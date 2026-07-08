@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import type { Chain } from "viem";
 
 import { robinhoodChain, robinhoodChainTestnet, robinhoodChainsById } from "../chains";
@@ -24,5 +24,10 @@ describe("Robinhood Chain config", () => {
   it("provides lookup by chain ID", () => {
     expect(robinhoodChainsById[4663]).toBe(robinhoodChain);
     expect(robinhoodChainsById[46630]).toBe(robinhoodChainTestnet);
+  });
+
+  it("returns undefined for unknown chain IDs and exposes a partial lookup type", () => {
+    expect(robinhoodChainsById[999999]).toBeUndefined();
+    expectTypeOf(robinhoodChainsById).toEqualTypeOf<Readonly<Partial<Record<number, Chain>>>>();
   });
 });

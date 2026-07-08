@@ -13,7 +13,10 @@ import {
   getAllowedNextStatuses,
   transitionInventoryItem
 } from "../lifecycle";
+import { createPhotoHash } from "../photo-hash";
 import type { InventoryItem, InventoryStatus } from "../schema";
+
+const testPhotoUrls = ["https://assets.example.com/inventory/test-front.jpg"];
 
 const makeItem = (custodyStatus: InventoryStatus): InventoryItem => ({
   inventoryId: `inv-${custodyStatus}`,
@@ -27,12 +30,12 @@ const makeItem = (custodyStatus: InventoryStatus): InventoryItem => ({
   variant: "Standard",
   rawConditionEstimate: "Near Mint",
   conditionNotes: "Clean raw card.",
-  gradingCompany: "",
-  grade: "",
-  certNumber: "",
-  certUrl: "",
-  photoUrls: ["https://assets.example.com/inventory/test-front.jpg"],
-  photoHash: "sha256:1b0ab7c853927324a4c95e250dd802be4d3c84b9f5f77c62160428ad4cc548ca",
+  gradingCompany: null,
+  grade: null,
+  certNumber: null,
+  certUrl: null,
+  photoUrls: testPhotoUrls,
+  photoHash: createPhotoHash(testPhotoUrls),
   vaultLocationLabel: "Vault A",
   custodyStatus,
   redeemable: true,
@@ -109,13 +112,16 @@ describe("inventory lifecycle", () => {
     expect(canListItem(makeItem("user_owned"))).toBe(true);
   });
 
-  it("allows buyback-held items to recycle into drop-ready status after admin review", () => {
+  it("requires admin review before buyback-held items recycle into drop-ready status", () => {
     const buybackHeld = makeItem("buyback_held");
+    const updatedAt = "2026-07-08T02:00:00.000Z";
 
     expect(canRecycleBuybackHeldItem(buybackHeld, { adminReviewed: false })).toBe(false);
     expect(canRecycleBuybackHeldItem(buybackHeld, { adminReviewed: true })).toBe(true);
+    expect(() => transitionInventoryItem(buybackHeld, "drop_ready", updatedAt)).toThrow(/admin review/i);
 
-    const recycled = transitionInventoryItem(buybackHeld, "drop_ready", "2026-07-08T02:00:00.000Z");
+    const recycled = transitionInventoryItem(buybackHeld, "drop_ready", { adminReviewed: true, updatedAt });
     expect(recycled.custodyStatus).toBe("drop_ready");
+    expect(recycled.updatedAt).toBe(updatedAt);
   });
 });

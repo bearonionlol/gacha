@@ -56,7 +56,7 @@ export const robinhoodChainTestnet = {
 
 export const robinhoodChains = [robinhoodChain, robinhoodChainTestnet] as const;
 
-export const robinhoodChainsById: Readonly<Record<number, Chain>> = {
+export const robinhoodChainsById: Readonly<Partial<Record<number, Chain>>> = {
   [robinhoodChain.id]: robinhoodChain,
   [robinhoodChainTestnet.id]: robinhoodChainTestnet
 };

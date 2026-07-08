@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { createPhotoHash } from "./photo-hash";
+
 export const supportedBrands = ["pokemon", "one_piece", "other"] as const;
 
 export type SupportedBrand = "pokemon" | "one_piece" | "other";
@@ -66,10 +68,10 @@ export type InventoryItem = {
   variant: string;
   rawConditionEstimate: string;
   conditionNotes: string;
-  gradingCompany: string;
-  grade: string;
-  certNumber: string;
-  certUrl: string;
+  gradingCompany: string | null;
+  grade: string | null;
+  certNumber: string | null;
+  certUrl: string | null;
   photoUrls: string[];
   photoHash: string;
   vaultLocationLabel: string;
@@ -90,7 +92,10 @@ const requiredTextField = z.string().min(1);
 const isoDateTime = z.string().datetime({ offset: true });
 const cents = z.number().int().nonnegative();
 const photoHash = z.string().regex(/^sha256:[a-f0-9]{64}$/);
-const optionalUrl = z.union([z.literal(""), z.string().url()]);
+const nullableTextField = z.string().nullable();
+const nullableUrl = z.union([z.string().url(), z.null()]);
+const categoriesWithRequiredGradingFields: readonly InventoryCategory[] = ["graded_card", "slab"];
+const gradedOnlyFields = ["gradingCompany", "grade", "certNumber", "certUrl"] as const;
 
 export const SupportedBrandSchema = z.enum(supportedBrands);
 export const InventoryCategorySchema = z.enum(inventoryCategories);
@@ -110,10 +115,10 @@ export const InventoryItemSchema: z.ZodType<InventoryItem> = z
     variant: textField,
     rawConditionEstimate: textField,
     conditionNotes: textField,
-    gradingCompany: textField,
-    grade: textField,
-    certNumber: textField,
-    certUrl: optionalUrl,
+    gradingCompany: nullableTextField,
+    grade: nullableTextField,
+    certNumber: nullableTextField,
+    certUrl: nullableUrl,
     photoUrls: z.array(requiredTextField),
     photoHash,
     vaultLocationLabel: textField,
@@ -128,6 +133,29 @@ export const InventoryItemSchema: z.ZodType<InventoryItem> = z
     createdAt: isoDateTime,
     updatedAt: isoDateTime
   })
-  .strict();
+  .strict()
+  .superRefine((item, ctx) => {
+    if (item.photoHash !== createPhotoHash(item.photoUrls)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["photoHash"],
+        message: "photoHash must match the canonical hash of photoUrls"
+      });
+    }
+
+    if (categoriesWithRequiredGradingFields.includes(item.category)) {
+      for (const field of gradedOnlyFields) {
+        const value = item[field];
+
+        if (typeof value !== "string" || value.trim().length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [field],
+            message: `${field} is required for graded cards and slabs`
+          });
+        }
+      }
+    }
+  });
 
 export const InventoryItemsSchema: z.ZodType<InventoryItem[]> = z.array(InventoryItemSchema);

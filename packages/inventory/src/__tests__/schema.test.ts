@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { createPhotoHash } from "../photo-hash";
 import { sampleInventory } from "../sample-inventory";
 import { InventoryItemSchema, InventoryItemsSchema, type InventoryItem } from "../schema";
+
+const validPhotoUrls = ["https://assets.example.com/inventory/inv-test-001-front.jpg"];
 
 const validItem: InventoryItem = {
   inventoryId: "inv-test-001",
@@ -15,12 +18,12 @@ const validItem: InventoryItem = {
   variant: "Yellow Cheeks",
   rawConditionEstimate: "Near Mint",
   conditionNotes: "Light edge wear visible in front photo.",
-  gradingCompany: "",
-  grade: "",
-  certNumber: "",
-  certUrl: "",
-  photoUrls: ["https://assets.example.com/inventory/inv-test-001-front.jpg"],
-  photoHash: "sha256:1b0ab7c853927324a4c95e250dd802be4d3c84b9f5f77c62160428ad4cc548ca",
+  gradingCompany: null,
+  grade: null,
+  certNumber: null,
+  certUrl: null,
+  photoUrls: validPhotoUrls,
+  photoHash: createPhotoHash(validPhotoUrls),
   vaultLocationLabel: "Vault A / Row 1 / Bin 3",
   custodyStatus: "verified",
   redeemable: true,
@@ -34,9 +37,27 @@ const validItem: InventoryItem = {
   updatedAt: "2026-07-08T00:00:00.000Z"
 };
 
+const gradedItem: InventoryItem = {
+  ...validItem,
+  category: "graded_card",
+  gradingCompany: "PSA",
+  grade: "10",
+  certNumber: "SAMPLE-CERT-123",
+  certUrl: "https://certs.example.com/SAMPLE-CERT-123"
+};
+
 describe("InventoryItemSchema", () => {
   it("validates a complete inventory item with the shared domain fields", () => {
     expect(InventoryItemSchema.parse(validItem)).toEqual(validItem);
+  });
+
+  it("accepts null graded-only fields for raw cards", () => {
+    const parsed = InventoryItemSchema.parse(validItem);
+
+    expect(parsed.gradingCompany).toBeNull();
+    expect(parsed.grade).toBeNull();
+    expect(parsed.certNumber).toBeNull();
+    expect(parsed.certUrl).toBeNull();
   });
 
   it("rejects unsupported brands, categories, statuses, and grail tiers", () => {
@@ -53,12 +74,37 @@ describe("InventoryItemSchema", () => {
     expect(() => InventoryItemSchema.parse({ ...validItem, updatedAt: "07/08/2026" })).toThrow();
   });
 
+  it("rejects photo hashes that do not match the photo URLs", () => {
+    expect(() =>
+      InventoryItemSchema.parse({
+        ...validItem,
+        photoHash: createPhotoHash(["https://assets.example.com/inventory/different-front.jpg"])
+      })
+    ).toThrow();
+  });
+
+  it("requires non-empty graded-only fields for graded cards and slabs", () => {
+    for (const category of ["graded_card", "slab"] as const) {
+      expect(() => InventoryItemSchema.parse({ ...gradedItem, category, gradingCompany: null })).toThrow();
+      expect(() => InventoryItemSchema.parse({ ...gradedItem, category, grade: "" })).toThrow();
+      expect(() => InventoryItemSchema.parse({ ...gradedItem, category, certNumber: null })).toThrow();
+      expect(() => InventoryItemSchema.parse({ ...gradedItem, category, certUrl: null })).toThrow();
+    }
+  });
+
   it("validates sample inventory with Pokemon, One Piece, and graded starter items", () => {
     const parsed = InventoryItemsSchema.parse(sampleInventory);
 
     expect(parsed.some((item) => item.brand === "pokemon" && item.category === "raw_card")).toBe(true);
     expect(parsed.some((item) => item.brand === "one_piece" && item.category === "raw_card")).toBe(true);
-    expect(parsed.some((item) => item.category === "graded_card" && item.gradingCompany.length > 0)).toBe(true);
+    expect(
+      parsed.some(
+        (item) =>
+          item.category === "graded_card" &&
+          typeof item.gradingCompany === "string" &&
+          item.gradingCompany.length > 0
+      )
+    ).toBe(true);
     expect(parsed.every((item) => item.legalDisclaimer.toLowerCase().includes("no affiliation"))).toBe(true);
   });
 });

@@ -1,5 +1,12 @@
 import type { InventoryItem, InventoryStatus } from "./schema";
 
+export type InventoryTransitionOptions = {
+  updatedAt?: string;
+  adminReviewed?: boolean;
+};
+
+type InventoryTransitionInput = string | InventoryTransitionOptions;
+
 export const allowedInventoryTransitions: Readonly<Record<InventoryStatus, readonly InventoryStatus[]>> = {
   draft: ["photographed"],
   photographed: ["verified"],
@@ -28,17 +35,33 @@ export const assertInventoryTransition = (from: InventoryStatus, to: InventorySt
   }
 };
 
+const resolveTransitionUpdatedAt = (options?: InventoryTransitionInput): string => {
+  if (typeof options === "string") {
+    return options;
+  }
+
+  return options?.updatedAt ?? new Date().toISOString();
+};
+
+const hasAdminReview = (options?: InventoryTransitionInput): boolean => {
+  return typeof options === "object" && options.adminReviewed === true;
+};
+
 export const transitionInventoryItem = (
   item: InventoryItem,
   to: InventoryStatus,
-  updatedAt = new Date().toISOString()
+  options?: InventoryTransitionInput
 ): InventoryItem => {
   assertInventoryTransition(item.custodyStatus, to);
+
+  if (item.custodyStatus === "buyback_held" && to === "drop_ready" && !hasAdminReview(options)) {
+    throw new Error("Buyback-held items require admin review before recycling into drops");
+  }
 
   return {
     ...item,
     custodyStatus: to,
-    updatedAt
+    updatedAt: resolveTransitionUpdatedAt(options)
   };
 };
 
