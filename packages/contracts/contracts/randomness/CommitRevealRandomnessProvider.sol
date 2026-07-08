@@ -5,6 +5,7 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {IRandomnessProvider} from "./IRandomnessProvider.sol";
 
 contract CommitRevealRandomnessProvider is AccessControl, IRandomnessProvider {
+    bytes32 public constant REQUESTER_ROLE = keccak256("REQUESTER_ROLE");
     bytes32 public constant REVEALER_ROLE = keccak256("REVEALER_ROLE");
 
     struct RandomnessRequest {
@@ -33,7 +34,7 @@ contract CommitRevealRandomnessProvider is AccessControl, IRandomnessProvider {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
-    function requestRandomness(bytes32 requestId) external {
+    function requestRandomness(bytes32 requestId) external onlyRole(REQUESTER_ROLE) {
         if (requestId == bytes32(0)) {
             revert ZeroRequestId();
         }

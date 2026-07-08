@@ -6,6 +6,7 @@ const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 const requestId = ethers.keccak256(ethers.toUtf8Bytes("pack-purchase-001"));
 const seed = ethers.keccak256(ethers.toUtf8Bytes("revealed-seed"));
 const wrongSeed = ethers.keccak256(ethers.toUtf8Bytes("wrong-seed"));
+const requesterRole = ethers.id("REQUESTER_ROLE");
 
 function commitmentFor(seedValue: string): string {
   return ethers.keccak256(abiCoder.encode(["bytes32"], [seedValue]));
@@ -21,9 +22,9 @@ function randomnessFor(seedValue: string, requestIdValue: string, providerAddres
 
 describe("CommitRevealRandomnessProvider", function () {
   it("records randomness requests", async function () {
-    const { randomnessProvider } = await deployRandomnessProviderFixture();
+    const { randomnessProvider, requester } = await deployRandomnessProviderFixture();
 
-    await expect(randomnessProvider.requestRandomness(requestId))
+    await expect(randomnessProvider.connect(requester).requestRandomness(requestId))
       .to.emit(randomnessProvider, "RandomnessRequested")
       .withArgs(requestId);
 
@@ -31,19 +32,18 @@ describe("CommitRevealRandomnessProvider", function () {
     expect(ready).to.equal(false);
     expect(randomness).to.equal(0n);
 
-    await expect(randomnessProvider.requestRandomness(requestId))
+    await expect(randomnessProvider.connect(requester).requestRandomness(requestId))
       .to.be.revertedWithCustomError(randomnessProvider, "RandomnessRequestAlreadyExists")
       .withArgs(requestId);
-    await expect(randomnessProvider.requestRandomness(ethers.ZeroHash)).to.be.revertedWithCustomError(
-      randomnessProvider,
-      "ZeroRequestId"
-    );
+    await expect(
+      randomnessProvider.connect(requester).requestRandomness(ethers.ZeroHash)
+    ).to.be.revertedWithCustomError(randomnessProvider, "ZeroRequestId");
   });
 
   it("requires a commit before reveal", async function () {
-    const { randomnessProvider, revealer } = await deployRandomnessProviderFixture();
+    const { randomnessProvider, requester, revealer } = await deployRandomnessProviderFixture();
 
-    await randomnessProvider.requestRandomness(requestId);
+    await randomnessProvider.connect(requester).requestRandomness(requestId);
 
     await expect(randomnessProvider.connect(revealer).revealRandomness(requestId, seed))
       .to.be.revertedWithCustomError(randomnessProvider, "RandomnessCommitmentMissing")
@@ -51,9 +51,9 @@ describe("CommitRevealRandomnessProvider", function () {
   });
 
   it("rejects a seed that does not match the commitment", async function () {
-    const { randomnessProvider, revealer } = await deployRandomnessProviderFixture();
+    const { randomnessProvider, requester, revealer } = await deployRandomnessProviderFixture();
 
-    await randomnessProvider.requestRandomness(requestId);
+    await randomnessProvider.connect(requester).requestRandomness(requestId);
     await randomnessProvider.connect(revealer).commitRandomness(requestId, commitmentFor(seed));
 
     await expect(randomnessProvider.connect(revealer).revealRandomness(requestId, wrongSeed))
@@ -62,10 +62,10 @@ describe("CommitRevealRandomnessProvider", function () {
   });
 
   it("returns ready randomness after reveal", async function () {
-    const { randomnessProvider, revealer } = await deployRandomnessProviderFixture();
+    const { randomnessProvider, requester, revealer } = await deployRandomnessProviderFixture();
     const expectedRandomness = randomnessFor(seed, requestId, await randomnessProvider.getAddress());
 
-    await randomnessProvider.requestRandomness(requestId);
+    await randomnessProvider.connect(requester).requestRandomness(requestId);
     await randomnessProvider.connect(revealer).commitRandomness(requestId, commitmentFor(seed));
 
     await expect(randomnessProvider.connect(revealer).revealRandomness(requestId, seed))
@@ -77,10 +77,18 @@ describe("CommitRevealRandomnessProvider", function () {
     expect(randomness).to.equal(expectedRandomness);
   });
 
-  it("restricts commit and reveal to the revealer role", async function () {
-    const { randomnessProvider, revealer, other } = await deployRandomnessProviderFixture();
+  it("restricts requests to the requester role", async function () {
+    const { randomnessProvider, other } = await deployRandomnessProviderFixture();
 
-    await randomnessProvider.requestRandomness(requestId);
+    await expect(randomnessProvider.connect(other).requestRandomness(requestId))
+      .to.be.revertedWithCustomError(randomnessProvider, "AccessControlUnauthorizedAccount")
+      .withArgs(other.address, requesterRole);
+  });
+
+  it("restricts commit and reveal to the revealer role", async function () {
+    const { randomnessProvider, requester, revealer, other } = await deployRandomnessProviderFixture();
+
+    await randomnessProvider.connect(requester).requestRandomness(requestId);
 
     await expect(randomnessProvider.connect(other).commitRandomness(requestId, commitmentFor(seed)))
       .to.be.revertedWithCustomError(randomnessProvider, "AccessControlUnauthorizedAccount")

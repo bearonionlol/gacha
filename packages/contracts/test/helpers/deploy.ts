@@ -2,6 +2,8 @@ import { ethers } from "hardhat";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import type { BaseContract, BigNumberish, ContractRunner, ContractTransactionResponse } from "ethers";
 
+const REQUESTER_ROLE = ethers.id("REQUESTER_ROLE");
+
 export interface InventoryRecord {
   inventoryId: string;
   inventoryHash: string;
@@ -68,6 +70,7 @@ export type ItemToken = Omit<BaseContract, "connect"> & {
 };
 
 export type RandomnessProvider = Omit<BaseContract, "connect"> & {
+  REQUESTER_ROLE(): Promise<string>;
   REVEALER_ROLE(): Promise<string>;
   requestRandomness(requestId: string): Promise<ContractTransactionResponse>;
   readRandomness(requestId: string): Promise<[boolean, bigint]>;
@@ -89,9 +92,11 @@ export interface CreateDropParams {
 
 export type PackSale = Omit<BaseContract, "connect"> & {
   DROP_ADMIN_ROLE(): Promise<string>;
+  REFUND_TIMEOUT(): Promise<bigint>;
   createDrop(params: CreateDropParams): Promise<ContractTransactionResponse>;
   purchase(dropId: BigNumberish, overrides?: { value?: BigNumberish }): Promise<ContractTransactionResponse>;
   reveal(purchaseId: BigNumberish): Promise<ContractTransactionResponse>;
+  refundExpiredPurchase(purchaseId: BigNumberish): Promise<ContractTransactionResponse>;
   remainingInventory(dropId: BigNumberish): Promise<bigint>;
   pause(): Promise<ContractTransactionResponse>;
   unpause(): Promise<ContractTransactionResponse>;
@@ -140,17 +145,20 @@ export async function deployRandomnessProviderFixture() {
   const deployer = requireSigner(signers, 0, "deployer");
   const revealer = requireSigner(signers, 1, "revealer");
   const other = requireSigner(signers, 2, "other");
+  const requester = requireSigner(signers, 3, "requester");
   const randomnessProvider = (await ethers.deployContract(
     "CommitRevealRandomnessProvider"
   )) as unknown as RandomnessProvider;
 
   await randomnessProvider.waitForDeployment();
+  await randomnessProvider.grantRole(REQUESTER_ROLE, requester.address);
   await randomnessProvider.grantRole(await randomnessProvider.REVEALER_ROLE(), revealer.address);
 
   return {
     randomnessProvider,
     deployer,
     revealer,
+    requester,
     other
   };
 }
@@ -197,6 +205,7 @@ export async function deployProtocolFixture() {
   await itemToken.grantRole(await itemToken.BURNER_ROLE(), burner.address);
   await itemToken.grantRole(await itemToken.URI_SETTER_ROLE(), uriSetter.address);
   await itemToken.grantRole(await itemToken.PAUSER_ROLE(), pauser.address);
+  await randomnessProvider.grantRole(REQUESTER_ROLE, await packSale.getAddress());
   await randomnessProvider.grantRole(await randomnessProvider.REVEALER_ROLE(), revealer.address);
   await packSale.grantRole(await packSale.DROP_ADMIN_ROLE(), dropAdmin.address);
 

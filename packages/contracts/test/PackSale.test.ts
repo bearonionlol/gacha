@@ -14,6 +14,8 @@ const secondMetadataUri = "ipfs://items/sealed-case-002.json";
 const thirdMetadataUri = "ipfs://items/sealed-case-003.json";
 const inventoryIds = [firstInventoryId, secondInventoryId, thirdInventoryId];
 const metadataUris = [firstMetadataUri, secondMetadataUri, thirdMetadataUri];
+const requesterRole = ethers.id("REQUESTER_ROLE");
+const refundTimeoutSeconds = 24 * 60 * 60;
 
 function inventoryHashFor(inventoryId: string): string {
   return ethers.keccak256(ethers.toUtf8Bytes(`inventory:${inventoryId}:v1`));
@@ -34,6 +36,11 @@ async function latestTimestamp(): Promise<number> {
 
 async function setNextBlockTimestamp(timestamp: number): Promise<void> {
   await ethers.provider.send("evm_setNextBlockTimestamp", [timestamp]);
+  await ethers.provider.send("evm_mine", []);
+}
+
+async function increaseTime(seconds: number): Promise<void> {
+  await ethers.provider.send("evm_increaseTime", [seconds]);
   await ethers.provider.send("evm_mine", []);
 }
 
@@ -70,7 +77,7 @@ async function anchorInventories(
   }
 }
 
-async function createActiveDrop(): Promise<{
+async function createActiveDrop(overrides: Partial<CreateDropParams> = {}): Promise<{
   fixture: Awaited<ReturnType<typeof deployProtocolFixture>>;
   dropId: bigint;
 }> {
@@ -79,7 +86,7 @@ async function createActiveDrop(): Promise<{
 
   await anchorInventories(registry, inventoryAdmin);
 
-  await packSale.connect(dropAdmin).createDrop(await activeDropParams());
+  await packSale.connect(dropAdmin).createDrop(await activeDropParams(overrides));
 
   return {
     fixture,
@@ -95,6 +102,16 @@ function requestIdFor(packSaleAddress: string, purchaseId: bigint, buyerAddress:
 
 function commitmentFor(seed: string): string {
   return ethers.keccak256(abiCoder.encode(["bytes32"], [seed]));
+}
+
+async function makeRandomnessReady(
+  randomnessProvider: Awaited<ReturnType<typeof deployProtocolFixture>>["randomnessProvider"],
+  revealer: Awaited<ReturnType<typeof deployProtocolFixture>>["revealer"],
+  requestId: string,
+  seed: string
+): Promise<void> {
+  await randomnessProvider.connect(revealer).commitRandomness(requestId, commitmentFor(seed));
+  await randomnessProvider.connect(revealer).revealRandomness(requestId, seed);
 }
 
 describe("PackSale", function () {
@@ -118,6 +135,62 @@ describe("PackSale", function () {
       .withArgs(firstInventoryId);
   });
 
+  it("rejects drop creation with duplicate inventory IDs", async function () {
+    const { registry, inventoryAdmin, packSale, dropAdmin } = await deployProtocolFixture();
+
+    await anchorInventories(registry, inventoryAdmin, [firstInventoryId], [firstMetadataUri]);
+
+    await expect(
+      packSale.connect(dropAdmin).createDrop(
+        await activeDropParams({
+          maxSupply: 1n,
+          inventoryIds: [firstInventoryId, firstInventoryId],
+          metadataUris: [firstMetadataUri, secondMetadataUri]
+        })
+      )
+    )
+      .to.be.revertedWithCustomError(packSale, "DuplicateInventory")
+      .withArgs(firstInventoryId);
+  });
+
+  it("rejects drop creation with already-tokenized inventory", async function () {
+    const { registry, inventoryAdmin, tokenizer, owner, packSale, dropAdmin } = await deployProtocolFixture();
+
+    await anchorInventories(registry, inventoryAdmin, [firstInventoryId], [firstMetadataUri]);
+    await registry.connect(tokenizer).markTokenized(firstInventoryId, owner.address);
+
+    await expect(
+      packSale.connect(dropAdmin).createDrop(
+        await activeDropParams({
+          maxSupply: 1n,
+          inventoryIds: [firstInventoryId],
+          metadataUris: [firstMetadataUri]
+        })
+      )
+    )
+      .to.be.revertedWithCustomError(packSale, "InventoryAlreadyTokenized")
+      .withArgs(firstInventoryId);
+  });
+
+  it("rejects cross-drop inventory reuse while reserved", async function () {
+    const { registry, inventoryAdmin, packSale, dropAdmin } = await deployProtocolFixture();
+
+    await anchorInventories(registry, inventoryAdmin);
+    await packSale.connect(dropAdmin).createDrop(await activeDropParams());
+
+    await expect(
+      packSale.connect(dropAdmin).createDrop(
+        await activeDropParams({
+          maxSupply: 1n,
+          inventoryIds: [firstInventoryId],
+          metadataUris: [firstMetadataUri]
+        })
+      )
+    )
+      .to.be.revertedWithCustomError(packSale, "InventoryAlreadyReserved")
+      .withArgs(firstInventoryId);
+  });
+
   it("sells a pack for the configured native price", async function () {
     const {
       fixture: { packSale, buyer, treasury },
@@ -128,7 +201,46 @@ describe("PackSale", function () {
     await expect(purchase)
       .to.emit(packSale, "PackPurchased")
       .withArgs(1n, dropId, buyer.address, await requestIdForPack(packSale, 1n, buyer.address), packPrice);
-    await expect(purchase).to.changeEtherBalance(treasury, packPrice);
+    await expect(purchase).to.changeEtherBalances([packSale, treasury], [packPrice, 0n]);
+  });
+
+  it("rejects wrong pack payments", async function () {
+    const {
+      fixture: { packSale, buyer },
+      dropId
+    } = await createActiveDrop();
+    const shortPayment = packPrice - 1n;
+
+    await expect(packSale.connect(buyer).purchase(dropId, { value: shortPayment }))
+      .to.be.revertedWithCustomError(packSale, "ExactPaymentRequired")
+      .withArgs(packPrice, shortPayment);
+  });
+
+  it("rejects sold out purchases", async function () {
+    const {
+      fixture: { packSale, buyer, recipient },
+      dropId
+    } = await createActiveDrop({ maxSupply: 1n });
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+
+    await expect(packSale.connect(recipient).purchase(dropId, { value: packPrice }))
+      .to.be.revertedWithCustomError(packSale, "SoldOut")
+      .withArgs(dropId);
+  });
+
+  it("rejects purchases while paused", async function () {
+    const {
+      fixture: { packSale, dropAdmin, buyer },
+      dropId
+    } = await createActiveDrop();
+
+    await packSale.connect(dropAdmin).pause();
+
+    await expect(packSale.connect(buyer).purchase(dropId, { value: packPrice })).to.be.revertedWithCustomError(
+      packSale,
+      "EnforcedPause"
+    );
   });
 
   it("rejects purchases outside the sale window", async function () {
@@ -154,6 +266,22 @@ describe("PackSale", function () {
       .withArgs(1n);
   });
 
+  it("prevents untrusted request ID squatting before purchase", async function () {
+    const {
+      fixture: { packSale, randomnessProvider, buyer, other },
+      dropId
+    } = await createActiveDrop();
+    const requestId = await requestIdForPack(packSale, 1n, buyer.address);
+
+    await expect(randomnessProvider.connect(other).requestRandomness(requestId))
+      .to.be.revertedWithCustomError(randomnessProvider, "AccessControlUnauthorizedAccount")
+      .withArgs(other.address, requesterRole);
+
+    await expect(packSale.connect(buyer).purchase(dropId, { value: packPrice }))
+      .to.emit(packSale, "PackPurchased")
+      .withArgs(1n, dropId, buyer.address, requestId, packPrice);
+  });
+
   it("reveals a purchased pack after randomness is ready", async function () {
     const { fixture, dropId } = await createActiveDrop();
     const { packSale, randomnessProvider, buyer, revealer } = fixture;
@@ -164,10 +292,23 @@ describe("PackSale", function () {
 
     await expect(packSale.connect(buyer).reveal(1n)).to.be.revertedWithCustomError(packSale, "RandomnessNotReady");
 
-    await randomnessProvider.connect(revealer).commitRandomness(requestId, commitmentFor(seed));
-    await randomnessProvider.connect(revealer).revealRandomness(requestId, seed);
+    await makeRandomnessReady(randomnessProvider, revealer, requestId, seed);
 
     await expect(packSale.connect(buyer).reveal(1n)).to.emit(packSale, "PackRevealed");
+  });
+
+  it("rejects unauthorized reveals", async function () {
+    const { fixture, dropId } = await createActiveDrop();
+    const { packSale, randomnessProvider, buyer, other, revealer } = fixture;
+    const seed = ethers.keccak256(ethers.toUtf8Bytes("unauthorized-reveal-seed"));
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    const requestId = await requestIdForPack(packSale, 1n, buyer.address);
+    await makeRandomnessReady(randomnessProvider, revealer, requestId, seed);
+
+    await expect(packSale.connect(other).reveal(1n))
+      .to.be.revertedWithCustomError(packSale, "UnauthorizedReveal")
+      .withArgs(1n, other.address);
   });
 
   it("mints the revealed inventory token to the buyer", async function () {
@@ -183,8 +324,7 @@ describe("PackSale", function () {
 
     await packSale.connect(buyer).purchase(dropId, { value: packPrice });
     const requestId = await requestIdForPack(packSale, 1n, buyer.address);
-    await randomnessProvider.connect(revealer).commitRandomness(requestId, commitmentFor(seed));
-    await randomnessProvider.connect(revealer).revealRandomness(requestId, seed);
+    await makeRandomnessReady(randomnessProvider, revealer, requestId, seed);
 
     await expect(packSale.connect(buyer).reveal(1n))
       .to.emit(itemToken, "TransferSingle")
@@ -194,6 +334,21 @@ describe("PackSale", function () {
     expect(await itemToken.uri(tokenId)).to.equal(firstMetadataUri);
   });
 
+  it("rejects double reveals", async function () {
+    const { fixture, dropId } = await createActiveDrop();
+    const { packSale, randomnessProvider, buyer, revealer } = fixture;
+    const seed = ethers.keccak256(ethers.toUtf8Bytes("double-reveal-seed"));
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    const requestId = await requestIdForPack(packSale, 1n, buyer.address);
+    await makeRandomnessReady(randomnessProvider, revealer, requestId, seed);
+    await packSale.connect(buyer).reveal(1n);
+
+    await expect(packSale.connect(buyer).reveal(1n))
+      .to.be.revertedWithCustomError(packSale, "PurchaseAlreadyRevealed")
+      .withArgs(1n);
+  });
+
   it("removes revealed inventory from the drop pool", async function () {
     const { fixture, dropId } = await createActiveDrop();
     const { packSale, randomnessProvider, buyer, revealer } = fixture;
@@ -201,8 +356,7 @@ describe("PackSale", function () {
 
     await packSale.connect(buyer).purchase(dropId, { value: packPrice });
     const requestId = await requestIdForPack(packSale, 1n, buyer.address);
-    await randomnessProvider.connect(revealer).commitRandomness(requestId, commitmentFor(seed));
-    await randomnessProvider.connect(revealer).revealRandomness(requestId, seed);
+    await makeRandomnessReady(randomnessProvider, revealer, requestId, seed);
 
     expect(await packSale.remainingInventory(dropId)).to.equal(3n);
 
@@ -211,16 +365,97 @@ describe("PackSale", function () {
     expect(await packSale.remainingInventory(dropId)).to.equal(2n);
   });
 
-  it("forwards pack payments to the treasury", async function () {
+  it("forwards pack payments to the treasury after reveal", async function () {
     const {
-      fixture: { packSale, buyer, treasury },
+      fixture: { packSale, randomnessProvider, buyer, treasury, revealer },
+      dropId
+    } = await createActiveDrop();
+    const seed = ethers.keccak256(ethers.toUtf8Bytes("treasury-forward-seed"));
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    const requestId = await requestIdForPack(packSale, 1n, buyer.address);
+    await makeRandomnessReady(randomnessProvider, revealer, requestId, seed);
+
+    await expect(packSale.connect(buyer).reveal(1n)).to.changeEtherBalances(
+      [treasury, packSale],
+      [packPrice, -packPrice]
+    );
+  });
+
+  it("blocks later purchase reveals until earlier purchases reveal", async function () {
+    const { fixture, dropId } = await createActiveDrop();
+    const { packSale, randomnessProvider, buyer, recipient, revealer } = fixture;
+    const firstSeed = ethers.keccak256(ethers.toUtf8Bytes("first-order-seed"));
+    const secondSeed = ethers.keccak256(ethers.toUtf8Bytes("second-order-seed"));
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    await packSale.connect(recipient).purchase(dropId, { value: packPrice });
+    await makeRandomnessReady(randomnessProvider, revealer, await requestIdForPack(packSale, 1n, buyer.address), firstSeed);
+    await makeRandomnessReady(
+      randomnessProvider,
+      revealer,
+      await requestIdForPack(packSale, 2n, recipient.address),
+      secondSeed
+    );
+
+    await expect(packSale.connect(recipient).reveal(2n))
+      .to.be.revertedWithCustomError(packSale, "RevealOrderBlocked")
+      .withArgs(2n, 0n, 1n);
+
+    await packSale.connect(buyer).reveal(1n);
+    await expect(packSale.connect(recipient).reveal(2n)).to.emit(packSale, "PackRevealed");
+  });
+
+  it("rejects refunds before the timeout", async function () {
+    const {
+      fixture: { packSale, buyer },
       dropId
     } = await createActiveDrop();
 
-    await expect(packSale.connect(buyer).purchase(dropId, { value: packPrice })).to.changeEtherBalance(
-      treasury,
-      packPrice
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+
+    await expect(packSale.connect(buyer).refundExpiredPurchase(1n))
+      .to.be.revertedWithCustomError(packSale, "RefundNotAvailable")
+      .withArgs(1n);
+  });
+
+  it("lets the buyer refund an unrevealed purchase after timeout", async function () {
+    const {
+      fixture: { packSale, buyer },
+      dropId
+    } = await createActiveDrop();
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    await increaseTime(refundTimeoutSeconds + 1);
+
+    await expect(packSale.connect(buyer).refundExpiredPurchase(1n)).to.changeEtherBalances(
+      [buyer, packSale],
+      [packPrice, -packPrice]
     );
+
+    await expect(packSale.connect(buyer).refundExpiredPurchase(1n))
+      .to.be.revertedWithCustomError(packSale, "PurchaseAlreadyRefunded")
+      .withArgs(1n);
+  });
+
+  it("advances reveal order when refunding the next expected purchase", async function () {
+    const { fixture, dropId } = await createActiveDrop();
+    const { packSale, randomnessProvider, buyer, recipient, revealer } = fixture;
+    const secondSeed = ethers.keccak256(ethers.toUtf8Bytes("refund-order-seed"));
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    await packSale.connect(recipient).purchase(dropId, { value: packPrice });
+    await makeRandomnessReady(
+      randomnessProvider,
+      revealer,
+      await requestIdForPack(packSale, 2n, recipient.address),
+      secondSeed
+    );
+    await increaseTime(refundTimeoutSeconds + 1);
+
+    await packSale.connect(buyer).refundExpiredPurchase(1n);
+
+    await expect(packSale.connect(recipient).reveal(2n)).to.emit(packSale, "PackRevealed");
   });
 });
 
