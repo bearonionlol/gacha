@@ -576,6 +576,16 @@ The app should include:
 
 The first screen should be the app experience, not a marketing landing page.
 
+Visual quality requirements:
+
+- The app must not look vibe-coded, generic, AI-generated, or template-like.
+- The design should feel intentionally human-made: clear hierarchy, useful empty states, polished copy, credible microinteractions, and purposeful spacing.
+- Use a Robinhood-inspired palette of black, white, cool graphite, soft neutral surfaces, and precise neon green accents.
+- Keep the experience welcoming despite the finance-terminal style: approachable onboarding, clear explanations, warm confirmation states, and readable card/inventory details.
+- Avoid cluttered neon cyberpunk styling, casino-like reward clutter, excessive gradients, or random decorative effects.
+- Use icons, data density, and motion sparingly; each visual element should clarify a user decision.
+- The main app should feel like a premium collectible trading desk with enough warmth for new users to understand what to do next.
+
 ## Safety And Compliance Requirements
 
 The UI must:
