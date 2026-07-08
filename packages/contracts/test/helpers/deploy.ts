@@ -67,6 +67,38 @@ export type ItemToken = Omit<BaseContract, "connect"> & {
   connect(runner: ContractRunner | null): ItemToken;
 };
 
+export type RandomnessProvider = Omit<BaseContract, "connect"> & {
+  REVEALER_ROLE(): Promise<string>;
+  requestRandomness(requestId: string): Promise<ContractTransactionResponse>;
+  readRandomness(requestId: string): Promise<[boolean, bigint]>;
+  commitRandomness(requestId: string, commitment: string): Promise<ContractTransactionResponse>;
+  revealRandomness(requestId: string, seed: string): Promise<ContractTransactionResponse>;
+  grantRole(role: string, account: string): Promise<ContractTransactionResponse>;
+  connect(runner: ContractRunner | null): RandomnessProvider;
+};
+
+export interface CreateDropParams {
+  name: string;
+  price: BigNumberish;
+  startTime: BigNumberish;
+  endTime: BigNumberish;
+  maxSupply: BigNumberish;
+  inventoryIds: string[];
+  metadataUris: string[];
+}
+
+export type PackSale = Omit<BaseContract, "connect"> & {
+  DROP_ADMIN_ROLE(): Promise<string>;
+  createDrop(params: CreateDropParams): Promise<ContractTransactionResponse>;
+  purchase(dropId: BigNumberish, overrides?: { value?: BigNumberish }): Promise<ContractTransactionResponse>;
+  reveal(purchaseId: BigNumberish): Promise<ContractTransactionResponse>;
+  remainingInventory(dropId: BigNumberish): Promise<bigint>;
+  pause(): Promise<ContractTransactionResponse>;
+  unpause(): Promise<ContractTransactionResponse>;
+  grantRole(role: string, account: string): Promise<ContractTransactionResponse>;
+  connect(runner: ContractRunner | null): PackSale;
+};
+
 function requireSigner(
   signers: HardhatEthersSigner[],
   index: number,
@@ -103,6 +135,26 @@ export async function deployInventoryRegistryFixture() {
   };
 }
 
+export async function deployRandomnessProviderFixture() {
+  const signers = await ethers.getSigners();
+  const deployer = requireSigner(signers, 0, "deployer");
+  const revealer = requireSigner(signers, 1, "revealer");
+  const other = requireSigner(signers, 2, "other");
+  const randomnessProvider = (await ethers.deployContract(
+    "CommitRevealRandomnessProvider"
+  )) as unknown as RandomnessProvider;
+
+  await randomnessProvider.waitForDeployment();
+  await randomnessProvider.grantRole(await randomnessProvider.REVEALER_ROLE(), revealer.address);
+
+  return {
+    randomnessProvider,
+    deployer,
+    revealer,
+    other
+  };
+}
+
 export async function deployProtocolFixture() {
   const signers = await ethers.getSigners();
   const deployer = requireSigner(signers, 0, "deployer");
@@ -115,21 +167,44 @@ export async function deployProtocolFixture() {
   const uriSetter = requireSigner(signers, 7, "URI setter");
   const pauser = requireSigner(signers, 8, "pauser");
   const recipient = requireSigner(signers, 9, "recipient");
+  const revealer = requireSigner(signers, 10, "revealer");
+  const dropAdmin = requireSigner(signers, 11, "drop admin");
+  const buyer = requireSigner(signers, 12, "buyer");
+  const treasury = requireSigner(signers, 13, "treasury");
   const registry = (await ethers.deployContract("InventoryRegistry")) as unknown as InventoryRegistry;
   const itemToken = (await ethers.deployContract("ItemToken")) as unknown as ItemToken;
+  const randomnessProvider = (await ethers.deployContract(
+    "CommitRevealRandomnessProvider"
+  )) as unknown as RandomnessProvider;
 
   await registry.waitForDeployment();
   await itemToken.waitForDeployment();
+  await randomnessProvider.waitForDeployment();
+
+  const packSale = (await ethers.deployContract("PackSale", [
+    await registry.getAddress(),
+    await itemToken.getAddress(),
+    await randomnessProvider.getAddress(),
+    treasury.address
+  ])) as unknown as PackSale;
+
+  await packSale.waitForDeployment();
   await registry.grantRole(await registry.INVENTORY_ADMIN_ROLE(), inventoryAdmin.address);
   await registry.grantRole(await registry.TOKENIZER_ROLE(), tokenizer.address);
+  await registry.grantRole(await registry.TOKENIZER_ROLE(), await packSale.getAddress());
   await itemToken.grantRole(await itemToken.MINTER_ROLE(), minter.address);
+  await itemToken.grantRole(await itemToken.MINTER_ROLE(), await packSale.getAddress());
   await itemToken.grantRole(await itemToken.BURNER_ROLE(), burner.address);
   await itemToken.grantRole(await itemToken.URI_SETTER_ROLE(), uriSetter.address);
   await itemToken.grantRole(await itemToken.PAUSER_ROLE(), pauser.address);
+  await randomnessProvider.grantRole(await randomnessProvider.REVEALER_ROLE(), revealer.address);
+  await packSale.grantRole(await packSale.DROP_ADMIN_ROLE(), dropAdmin.address);
 
   return {
     registry,
     itemToken,
+    randomnessProvider,
+    packSale,
     deployer,
     inventoryAdmin,
     tokenizer,
@@ -139,6 +214,10 @@ export async function deployProtocolFixture() {
     burner,
     uriSetter,
     pauser,
-    recipient
+    recipient,
+    revealer,
+    dropAdmin,
+    buyer,
+    treasury
   };
 }
