@@ -97,7 +97,10 @@ export type PackSale = Omit<BaseContract, "connect"> & {
   createDrop(params: CreateDropParams): Promise<ContractTransactionResponse>;
   purchase(dropId: BigNumberish, overrides?: { value?: BigNumberish }): Promise<ContractTransactionResponse>;
   reveal(purchaseId: BigNumberish): Promise<ContractTransactionResponse>;
+  claimRevealedTokenTo(purchaseId: BigNumberish, to: string): Promise<ContractTransactionResponse>;
+  refundCredit(account: string): Promise<bigint>;
   refundExpiredPurchase(purchaseId: BigNumberish): Promise<ContractTransactionResponse>;
+  withdrawRefund(): Promise<ContractTransactionResponse>;
   closeDrop(dropId: BigNumberish): Promise<ContractTransactionResponse>;
   remainingInventory(dropId: BigNumberish): Promise<bigint>;
   pause(): Promise<ContractTransactionResponse>;

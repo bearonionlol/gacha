@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { ethers } from "hardhat";
+import type { BaseContract, BigNumberish, ContractRunner, ContractTransactionResponse } from "ethers";
 import { deployProtocolFixture, type CreateDropParams } from "./helpers/deploy";
 
 const abiCoder = ethers.AbiCoder.defaultAbiCoder();
@@ -16,6 +17,21 @@ const inventoryIds = [firstInventoryId, secondInventoryId, thirdInventoryId];
 const metadataUris = [firstMetadataUri, secondMetadataUri, thirdMetadataUri];
 const requesterRole = ethers.id("REQUESTER_ROLE");
 const refundTimeoutSeconds = 24 * 60 * 60;
+
+type RejectingPackBuyer = Omit<BaseContract, "connect"> & {
+  purchasePack(
+    packSale: string,
+    dropId: BigNumberish,
+    overrides?: { value?: BigNumberish }
+  ): Promise<ContractTransactionResponse>;
+  claimRevealedTokenTo(
+    packSale: string,
+    purchaseId: BigNumberish,
+    to: string
+  ): Promise<ContractTransactionResponse>;
+  withdrawRefund(packSale: string): Promise<ContractTransactionResponse>;
+  connect(runner: ContractRunner | null): RejectingPackBuyer;
+};
 
 function inventoryHashFor(inventoryId: string): string {
   return ethers.keccak256(ethers.toUtf8Bytes(`inventory:${inventoryId}:v1`));
@@ -92,6 +108,13 @@ async function createActiveDrop(overrides: Partial<CreateDropParams> = {}): Prom
     fixture,
     dropId: 1n
   };
+}
+
+async function deployRejectingPackBuyer(): Promise<RejectingPackBuyer> {
+  const rejectingBuyer = (await ethers.deployContract("RejectingPackBuyer")) as unknown as RejectingPackBuyer;
+  await rejectingBuyer.waitForDeployment();
+
+  return rejectingBuyer;
 }
 
 function requestIdFor(packSaleAddress: string, purchaseId: bigint, buyerAddress: string, chainId: bigint): string {
@@ -326,11 +349,10 @@ describe("PackSale", function () {
     const requestId = await requestIdForPack(packSale, 1n, buyer.address);
     await makeRandomnessReady(randomnessProvider, revealer, requestId, seed);
 
-    await expect(packSale.connect(buyer).reveal(1n))
-      .to.emit(itemToken, "TransferSingle")
-      .withArgs(await packSale.getAddress(), ethers.ZeroAddress, buyer.address, tokenId, 1n);
+    await expect(packSale.connect(buyer).reveal(1n)).to.emit(packSale, "PackRevealed");
 
     expect(await itemToken.balanceOf(buyer.address, tokenId)).to.equal(1n);
+    expect(await itemToken.balanceOf(await packSale.getAddress(), tokenId)).to.equal(0n);
     expect(await itemToken.uri(tokenId)).to.equal(firstMetadataUri);
   });
 
@@ -421,12 +443,47 @@ describe("PackSale", function () {
     await makeRandomnessReady(randomnessProvider, revealer, secondRequestId, secondSeed);
     await increaseTime(refundTimeoutSeconds + 1);
 
-    await expect(packSale.connect(other).reveal(1n))
-      .to.emit(itemToken, "TransferSingle")
-      .withArgs(await packSale.getAddress(), ethers.ZeroAddress, buyer.address, firstTokenId, 1n);
+    await expect(packSale.connect(other).reveal(1n)).to.emit(packSale, "PackRevealed");
 
     expect(await itemToken.balanceOf(buyer.address, firstTokenId)).to.equal(1n);
+    expect(await itemToken.balanceOf(await packSale.getAddress(), firstTokenId)).to.equal(0n);
     await expect(packSale.connect(recipient).reveal(2n)).to.emit(packSale, "PackRevealed");
+  });
+
+  it("escrows revealed tokens for non-receiver buyers without blocking later resolution", async function () {
+    const { fixture, dropId } = await createActiveDrop();
+    const { packSale, randomnessProvider, itemToken, recipient, other, dropAdmin, revealer } = fixture;
+    const rejectingBuyer = await deployRejectingPackBuyer();
+    const rejectingBuyerAddress = await rejectingBuyer.getAddress();
+    const packSaleAddress = await packSale.getAddress();
+    const firstRequestId = await requestIdForPack(packSale, 1n, rejectingBuyerAddress);
+    const secondRequestId = await requestIdForPack(packSale, 2n, recipient.address);
+    const firstSeed = await seedForInventoryIndex(randomnessProvider, firstRequestId, 0n);
+    const secondSeed = ethers.keccak256(ethers.toUtf8Bytes("non-receiver-second-seed"));
+    const firstTokenId = physicalTokenIdFor(firstInventoryId);
+
+    await rejectingBuyer.purchasePack(packSaleAddress, dropId, { value: packPrice });
+    await packSale.connect(recipient).purchase(dropId, { value: packPrice });
+    await makeRandomnessReady(randomnessProvider, revealer, firstRequestId, firstSeed);
+    await makeRandomnessReady(randomnessProvider, revealer, secondRequestId, secondSeed);
+    await increaseTime(refundTimeoutSeconds + 1);
+
+    await expect(packSale.connect(other).reveal(1n)).to.emit(packSale, "PackRevealed");
+
+    expect(await itemToken.balanceOf(packSaleAddress, firstTokenId)).to.equal(1n);
+    expect(await itemToken.balanceOf(rejectingBuyerAddress, firstTokenId)).to.equal(0n);
+
+    await expect(packSale.connect(recipient).reveal(2n)).to.emit(packSale, "PackRevealed");
+    await expect(packSale.connect(dropAdmin).closeDrop(dropId)).to.emit(packSale, "DropClosed");
+
+    await expect(packSale.connect(other).claimRevealedTokenTo(1n, other.address))
+      .to.be.revertedWithCustomError(packSale, "UnauthorizedClaim")
+      .withArgs(1n, other.address);
+
+    await expect(rejectingBuyer.claimRevealedTokenTo(packSaleAddress, 1n, other.address))
+      .to.emit(itemToken, "TransferSingle")
+      .withArgs(packSaleAddress, packSaleAddress, other.address, firstTokenId, 1n);
+    expect(await itemToken.balanceOf(other.address, firstTokenId)).to.equal(1n);
   });
 
   it("rejects refunds before the timeout", async function () {
@@ -453,8 +510,15 @@ describe("PackSale", function () {
 
     await expect(packSale.connect(other).refundExpiredPurchase(1n)).to.changeEtherBalances(
       [buyer, packSale],
+      [0n, 0n]
+    );
+    expect(await packSale.refundCredit(buyer.address)).to.equal(packPrice);
+
+    await expect(packSale.connect(buyer).withdrawRefund()).to.changeEtherBalances(
+      [buyer, packSale],
       [packPrice, -packPrice]
     );
+    expect(await packSale.refundCredit(buyer.address)).to.equal(0n);
 
     await expect(packSale.connect(buyer).refundExpiredPurchase(1n))
       .to.be.revertedWithCustomError(packSale, "PurchaseAlreadyRefunded")
@@ -487,12 +551,33 @@ describe("PackSale", function () {
 
     await expect(packSale.connect(buyer).refundExpiredPurchase(1n)).to.changeEtherBalances(
       [buyer, packSale],
+      [0n, 0n]
+    );
+    expect(await packSale.refundCredit(buyer.address)).to.equal(packPrice);
+
+    await expect(packSale.connect(buyer).withdrawRefund()).to.changeEtherBalances(
+      [buyer, packSale],
       [packPrice, -packPrice]
     );
 
     await expect(packSale.connect(buyer).refundExpiredPurchase(1n))
       .to.be.revertedWithCustomError(packSale, "PurchaseAlreadyRefunded")
       .withArgs(1n);
+  });
+
+  it("credits refunds for native-rejecting buyers without blocking drop closure", async function () {
+    const { fixture, dropId } = await createActiveDrop({ maxSupply: 1n });
+    const { packSale, other, dropAdmin } = fixture;
+    const rejectingBuyer = await deployRejectingPackBuyer();
+    const rejectingBuyerAddress = await rejectingBuyer.getAddress();
+    const packSaleAddress = await packSale.getAddress();
+
+    await rejectingBuyer.purchasePack(packSaleAddress, dropId, { value: packPrice });
+    await increaseTime(refundTimeoutSeconds + 1);
+
+    await expect(packSale.connect(other).refundExpiredPurchase(1n)).to.emit(packSale, "PackRefunded");
+    expect(await packSale.refundCredit(rejectingBuyerAddress)).to.equal(packPrice);
+    await expect(packSale.connect(dropAdmin).closeDrop(dropId)).to.emit(packSale, "DropClosed");
   });
 
   it("lets a replacement buyer purchase after an expired refund frees supply", async function () {
@@ -588,6 +673,18 @@ describe("PackSale", function () {
     expect(record.owner).to.equal(ethers.ZeroAddress);
     expect(await packSale.remainingInventory(dropId)).to.equal(3n);
     expect(await ethers.provider.getBalance(await packSale.getAddress())).to.equal(packPrice);
+
+    await expect(
+      packSale.connect(fixture.dropAdmin).createDrop(
+        await activeDropParams({
+          maxSupply: 1n,
+          inventoryIds: [firstInventoryId],
+          metadataUris: [firstMetadataUri]
+        })
+      )
+    )
+      .to.be.revertedWithCustomError(packSale, "InventoryAlreadyReserved")
+      .withArgs(firstInventoryId);
   });
 });
 
