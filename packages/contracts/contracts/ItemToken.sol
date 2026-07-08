@@ -7,6 +7,12 @@ import {ERC1155Supply} from "@openzeppelin/contracts/token/ERC1155/extensions/ER
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
 contract ItemToken is ERC1155, ERC1155Supply, AccessControl, Pausable {
+    enum TokenKind {
+        Unknown,
+        Inventory,
+        Game
+    }
+
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
     bytes32 public constant URI_SETTER_ROLE = keccak256("URI_SETTER_ROLE");
@@ -14,12 +20,16 @@ contract ItemToken is ERC1155, ERC1155Supply, AccessControl, Pausable {
 
     error ZeroRecipient();
     error EmptyInventoryId();
+    error EmptyTokenURI();
+    error InventoryTokenIdMismatch(string inventoryId, uint256 expectedTokenId, uint256 actualTokenId);
     error InventoryTokenAlreadyMinted(uint256 tokenId);
+    error TokenKindConflict(uint256 tokenId);
     error InvalidAmount();
     error BurnNotApproved(address owner);
 
     mapping(uint256 tokenId => string tokenUri) private _tokenUris;
     mapping(uint256 tokenId => bool minted) private _inventoryTokenMinted;
+    mapping(uint256 tokenId => TokenKind kind) private _tokenKinds;
 
     constructor() ERC1155("ipfs://gacha/items/{id}.json") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -39,11 +49,21 @@ contract ItemToken is ERC1155, ERC1155Supply, AccessControl, Pausable {
             revert EmptyInventoryId();
         }
 
+        uint256 expectedTokenId = _derivePhysicalTokenId(inventoryId);
+        if (tokenId != expectedTokenId) {
+            revert InventoryTokenIdMismatch(inventoryId, expectedTokenId, tokenId);
+        }
+
+        if (_tokenKinds[tokenId] == TokenKind.Game) {
+            revert TokenKindConflict(tokenId);
+        }
+
         if (_inventoryTokenMinted[tokenId] || totalSupply(tokenId) != 0) {
             revert InventoryTokenAlreadyMinted(tokenId);
         }
 
         _inventoryTokenMinted[tokenId] = true;
+        _tokenKinds[tokenId] = TokenKind.Inventory;
         _setTokenURIIfEmpty(tokenId, tokenUri);
         _mint(to, tokenId, 1, "");
     }
@@ -62,12 +82,21 @@ contract ItemToken is ERC1155, ERC1155Supply, AccessControl, Pausable {
             revert InvalidAmount();
         }
 
+        TokenKind kind = _tokenKinds[tokenId];
+        if (kind == TokenKind.Inventory) {
+            revert TokenKindConflict(tokenId);
+        }
+
+        if (kind == TokenKind.Unknown) {
+            _tokenKinds[tokenId] = TokenKind.Game;
+        }
+
         _setTokenURIIfEmpty(tokenId, tokenUri);
         _mint(to, tokenId, amount, "");
     }
 
     function burn(address from, uint256 tokenId, uint256 amount) external onlyRole(BURNER_ROLE) {
-        if (from != _msgSender() && !isApprovedForAll(from, address(this))) {
+        if (from != _msgSender() && !isApprovedForAll(from, _msgSender())) {
             revert BurnNotApproved(from);
         }
 
@@ -75,6 +104,10 @@ contract ItemToken is ERC1155, ERC1155Supply, AccessControl, Pausable {
     }
 
     function setTokenURI(uint256 tokenId, string calldata tokenUri) external onlyRole(URI_SETTER_ROLE) {
+        if (bytes(tokenUri).length == 0) {
+            revert EmptyTokenURI();
+        }
+
         _tokenUris[tokenId] = tokenUri;
         emit URI(tokenUri, tokenId);
     }
@@ -115,5 +148,9 @@ contract ItemToken is ERC1155, ERC1155Supply, AccessControl, Pausable {
             _tokenUris[tokenId] = tokenUri;
             emit URI(tokenUri, tokenId);
         }
+    }
+
+    function _derivePhysicalTokenId(string calldata inventoryId) private pure returns (uint256) {
+        return uint256(keccak256(abi.encodePacked("inventory:", inventoryId)));
     }
 }
