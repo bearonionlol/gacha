@@ -1,0 +1,12 @@
+.superpowers/
+node_modules/
+.env
+.env.local
+dist/
+build/
+coverage/
+cache/
+artifacts/
+typechain-types/
+.next/
+out/
