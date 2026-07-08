@@ -1,7 +1,5 @@
 .superpowers/
 node_modules/
-.env
-.env.local
 dist/
 build/
 coverage/
@@ -10,3 +8,8 @@ artifacts/
 typechain-types/
 .next/
 out/
+.env
+.env.local
+.DS_Store
+.worktrees/
+worktrees/
