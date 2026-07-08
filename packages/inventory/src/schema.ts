@@ -158,4 +158,18 @@ export const InventoryItemSchema: z.ZodType<InventoryItem> = z
     }
   });
 
-export const InventoryItemsSchema: z.ZodType<InventoryItem[]> = z.array(InventoryItemSchema);
+export const InventoryItemsSchema: z.ZodType<InventoryItem[]> = z.array(InventoryItemSchema).superRefine((items, ctx) => {
+  const seenInventoryIds = new Set<string>();
+
+  items.forEach((item, index) => {
+    if (seenInventoryIds.has(item.inventoryId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [index, "inventoryId"],
+        message: `Duplicate inventoryId: ${item.inventoryId}`
+      });
+    }
+
+    seenInventoryIds.add(item.inventoryId);
+  });
+});

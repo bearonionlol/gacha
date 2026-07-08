@@ -107,4 +107,16 @@ describe("InventoryItemSchema", () => {
     ).toBe(true);
     expect(parsed.every((item) => item.legalDisclaimer.toLowerCase().includes("no affiliation"))).toBe(true);
   });
+
+  it("rejects duplicate inventory IDs in inventory lists", () => {
+    const secondPhotoUrls = ["https://assets.example.com/inventory/inv-test-002-front.jpg"];
+    const duplicateIdItem: InventoryItem = {
+      ...validItem,
+      cardName: "Pokemon TCG Bulbasaur",
+      photoUrls: secondPhotoUrls,
+      photoHash: createPhotoHash(secondPhotoUrls)
+    };
+
+    expect(() => InventoryItemsSchema.parse([validItem, duplicateIdItem])).toThrow(/duplicate inventoryId/i);
+  });
 });

@@ -36,6 +36,10 @@ const validateInventoryItems = (items: readonly InventoryItem[]): InventoryItem[
 };
 
 const serializeCsvValue = (value: InventoryItem[(typeof inventoryCsvColumns)[number]]): string => {
+  if (value == null) {
+    return "";
+  }
+
   const text = Array.isArray(value) ? JSON.stringify(value) : String(value);
   const escaped = text.replace(/"/g, '""');
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { exportInventoryAsCsv, exportInventoryAsJson, inventoryCsvColumns } from "../export";
+import { createPhotoHash } from "../photo-hash";
 import type { InventoryItem } from "../schema";
 
 const item: InventoryItem = {
@@ -50,6 +51,26 @@ describe("inventory exports", () => {
     expect(row).toContain('"Pokemon TCG Pikachu, Yellow Cheeks"');
     expect(row).toContain('"[""front.jpg"",""back.jpg""]"');
     expect(row).toContain('"[""electric"",""base_set""]"');
+  });
+
+  it("exports null graded-only fields as blank CSV cells", () => {
+    const photoUrls = ["front.jpg"];
+    const csv = exportInventoryAsCsv([
+      {
+        ...item,
+        cardName: "Pokemon TCG Pikachu",
+        photoUrls,
+        photoHash: createPhotoHash(photoUrls),
+        craftingTags: ["electric"]
+      }
+    ]);
+    const [, row] = csv.split("\n");
+    const cells = row?.split(",");
+
+    expect(cells?.[inventoryCsvColumns.indexOf("gradingCompany")]).toBe("");
+    expect(cells?.[inventoryCsvColumns.indexOf("grade")]).toBe("");
+    expect(cells?.[inventoryCsvColumns.indexOf("certNumber")]).toBe("");
+    expect(cells?.[inventoryCsvColumns.indexOf("certUrl")]).toBe("");
   });
 
   it("escapes CSV fields containing quotes, commas, and newlines", () => {
