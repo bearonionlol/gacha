@@ -109,6 +109,58 @@ export type PackSale = Omit<BaseContract, "connect"> & {
   connect(runner: ContractRunner | null): PackSale;
 };
 
+export interface ListingRecord {
+  seller: string;
+  tokenId: bigint;
+  amount: bigint;
+  price: bigint;
+  active: boolean;
+  sold: boolean;
+  cancelled: boolean;
+}
+
+export type Marketplace = Omit<BaseContract, "connect"> & {
+  MARKET_ADMIN_ROLE(): Promise<string>;
+  feeBps(): Promise<bigint>;
+  treasury(): Promise<string>;
+  listings(listingId: BigNumberish): Promise<ListingRecord>;
+  list(tokenId: BigNumberish, amount: BigNumberish, price: BigNumberish): Promise<ContractTransactionResponse>;
+  cancel(listingId: BigNumberish): Promise<ContractTransactionResponse>;
+  buy(listingId: BigNumberish, overrides?: { value?: BigNumberish }): Promise<ContractTransactionResponse>;
+  setFeeBps(feeBps: BigNumberish): Promise<ContractTransactionResponse>;
+  setTreasury(treasury: string): Promise<ContractTransactionResponse>;
+  pause(): Promise<ContractTransactionResponse>;
+  unpause(): Promise<ContractTransactionResponse>;
+  grantRole(role: string, account: string): Promise<ContractTransactionResponse>;
+  connect(runner: ContractRunner | null): Marketplace;
+};
+
+export interface QuoteRecord {
+  price: bigint;
+  active: boolean;
+}
+
+export type BuybackVault = Omit<BaseContract, "connect"> & {
+  BUYBACK_ADMIN_ROLE(): Promise<string>;
+  quotes(tokenId: BigNumberish): Promise<QuoteRecord>;
+  setQuote(
+    tokenId: BigNumberish,
+    price: BigNumberish,
+    active: boolean
+  ): Promise<ContractTransactionResponse>;
+  acceptQuote(tokenId: BigNumberish, amount: BigNumberish): Promise<ContractTransactionResponse>;
+  withdrawToken(
+    to: string,
+    tokenId: BigNumberish,
+    amount: BigNumberish
+  ): Promise<ContractTransactionResponse>;
+  withdrawNative(to: string, amount: BigNumberish): Promise<ContractTransactionResponse>;
+  pause(): Promise<ContractTransactionResponse>;
+  unpause(): Promise<ContractTransactionResponse>;
+  grantRole(role: string, account: string): Promise<ContractTransactionResponse>;
+  connect(runner: ContractRunner | null): BuybackVault;
+};
+
 function requireSigner(
   signers: HardhatEthersSigner[],
   index: number,
@@ -184,6 +236,8 @@ export async function deployProtocolFixture() {
   const dropAdmin = requireSigner(signers, 11, "drop admin");
   const buyer = requireSigner(signers, 12, "buyer");
   const treasury = requireSigner(signers, 13, "treasury");
+  const marketAdmin = requireSigner(signers, 14, "market admin");
+  const buybackAdmin = requireSigner(signers, 15, "buyback admin");
   const registry = (await ethers.deployContract("InventoryRegistry")) as unknown as InventoryRegistry;
   const itemToken = (await ethers.deployContract("ItemToken")) as unknown as ItemToken;
   const randomnessProvider = (await ethers.deployContract(
@@ -202,6 +256,17 @@ export async function deployProtocolFixture() {
   ])) as unknown as PackSale;
 
   await packSale.waitForDeployment();
+  const marketplace = (await ethers.deployContract("Marketplace", [
+    await itemToken.getAddress(),
+    treasury.address
+  ])) as unknown as Marketplace;
+  const buybackVault = (await ethers.deployContract("BuybackVault", [
+    await itemToken.getAddress()
+  ])) as unknown as BuybackVault;
+
+  await marketplace.waitForDeployment();
+  await buybackVault.waitForDeployment();
+
   await registry.grantRole(await registry.INVENTORY_ADMIN_ROLE(), inventoryAdmin.address);
   await registry.grantRole(await registry.TOKENIZER_ROLE(), tokenizer.address);
   await registry.grantRole(await registry.TOKENIZER_ROLE(), await packSale.getAddress());
@@ -213,12 +278,16 @@ export async function deployProtocolFixture() {
   await randomnessProvider.grantRole(REQUESTER_ROLE, await packSale.getAddress());
   await randomnessProvider.grantRole(await randomnessProvider.REVEALER_ROLE(), revealer.address);
   await packSale.grantRole(await packSale.DROP_ADMIN_ROLE(), dropAdmin.address);
+  await marketplace.grantRole(await marketplace.MARKET_ADMIN_ROLE(), marketAdmin.address);
+  await buybackVault.grantRole(await buybackVault.BUYBACK_ADMIN_ROLE(), buybackAdmin.address);
 
   return {
     registry,
     itemToken,
     randomnessProvider,
     packSale,
+    marketplace,
+    buybackVault,
     deployer,
     inventoryAdmin,
     tokenizer,
@@ -232,6 +301,8 @@ export async function deployProtocolFixture() {
     revealer,
     dropAdmin,
     buyer,
-    treasury
+    treasury,
+    marketAdmin,
+    buybackAdmin
   };
 }
