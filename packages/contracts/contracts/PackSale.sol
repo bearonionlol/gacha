@@ -29,7 +29,9 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard {
         uint256 endTime;
         uint256 maxSupply;
         uint256 sold;
+        uint256 nextPurchasePosition;
         uint256 nextRevealPosition;
+        uint256 pendingPurchases;
         string[] inventoryIds;
         string[] metadataUris;
         bool exists;
@@ -63,9 +65,11 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard {
     error UnauthorizedReveal(uint256 purchaseId, address caller);
     error PurchaseAlreadyRevealed(uint256 purchaseId);
     error RevealOrderBlocked(uint256 purchaseId, uint256 expectedPosition, uint256 actualPosition);
-    error UnauthorizedRefund(uint256 purchaseId, address caller);
     error PurchaseAlreadyRefunded(uint256 purchaseId);
     error RefundNotAvailable(uint256 purchaseId);
+    error RefundRandomnessReady(uint256 purchaseId);
+    error DropStillActive(uint256 dropId);
+    error PendingPurchasesRemaining(uint256 dropId);
     error TransferFailed(address to, uint256 amount);
 
     event DropCreated(
@@ -92,6 +96,7 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard {
         uint256 tokenId
     );
     event PackRefunded(uint256 indexed purchaseId, uint256 indexed dropId, address indexed buyer, uint256 price);
+    event DropClosed(uint256 indexed dropId, uint256 releasedInventory);
 
     InventoryRegistry public immutable inventoryRegistry;
     ItemToken public immutable itemToken;
@@ -211,9 +216,11 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard {
 
         purchaseId = nextPurchaseId++;
         bytes32 requestId = keccak256(abi.encode(address(this), purchaseId, msg.sender, block.chainid));
-        uint256 position = drop.sold;
+        uint256 position = drop.nextPurchasePosition;
 
         drop.sold += 1;
+        drop.nextPurchasePosition += 1;
+        drop.pendingPurchases += 1;
         _purchaseIdByDropPosition[dropId][position] = purchaseId;
         _purchases[purchaseId] = Purchase({
             buyer: msg.sender,
@@ -235,7 +242,10 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard {
     function reveal(uint256 purchaseId) external nonReentrant returns (uint256 tokenId) {
         Purchase storage purchaseRecord = _purchaseFor(purchaseId);
 
-        if (purchaseRecord.buyer != msg.sender) {
+        if (
+            purchaseRecord.buyer != msg.sender
+                && block.timestamp < purchaseRecord.purchasedAt + REFUND_TIMEOUT
+        ) {
             revert UnauthorizedReveal(purchaseId, msg.sender);
         }
 
@@ -279,6 +289,7 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard {
         inventoryRegistry.markTokenized(inventoryId, purchaseRecord.buyer);
         delete _reservedInventory[_inventoryKey(inventoryId)];
         itemToken.mintInventoryItem(purchaseRecord.buyer, tokenId, inventoryId, metadataUri);
+        drop.pendingPurchases -= 1;
         _advanceRevealCursor(drop, purchaseRecord.dropId);
         _sendNative(treasury, purchaseRecord.price);
 
@@ -288,10 +299,6 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard {
     function refundExpiredPurchase(uint256 purchaseId) external nonReentrant {
         Purchase storage purchaseRecord = _purchaseFor(purchaseId);
 
-        if (purchaseRecord.buyer != msg.sender) {
-            revert UnauthorizedRefund(purchaseId, msg.sender);
-        }
-
         if (purchaseRecord.refunded) {
             revert PurchaseAlreadyRefunded(purchaseId);
         }
@@ -300,12 +307,19 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard {
             revert PurchaseAlreadyRevealed(purchaseId);
         }
 
+        (bool ready,) = randomnessProvider.readRandomness(purchaseRecord.requestId);
+        if (ready) {
+            revert RefundRandomnessReady(purchaseId);
+        }
+
         if (block.timestamp < purchaseRecord.purchasedAt + REFUND_TIMEOUT) {
             revert RefundNotAvailable(purchaseId);
         }
 
         Drop storage drop = _dropFor(purchaseRecord.dropId);
         purchaseRecord.refunded = true;
+        drop.sold -= 1;
+        drop.pendingPurchases -= 1;
 
         if (purchaseRecord.position == drop.nextRevealPosition) {
             _advanceRevealCursor(drop, purchaseRecord.dropId);
@@ -314,6 +328,28 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard {
         _sendNative(payable(purchaseRecord.buyer), purchaseRecord.price);
 
         emit PackRefunded(purchaseId, purchaseRecord.dropId, purchaseRecord.buyer, purchaseRecord.price);
+    }
+
+    function closeDrop(uint256 dropId) external onlyRole(DROP_ADMIN_ROLE) {
+        Drop storage drop = _dropFor(dropId);
+
+        if (block.timestamp <= drop.endTime) {
+            revert DropStillActive(dropId);
+        }
+
+        if (drop.pendingPurchases != 0) {
+            revert PendingPurchasesRemaining(dropId);
+        }
+
+        uint256 releasedInventory = drop.inventoryIds.length;
+        for (uint256 index = 0; index < releasedInventory; index++) {
+            delete _reservedInventory[_inventoryKey(drop.inventoryIds[index])];
+        }
+
+        delete drop.inventoryIds;
+        delete drop.metadataUris;
+
+        emit DropClosed(dropId, releasedInventory);
     }
 
     function remainingInventory(uint256 dropId) external view returns (uint256) {
@@ -349,7 +385,7 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard {
     function _advanceRevealCursor(Drop storage drop, uint256 dropId) private {
         drop.nextRevealPosition += 1;
 
-        while (drop.nextRevealPosition < drop.sold) {
+        while (drop.nextRevealPosition < drop.nextPurchasePosition) {
             uint256 purchaseIdAtPosition = _purchaseIdByDropPosition[dropId][drop.nextRevealPosition];
             if (purchaseIdAtPosition == 0 || !_purchases[purchaseIdAtPosition].refunded) {
                 break;

@@ -66,6 +66,7 @@ export type ItemToken = Omit<BaseContract, "connect"> & {
     data: string
   ): Promise<ContractTransactionResponse>;
   grantRole(role: string, account: string): Promise<ContractTransactionResponse>;
+  revokeRole(role: string, account: string): Promise<ContractTransactionResponse>;
   connect(runner: ContractRunner | null): ItemToken;
 };
 
@@ -97,6 +98,7 @@ export type PackSale = Omit<BaseContract, "connect"> & {
   purchase(dropId: BigNumberish, overrides?: { value?: BigNumberish }): Promise<ContractTransactionResponse>;
   reveal(purchaseId: BigNumberish): Promise<ContractTransactionResponse>;
   refundExpiredPurchase(purchaseId: BigNumberish): Promise<ContractTransactionResponse>;
+  closeDrop(dropId: BigNumberish): Promise<ContractTransactionResponse>;
   remainingInventory(dropId: BigNumberish): Promise<bigint>;
   pause(): Promise<ContractTransactionResponse>;
   unpause(): Promise<ContractTransactionResponse>;

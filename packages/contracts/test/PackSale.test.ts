@@ -406,6 +406,29 @@ describe("PackSale", function () {
     await expect(packSale.connect(recipient).reveal(2n)).to.emit(packSale, "PackRevealed");
   });
 
+  it("lets anyone reveal a timed-out ready purchase for the original buyer", async function () {
+    const { fixture, dropId } = await createActiveDrop();
+    const { packSale, randomnessProvider, itemToken, buyer, recipient, other, revealer } = fixture;
+    const firstRequestId = await requestIdForPack(packSale, 1n, buyer.address);
+    const secondRequestId = await requestIdForPack(packSale, 2n, recipient.address);
+    const firstSeed = await seedForInventoryIndex(randomnessProvider, firstRequestId, 0n);
+    const secondSeed = ethers.keccak256(ethers.toUtf8Bytes("keeper-second-seed"));
+    const firstTokenId = physicalTokenIdFor(firstInventoryId);
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    await packSale.connect(recipient).purchase(dropId, { value: packPrice });
+    await makeRandomnessReady(randomnessProvider, revealer, firstRequestId, firstSeed);
+    await makeRandomnessReady(randomnessProvider, revealer, secondRequestId, secondSeed);
+    await increaseTime(refundTimeoutSeconds + 1);
+
+    await expect(packSale.connect(other).reveal(1n))
+      .to.emit(itemToken, "TransferSingle")
+      .withArgs(await packSale.getAddress(), ethers.ZeroAddress, buyer.address, firstTokenId, 1n);
+
+    expect(await itemToken.balanceOf(buyer.address, firstTokenId)).to.equal(1n);
+    await expect(packSale.connect(recipient).reveal(2n)).to.emit(packSale, "PackRevealed");
+  });
+
   it("rejects refunds before the timeout", async function () {
     const {
       fixture: { packSale, buyer },
@@ -416,6 +439,40 @@ describe("PackSale", function () {
 
     await expect(packSale.connect(buyer).refundExpiredPurchase(1n))
       .to.be.revertedWithCustomError(packSale, "RefundNotAvailable")
+      .withArgs(1n);
+  });
+
+  it("lets anyone refund an expired purchase only to the original buyer when randomness is not ready", async function () {
+    const {
+      fixture: { packSale, buyer, other },
+      dropId
+    } = await createActiveDrop();
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    await increaseTime(refundTimeoutSeconds + 1);
+
+    await expect(packSale.connect(other).refundExpiredPurchase(1n)).to.changeEtherBalances(
+      [buyer, packSale],
+      [packPrice, -packPrice]
+    );
+
+    await expect(packSale.connect(buyer).refundExpiredPurchase(1n))
+      .to.be.revertedWithCustomError(packSale, "PurchaseAlreadyRefunded")
+      .withArgs(1n);
+  });
+
+  it("rejects refunds after randomness is ready", async function () {
+    const { fixture, dropId } = await createActiveDrop();
+    const { packSale, randomnessProvider, buyer, other, revealer } = fixture;
+    const requestId = await requestIdForPack(packSale, 1n, buyer.address);
+    const seed = ethers.keccak256(ethers.toUtf8Bytes("ready-refund-seed"));
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    await makeRandomnessReady(randomnessProvider, revealer, requestId, seed);
+    await increaseTime(refundTimeoutSeconds + 1);
+
+    await expect(packSale.connect(other).refundExpiredPurchase(1n))
+      .to.be.revertedWithCustomError(packSale, "RefundRandomnessReady")
       .withArgs(1n);
   });
 
@@ -438,6 +495,22 @@ describe("PackSale", function () {
       .withArgs(1n);
   });
 
+  it("lets a replacement buyer purchase after an expired refund frees supply", async function () {
+    const now = await latestTimestamp();
+    const {
+      fixture: { packSale, buyer, recipient },
+      dropId
+    } = await createActiveDrop({ maxSupply: 1n, endTime: now + refundTimeoutSeconds + 3600 });
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    await increaseTime(refundTimeoutSeconds + 1);
+    await packSale.connect(buyer).refundExpiredPurchase(1n);
+
+    await expect(packSale.connect(recipient).purchase(dropId, { value: packPrice }))
+      .to.emit(packSale, "PackPurchased")
+      .withArgs(2n, dropId, recipient.address, await requestIdForPack(packSale, 2n, recipient.address), packPrice);
+  });
+
   it("advances reveal order when refunding the next expected purchase", async function () {
     const { fixture, dropId } = await createActiveDrop();
     const { packSale, randomnessProvider, buyer, recipient, revealer } = fixture;
@@ -456,6 +529,65 @@ describe("PackSale", function () {
     await packSale.connect(buyer).refundExpiredPurchase(1n);
 
     await expect(packSale.connect(recipient).reveal(2n)).to.emit(packSale, "PackRevealed");
+  });
+
+  it("rejects closing a drop while pending purchases remain", async function () {
+    const { fixture, dropId } = await createActiveDrop();
+    const { packSale, buyer, dropAdmin } = fixture;
+    const now = await latestTimestamp();
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    await setNextBlockTimestamp(now + 3601);
+
+    await expect(packSale.connect(dropAdmin).closeDrop(dropId))
+      .to.be.revertedWithCustomError(packSale, "PendingPurchasesRemaining")
+      .withArgs(dropId);
+  });
+
+  it("closes a resolved ended drop and releases unused inventory reservations", async function () {
+    const { fixture, dropId } = await createActiveDrop({ maxSupply: 1n });
+    const { packSale, buyer, dropAdmin } = fixture;
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    await increaseTime(refundTimeoutSeconds + 1);
+    await packSale.connect(buyer).refundExpiredPurchase(1n);
+
+    await expect(packSale.connect(dropAdmin).closeDrop(dropId))
+      .to.emit(packSale, "DropClosed")
+      .withArgs(dropId, 3n);
+
+    expect(await packSale.remainingInventory(dropId)).to.equal(0n);
+
+    await expect(
+      packSale.connect(dropAdmin).createDrop(
+        await activeDropParams({
+          maxSupply: 1n,
+          inventoryIds: [firstInventoryId],
+          metadataUris: [firstMetadataUri]
+        })
+      )
+    ).to.emit(packSale, "DropCreated");
+  });
+
+  it("keeps registry and escrow unchanged when token minting fails during reveal", async function () {
+    const { fixture, dropId } = await createActiveDrop();
+    const { registry, itemToken, packSale, randomnessProvider, buyer, revealer } = fixture;
+    const requestId = await requestIdForPack(packSale, 1n, buyer.address);
+    const seed = await seedForInventoryIndex(randomnessProvider, requestId, 0n);
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    await makeRandomnessReady(randomnessProvider, revealer, requestId, seed);
+    await itemToken.revokeRole(await itemToken.MINTER_ROLE(), await packSale.getAddress());
+
+    await expect(packSale.connect(buyer).reveal(1n))
+      .to.be.revertedWithCustomError(itemToken, "AccessControlUnauthorizedAccount")
+      .withArgs(await packSale.getAddress(), await itemToken.MINTER_ROLE());
+
+    const record = await registry.getInventory(firstInventoryId);
+    expect(record.tokenized).to.equal(false);
+    expect(record.owner).to.equal(ethers.ZeroAddress);
+    expect(await packSale.remainingInventory(dropId)).to.equal(3n);
+    expect(await ethers.provider.getBalance(await packSale.getAddress())).to.equal(packPrice);
   });
 });
 
