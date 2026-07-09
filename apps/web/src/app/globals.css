@@ -796,15 +796,20 @@ h1 {
   padding: 0;
 }
 
-.required-field-list code,
+.required-field-list li,
 .inventory-lifecycle li {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface-2);
   padding: 7px 9px;
   color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.76rem;
+  list-style: none;
+}
+
+.required-field-list code,
+.inventory-lifecycle li {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   letter-spacing: 0;
 }
 
@@ -816,32 +821,29 @@ h1 {
   color: var(--green);
 }
 
-.inventory-table {
+.inventory-table-wrap {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
 }
 
-.inventory-table-row {
-  display: grid;
-  grid-template-columns: minmax(180px, 1.25fr) repeat(3, minmax(92px, 0.62fr)) minmax(150px, 0.8fr) repeat(
-      2,
-      minmax(92px, 0.55fr)
-    );
-  gap: 12px;
-  align-items: center;
+.inventory-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.inventory-table th,
+.inventory-table td {
   border-top: 1px solid var(--line);
   background: rgba(18, 23, 21, 0.72);
   padding: 12px;
   color: var(--muted);
+  text-align: left;
   font-size: 0.86rem;
 }
 
-.inventory-table-row:first-child {
+.inventory-table th {
   border-top: 0;
-}
-
-.inventory-table-row.header {
   background: var(--surface-3);
   color: var(--green);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -849,16 +851,16 @@ h1 {
   text-transform: uppercase;
 }
 
-.inventory-table-row strong,
-.inventory-table-row code {
+.inventory-table strong,
+.inventory-table code {
   display: block;
 }
 
-.inventory-table-row strong {
+.inventory-table strong {
   color: var(--text);
 }
 
-.inventory-table-row code {
+.inventory-table code {
   margin-top: 4px;
   color: var(--faint);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -883,11 +885,11 @@ h1 {
     grid-column: auto;
   }
 
-  .inventory-table {
+  .inventory-table-wrap {
     overflow-x: auto;
   }
 
-  .inventory-table-row {
+  .inventory-table {
     min-width: 860px;
   }
 
@@ -925,8 +927,7 @@ h1 {
   .portfolio-summary,
   .detail-grid,
   .timeline-state-row,
-  .request-steps,
-  .forge-grid {
+  .request-steps {
     grid-template-columns: 1fr;
   }
 

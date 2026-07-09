@@ -73,12 +73,17 @@ export function ForgeWorkbench() {
           inventory is burned in this demo.
         </p>
 
-        <div className="forge-grid" aria-label="3 x 3 Forge Grid slots">
+        <div className="forge-grid" aria-label="3 x 3 Forge Grid slots" role="grid">
           {gridSlots.map((slot) => {
             const card = protectedInputs[slot - 1];
 
             return (
-              <div className={card ? "forge-slot protected" : "forge-slot"} key={slot}>
+              <div
+                aria-label={card ? `Protected forge slot ${slot} ${card.title}` : `Open forge slot ${slot}`}
+                className={card ? "forge-slot protected" : "forge-slot"}
+                key={slot}
+                role="gridcell"
+              >
                 {card ? (
                   <>
                     <LockKeyhole size={18} aria-hidden="true" />
