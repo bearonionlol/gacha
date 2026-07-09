@@ -52,6 +52,12 @@ contract InventoryRegistry is AccessControl {
         return uint256(keccak256(abi.encodePacked("inventory:", inventoryId)));
     }
 
+    function validatePhysicalTokenId(uint256 tokenId) public pure {
+        if (tokenId <= GAME_TOKEN_ID_MAX) {
+            revert InvalidPhysicalTokenId(tokenId);
+        }
+    }
+
     function anchorInventory(
         string calldata inventoryId,
         bytes32 inventoryHash,
@@ -71,9 +77,7 @@ contract InventoryRegistry is AccessControl {
         }
 
         uint256 tokenId = derivePhysicalTokenId(inventoryId);
-        if (tokenId <= GAME_TOKEN_ID_MAX) {
-            revert InvalidPhysicalTokenId(tokenId);
-        }
+        validatePhysicalTokenId(tokenId);
 
         _inventoryRecords[key] = InventoryRecord({
             inventoryId: inventoryId,

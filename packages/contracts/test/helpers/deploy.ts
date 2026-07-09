@@ -16,9 +16,11 @@ export interface InventoryRecord {
 }
 
 export type InventoryRegistry = Omit<BaseContract, "connect"> & {
+  GAME_TOKEN_ID_MAX(): Promise<bigint>;
   INVENTORY_ADMIN_ROLE(): Promise<string>;
   TOKENIZER_ROLE(): Promise<string>;
   derivePhysicalTokenId(inventoryId: string): Promise<bigint>;
+  validatePhysicalTokenId(tokenId: BigNumberish): Promise<void>;
   anchorInventory(
     inventoryId: string,
     inventoryHash: string,

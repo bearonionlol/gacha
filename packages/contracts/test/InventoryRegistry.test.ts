@@ -21,6 +21,17 @@ describe("InventoryRegistry", function () {
     expect(await registry.derivePhysicalTokenId("sealed-case-002")).to.not.equal(derived);
   });
 
+  it("validates physical token ids outside the game namespace", async function () {
+    const { registry } = await deployInventoryRegistryFixture();
+    const gameNamespaceTokenId = await registry.GAME_TOKEN_ID_MAX();
+    const physicalTokenId = physicalTokenIdFor(inventoryId);
+
+    await expect(registry.validatePhysicalTokenId(gameNamespaceTokenId))
+      .to.be.revertedWithCustomError(registry, "InvalidPhysicalTokenId")
+      .withArgs(gameNamespaceTokenId);
+    await expect(registry.validatePhysicalTokenId(physicalTokenId)).to.not.be.reverted;
+  });
+
   it("anchors an inventory hash once", async function () {
     const { registry, inventoryAdmin } = await deployInventoryRegistryFixture();
     const tokenId = physicalTokenIdFor(inventoryId);
