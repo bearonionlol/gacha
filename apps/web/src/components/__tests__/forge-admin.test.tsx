@@ -11,8 +11,9 @@ describe("forge and admin routes", () => {
     expect(screen.getByText(/Output Preview/i)).toBeInTheDocument();
     expect(screen.getByText(/grail-protected/i)).toBeInTheDocument();
     expect(screen.getAllByRole("gridcell")).toHaveLength(9);
-    expect(screen.getByText(/Approval target: Forge/i)).toBeInTheDocument();
-    expect(screen.getByText(/Transaction submission lands in Phase 4B/i)).toBeInTheDocument();
+    expect(screen.getByText(/Approve Forge/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Forge\.craft/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/0\.001 ETH/i)).toBeInTheDocument();
   });
 
   it("renders admin lifecycle, required fields, and export controls", () => {

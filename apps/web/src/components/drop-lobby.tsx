@@ -1,5 +1,5 @@
-import { BadgeDollarSign, PackageCheck, PercentCircle } from "lucide-react";
-import { ActionGuardPanel } from "./action-guard-panel";
+import { BadgeDollarSign, PercentCircle } from "lucide-react";
+import { PackPurchasePanel } from "./testnet-write-panels";
 import { activeDrop } from "../lib/game-state";
 import { formatCents, formatCompactNumber } from "../lib/format";
 
@@ -19,12 +19,9 @@ export function DropLobby() {
           <h2>{activeDrop.title}</h2>
           <p>{activeDrop.inventoryBackedCount} vault items backing the demo drop pool.</p>
         </div>
-        <button className="primary-action" type="button">
-          <PackageCheck size={17} aria-hidden="true" />
-          Reserve pack
-        </button>
+        <span className="chain-pill">Live write enabled</span>
       </div>
-      <ActionGuardPanel action="Reserve pack" operator="PackSale" />
+      <PackPurchasePanel />
 
       <dl className="drop-stats">
         <div>
