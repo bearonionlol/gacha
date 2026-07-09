@@ -14,6 +14,11 @@ export type WriteRequest =
       value: bigint;
     }
   | {
+      kind: "packReveal";
+      contracts: ProtocolContracts;
+      purchaseId: bigint;
+    }
+  | {
       kind: "approval";
       contracts: ProtocolContracts;
       operator: ApprovalOperator;
@@ -36,6 +41,33 @@ export type WriteRequest =
       kind: "redemptionRequest";
       contracts: ProtocolContracts;
       tokenId: bigint;
+    }
+  | {
+      kind: "redemptionApprove";
+      contracts: ProtocolContracts;
+      requestId: bigint;
+    }
+  | {
+      kind: "redemptionMarkPacked";
+      contracts: ProtocolContracts;
+      requestId: bigint;
+    }
+  | {
+      kind: "redemptionMarkShipped";
+      contracts: ProtocolContracts;
+      requestId: bigint;
+      trackingRef: string;
+    }
+  | {
+      kind: "redemptionComplete";
+      contracts: ProtocolContracts;
+      requestId: bigint;
+    }
+  | {
+      kind: "redemptionCancel";
+      contracts: ProtocolContracts;
+      requestId: bigint;
+      reason: string;
     };
 
 export type PreparedWrite = {
@@ -70,6 +102,15 @@ export function createWriteRequest(request: WriteRequest): PreparedWrite {
     };
   }
 
+  if (request.kind === "packReveal") {
+    return {
+      address: request.contracts.PackSale,
+      abi: packSaleAbi as Abi,
+      functionName: "reveal",
+      args: [request.purchaseId]
+    };
+  }
+
   if (request.kind === "marketList") {
     return {
       address: request.contracts.Marketplace,
@@ -89,11 +130,44 @@ export function createWriteRequest(request: WriteRequest): PreparedWrite {
     };
   }
 
+  if (request.kind === "redemptionRequest") {
+    return {
+      address: request.contracts.RedemptionRegistry,
+      abi: redemptionRegistryAbi as Abi,
+      functionName: "requestRedemption",
+      args: [request.tokenId]
+    };
+  }
+
+  if (request.kind === "redemptionApprove") {
+    return createRedemptionAdminWrite(request.contracts, "approve", [request.requestId]);
+  }
+
+  if (request.kind === "redemptionMarkPacked") {
+    return createRedemptionAdminWrite(request.contracts, "markPacked", [request.requestId]);
+  }
+
+  if (request.kind === "redemptionMarkShipped") {
+    return createRedemptionAdminWrite(request.contracts, "markShipped", [request.requestId, request.trackingRef]);
+  }
+
+  if (request.kind === "redemptionComplete") {
+    return createRedemptionAdminWrite(request.contracts, "complete", [request.requestId]);
+  }
+
+  return createRedemptionAdminWrite(request.contracts, "cancel", [request.requestId, request.reason]);
+}
+
+function createRedemptionAdminWrite(
+  contracts: ProtocolContracts,
+  functionName: string,
+  args: readonly unknown[]
+): PreparedWrite {
   return {
-    address: request.contracts.RedemptionRegistry,
+    address: contracts.RedemptionRegistry,
     abi: redemptionRegistryAbi as Abi,
-    functionName: "requestRedemption",
-    args: [request.tokenId]
+    functionName,
+    args
   };
 }
 

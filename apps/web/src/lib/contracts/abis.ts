@@ -15,6 +15,13 @@ export const packSaleAbi = [
     stateMutability: "payable",
     inputs: [{ name: "dropId", type: "uint256" }],
     outputs: [{ name: "purchaseId", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "reveal",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "purchaseId", type: "uint256" }],
+    outputs: [{ name: "tokenId", type: "uint256" }]
   }
 ] as const;
 
@@ -79,6 +86,47 @@ export const redemptionRegistryAbi = [
     stateMutability: "nonpayable",
     inputs: [{ name: "tokenId", type: "uint256" }],
     outputs: [{ name: "requestId", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "requestId", type: "uint256" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "markPacked",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "requestId", type: "uint256" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "markShipped",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "requestId", type: "uint256" },
+      { name: "trackingRef", type: "string" }
+    ],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "complete",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "requestId", type: "uint256" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "cancel",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "requestId", type: "uint256" },
+      { name: "reason", type: "string" }
+    ],
+    outputs: []
   }
 ] as const;
 

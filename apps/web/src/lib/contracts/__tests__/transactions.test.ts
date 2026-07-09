@@ -76,6 +76,39 @@ describe("transaction helpers", () => {
     expect(redeem.args).toEqual([1001n]);
   });
 
+  it("builds pack reveal and redemption admin requests", () => {
+    const reveal = createWriteRequest({ kind: "packReveal", contracts, purchaseId: 7n });
+    const approve = createWriteRequest({ kind: "redemptionApprove", contracts, requestId: 2n });
+    const packed = createWriteRequest({ kind: "redemptionMarkPacked", contracts, requestId: 2n });
+    const shipped = createWriteRequest({
+      kind: "redemptionMarkShipped",
+      contracts,
+      requestId: 3n,
+      trackingRef: "UPS-TEST-1"
+    });
+    const completed = createWriteRequest({ kind: "redemptionComplete", contracts, requestId: 3n });
+    const cancelled = createWriteRequest({
+      kind: "redemptionCancel",
+      contracts,
+      requestId: 4n,
+      reason: "testnet operator cancellation"
+    });
+
+    expect(reveal.address).toBe(contracts.PackSale);
+    expect(reveal.functionName).toBe("reveal");
+    expect(reveal.args).toEqual([7n]);
+    expect(approve.functionName).toBe("approve");
+    expect(approve.args).toEqual([2n]);
+    expect(packed.functionName).toBe("markPacked");
+    expect(packed.args).toEqual([2n]);
+    expect(shipped.functionName).toBe("markShipped");
+    expect(shipped.args).toEqual([3n, "UPS-TEST-1"]);
+    expect(completed.functionName).toBe("complete");
+    expect(completed.args).toEqual([3n]);
+    expect(cancelled.functionName).toBe("cancel");
+    expect(cancelled.args).toEqual([4n, "testnet operator cancellation"]);
+  });
+
   it("sanitizes common wallet errors", () => {
     expect(getTransactionErrorMessage(Object.assign(new Error("rejected"), { code: 4001 }))).toMatch(/rejected/i);
     expect(getTransactionErrorMessage(new Error("insufficient funds for gas * price + value"))).toMatch(
