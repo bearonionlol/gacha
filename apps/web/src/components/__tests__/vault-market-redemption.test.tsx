@@ -21,7 +21,11 @@ describe("vault, market, and redemption routes", () => {
 
     expect(screen.getByText(/Fixed-price market/i)).toBeInTheDocument();
     expect(screen.getByText(/escrowed until sale or cancellation/i)).toBeInTheDocument();
-    expect(screen.getByText(/protocol fee/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/protocol fee/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Seller receives/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Floor delta/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Buyback delta/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Listing health/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: /Open listing for Pokemon TCG Charizard ex/i })).toBeDisabled();
     expect(screen.getAllByText(/Approve Marketplace/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Marketplace\.list/i).length).toBeGreaterThan(0);
