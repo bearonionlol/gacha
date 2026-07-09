@@ -87,14 +87,55 @@ type ForgeContract = BaseContract & {
     excludeGrailProtectedInputs: boolean;
   }): Promise<ContractTransactionResponse>;
   setRecipeStatus(recipeId: BigNumberish, status: BigNumberish): Promise<ContractTransactionResponse>;
+  getRecipeInputs(recipeId: BigNumberish): Promise<[bigint[], bigint[]]>;
+  recipes(recipeId: BigNumberish): Promise<ForgeRecipe>;
+};
+
+type ForgeRecipe = {
+  outputTokenId: bigint;
+  outputAmount: bigint;
+  outputUri: string;
+  fee: bigint;
+  startTime: bigint;
+  endTime: bigint;
+  maxTotalCrafts: bigint;
+  maxCraftsPerWallet: bigint;
+  totalCrafts: bigint;
+  status: bigint;
+  requiresManualReview: boolean;
+  excludeGrailProtectedInputs: boolean;
+  exists: boolean;
 };
 
 const recipeStatus = {
+  Draft: 0,
   Simulated: 1,
   AdminReviewed: 2,
   Scheduled: 3,
-  Active: 4
+  Active: 4,
+  Paused: 5
 } as const;
+
+const sampleRecipeId = 1n;
+const sampleForgeRecipe = {
+  inputTokenIds: [
+    ethers.toBigInt(ethers.id("game:sample-forge-input-a")),
+    ethers.toBigInt(ethers.id("game:sample-forge-input-b"))
+  ],
+  inputAmounts: [1n, 1n],
+  outputTokenId: ethers.toBigInt(ethers.id("game:sample-forge-output")),
+  outputAmount: 1n,
+  outputUri: "ipfs://metadata/game/sample-forge-output.json",
+  fee: ethers.parseEther("0.001"),
+  maxTotalCrafts: 100n,
+  maxCraftsPerWallet: 5n,
+  requiresManualReview: false,
+  excludeGrailProtectedInputs: true
+} as const;
+
+const inventoryRegistryErrors = new ethers.Interface([
+  "error InventoryNotAnchored(string inventoryId)"
+]);
 
 function deploymentsPath(networkName: string): string {
   return path.resolve(__dirname, "../../../deployments", `${networkName}.json`);
@@ -136,7 +177,7 @@ function loadInventorySourceModule(
     }
 
     if (specifier.startsWith(".")) {
-      const resolvedPath = path.resolve(path.dirname(filePath), `${specifier}.ts`);
+      const resolvedPath = resolveRelativeInventoryModule(filePath, specifier);
       return loadInventorySourceModule(resolvedPath, moduleCache);
     }
 
@@ -157,6 +198,20 @@ function loadInventorySourceModule(
   );
 
   return module.exports;
+}
+
+function resolveRelativeInventoryModule(fromFilePath: string, specifier: string): string {
+  const basePath = path.resolve(path.dirname(fromFilePath), specifier);
+  const candidatePaths = path.extname(basePath)
+    ? [basePath]
+    : [basePath, `${basePath}.ts`, `${basePath}.js`, path.join(basePath, "index.ts")];
+  const resolvedPath = candidatePaths.find((candidatePath) => existsSync(candidatePath));
+
+  if (!resolvedPath) {
+    throw new Error(`Could not resolve ${specifier} from ${fromFilePath}`);
+  }
+
+  return resolvedPath;
 }
 
 function loadSampleInventory(): InventoryItem[] {
@@ -225,7 +280,11 @@ async function anchorInventory(
     await inventoryRegistry.getInventory(item.inventoryId);
     console.log(`inventory already anchored: ${item.inventoryId}`);
     return;
-  } catch {
+  } catch (error: unknown) {
+    if (!isInventoryNotAnchoredError(error, item.inventoryId)) {
+      throw error;
+    }
+
     await waitFor(
       inventoryRegistry.anchorInventory(
         item.inventoryId,
@@ -237,6 +296,59 @@ async function anchorInventory(
     );
     console.log(`anchored inventory: ${item.inventoryId}`);
   }
+}
+
+function isInventoryNotAnchoredError(error: unknown, inventoryId: string): boolean {
+  const data = extractErrorData(error);
+  if (data) {
+    try {
+      const parsed = inventoryRegistryErrors.parseError(data);
+      return parsed?.name === "InventoryNotAnchored" && parsed.args[0] === inventoryId;
+    } catch {
+      return false;
+    }
+  }
+
+  return extractErrorMessages(error).some((message) =>
+    message.includes(`custom error 'InventoryNotAnchored("${inventoryId}")'`)
+  );
+}
+
+function extractErrorData(error: unknown, seen = new Set<unknown>()): string | undefined {
+  if (!error || typeof error !== "object" || seen.has(error)) {
+    return undefined;
+  }
+
+  seen.add(error);
+  const record = error as Record<string, unknown>;
+  if (typeof record.data === "string" && record.data.startsWith("0x")) {
+    return record.data;
+  }
+
+  for (const key of ["error", "info", "receipt"] as const) {
+    const nestedData = extractErrorData(record[key], seen);
+    if (nestedData) {
+      return nestedData;
+    }
+  }
+
+  return undefined;
+}
+
+function extractErrorMessages(error: unknown, seen = new Set<unknown>()): string[] {
+  if (!error || typeof error !== "object" || seen.has(error)) {
+    return [];
+  }
+
+  seen.add(error);
+  const record = error as Record<string, unknown>;
+  const messages = typeof record.message === "string" ? [record.message] : [];
+
+  for (const key of ["error", "info", "receipt"] as const) {
+    messages.push(...extractErrorMessages(record[key], seen));
+  }
+
+  return messages;
 }
 
 async function seedDrop(packSale: PackSaleContract, item: InventoryItem): Promise<void> {
@@ -266,16 +378,34 @@ async function seedDrop(packSale: PackSaleContract, item: InventoryItem): Promis
 }
 
 async function activateRecipe(forge: ForgeContract, recipeId: bigint): Promise<void> {
-  await waitFor(forge.setRecipeStatus(recipeId, recipeStatus.Simulated));
-  await waitFor(forge.setRecipeStatus(recipeId, recipeStatus.AdminReviewed));
-  await waitFor(forge.setRecipeStatus(recipeId, recipeStatus.Scheduled));
-  await waitFor(forge.setRecipeStatus(recipeId, recipeStatus.Active));
+  const recipe = await forge.recipes(recipeId);
+  if (recipe.status === BigInt(recipeStatus.Active)) {
+    console.log(`Forge recipe ${recipeId} already active`);
+    return;
+  }
+
+  const transitionsByStatus = new Map<bigint, readonly number[]>([
+    [BigInt(recipeStatus.Draft), [recipeStatus.Simulated, recipeStatus.AdminReviewed, recipeStatus.Scheduled, recipeStatus.Active]],
+    [BigInt(recipeStatus.Simulated), [recipeStatus.AdminReviewed, recipeStatus.Scheduled, recipeStatus.Active]],
+    [BigInt(recipeStatus.AdminReviewed), [recipeStatus.Scheduled, recipeStatus.Active]],
+    [BigInt(recipeStatus.Scheduled), [recipeStatus.Active]],
+    [BigInt(recipeStatus.Paused), [recipeStatus.Active]]
+  ]);
+  const transitions = transitionsByStatus.get(recipe.status);
+  if (!transitions) {
+    throw new Error(`Sample Forge recipe ${recipeId} cannot be activated from status ${recipe.status}`);
+  }
+
+  for (const status of transitions) {
+    await waitFor(forge.setRecipeStatus(recipeId, status));
+  }
 }
 
 async function seedForgeRecipe(forge: ForgeContract): Promise<void> {
   const nextRecipeId = await forge.nextRecipeId();
-  if (nextRecipeId > 1n) {
-    console.log("recipe seed skipped: Forge already has at least one recipe");
+  if (nextRecipeId > sampleRecipeId) {
+    await validateSampleForgeRecipe(forge);
+    await activateRecipe(forge, sampleRecipeId);
     return;
   }
 
@@ -284,28 +414,87 @@ async function seedForgeRecipe(forge: ForgeContract): Promise<void> {
     throw new Error("Could not read latest block");
   }
 
-  const recipeId = nextRecipeId;
   await waitFor(
     forge.createRecipe({
-      inputTokenIds: [
-        ethers.toBigInt(ethers.id("game:sample-forge-input-a")),
-        ethers.toBigInt(ethers.id("game:sample-forge-input-b"))
-      ],
-      inputAmounts: [1, 1],
-      outputTokenId: ethers.toBigInt(ethers.id("game:sample-forge-output")),
-      outputAmount: 1,
-      outputUri: "ipfs://metadata/game/sample-forge-output.json",
-      fee: ethers.parseEther("0.001"),
+      inputTokenIds: [...sampleForgeRecipe.inputTokenIds],
+      inputAmounts: [...sampleForgeRecipe.inputAmounts],
+      outputTokenId: sampleForgeRecipe.outputTokenId,
+      outputAmount: sampleForgeRecipe.outputAmount,
+      outputUri: sampleForgeRecipe.outputUri,
+      fee: sampleForgeRecipe.fee,
       startTime: latestBlock.timestamp - 60,
       endTime: latestBlock.timestamp + 30 * 24 * 60 * 60,
-      maxTotalCrafts: 100,
-      maxCraftsPerWallet: 5,
-      requiresManualReview: false,
-      excludeGrailProtectedInputs: true
+      maxTotalCrafts: sampleForgeRecipe.maxTotalCrafts,
+      maxCraftsPerWallet: sampleForgeRecipe.maxCraftsPerWallet,
+      requiresManualReview: sampleForgeRecipe.requiresManualReview,
+      excludeGrailProtectedInputs: sampleForgeRecipe.excludeGrailProtectedInputs
     })
   );
-  await activateRecipe(forge, recipeId);
-  console.log(`created and activated sample Forge recipe ${recipeId}`);
+  await activateRecipe(forge, sampleRecipeId);
+  console.log(`created and activated sample Forge recipe ${sampleRecipeId}`);
+}
+
+async function validateSampleForgeRecipe(forge: ForgeContract): Promise<void> {
+  const recipe = await forge.recipes(sampleRecipeId);
+  if (!recipe.exists) {
+    throw new Error(`Forge recipe ${sampleRecipeId} is missing even though nextRecipeId advanced`);
+  }
+
+  const [inputTokenIds, inputAmounts] = await forge.getRecipeInputs(sampleRecipeId);
+  const mismatches = [
+    ...compareBigintArrays("inputTokenIds", inputTokenIds, sampleForgeRecipe.inputTokenIds),
+    ...compareBigintArrays("inputAmounts", inputAmounts, sampleForgeRecipe.inputAmounts),
+    ...compareBigint("outputTokenId", recipe.outputTokenId, sampleForgeRecipe.outputTokenId),
+    ...compareBigint("outputAmount", recipe.outputAmount, sampleForgeRecipe.outputAmount),
+    ...compareString("outputUri", recipe.outputUri, sampleForgeRecipe.outputUri),
+    ...compareBigint("fee", recipe.fee, sampleForgeRecipe.fee),
+    ...compareBigint("maxTotalCrafts", recipe.maxTotalCrafts, sampleForgeRecipe.maxTotalCrafts),
+    ...compareBigint("maxCraftsPerWallet", recipe.maxCraftsPerWallet, sampleForgeRecipe.maxCraftsPerWallet),
+    ...compareBoolean("requiresManualReview", recipe.requiresManualReview, sampleForgeRecipe.requiresManualReview),
+    ...compareBoolean(
+      "excludeGrailProtectedInputs",
+      recipe.excludeGrailProtectedInputs,
+      sampleForgeRecipe.excludeGrailProtectedInputs
+    )
+  ];
+
+  if (mismatches.length > 0) {
+    throw new Error(
+      `Forge recipe ${sampleRecipeId} exists but does not match the sample seed recipe: ${mismatches.join("; ")}`
+    );
+  }
+}
+
+function compareBigint(label: string, actual: bigint, expected: bigint): string[] {
+  return actual === expected ? [] : [`${label} expected ${expected} got ${actual}`];
+}
+
+function compareString(label: string, actual: string, expected: string): string[] {
+  return actual === expected ? [] : [`${label} expected ${expected} got ${actual}`];
+}
+
+function compareBoolean(label: string, actual: boolean, expected: boolean): string[] {
+  return actual === expected ? [] : [`${label} expected ${expected} got ${actual}`];
+}
+
+function compareBigintArrays(
+  label: string,
+  actual: readonly bigint[],
+  expected: readonly bigint[]
+): string[] {
+  const mismatches: string[] = [];
+  if (actual.length !== expected.length) {
+    mismatches.push(`${label} length expected ${expected.length} got ${actual.length}`);
+  }
+
+  const comparableLength = Math.min(actual.length, expected.length);
+  for (let index = 0; index < comparableLength; index++) {
+    if (actual[index] !== expected[index]) {
+      mismatches.push(`${label}[${index}] expected ${expected[index]} got ${actual[index]}`);
+    }
+  }
+
+  return mismatches;
 }
 
 async function main(): Promise<void> {
