@@ -26,13 +26,13 @@ describe("transaction helpers", () => {
       kind: "packPurchase",
       contracts,
       dropId: 1n,
-      value: 9_000_000_000_000_000n
+      value: 10_000_000_000_000_000n
     });
 
     expect(request.address).toBe(contracts.PackSale);
     expect(request.functionName).toBe("purchase");
     expect(request.args).toEqual([1n]);
-    expect(request.value).toBe(9_000_000_000_000_000n);
+    expect(request.value).toBe(10_000_000_000_000_000n);
   });
 
   it("builds marketplace approval and list requests", () => {
@@ -62,15 +62,15 @@ describe("transaction helpers", () => {
     const craft = createWriteRequest({
       kind: "forgeCraft",
       contracts,
-      recipeId: 2n,
-      value: 1_500_000_000_000_000n
+      recipeId: 1n,
+      value: 1_000_000_000_000_000n
     });
     const redeem = createWriteRequest({ kind: "redemptionRequest", contracts, tokenId: 1001n });
 
     expect(craft.address).toBe(contracts.Forge);
     expect(craft.functionName).toBe("craft");
-    expect(craft.args).toEqual([2n]);
-    expect(craft.value).toBe(1_500_000_000_000_000n);
+    expect(craft.args).toEqual([1n]);
+    expect(craft.value).toBe(1_000_000_000_000_000n);
     expect(redeem.address).toBe(contracts.RedemptionRegistry);
     expect(redeem.functionName).toBe("requestRedemption");
     expect(redeem.args).toEqual([1001n]);

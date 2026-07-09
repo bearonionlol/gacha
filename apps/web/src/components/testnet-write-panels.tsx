@@ -3,7 +3,12 @@
 import { useMemo, useState } from "react";
 import { loadDeploymentRegistrySnapshotFromEnv } from "../lib/deployments";
 import { getReadyContractRegistry, type ProtocolContracts } from "../lib/contracts/registry";
-import { testnetWriteConfig, parsePositiveTokenId } from "../lib/contracts/transaction-config";
+import {
+  createMarketListRequestForToken,
+  createRedemptionRequestForToken,
+  parsePositiveTokenId,
+  testnetWriteConfig
+} from "../lib/contracts/transaction-config";
 import { robinhoodTestnetChainId } from "../lib/contracts/wallet";
 import { TransactionActionPanel } from "./transaction-action-panel";
 
@@ -104,13 +109,7 @@ export function MarketplaceListPanel({ inputId }: TokenInputPanelProps) {
           { label: "Ask", value: testnetWriteConfig.market.displayPrice }
         ]}
         title="List item on testnet"
-        writeRequest={(contracts) => ({
-          kind: "marketList",
-          contracts,
-          tokenId: tokenId ?? 0n,
-          amount: testnetWriteConfig.market.amount,
-          price: testnetWriteConfig.market.price
-        })}
+        writeRequest={(contracts) => createMarketListRequestForToken(contracts, tokenId)}
       />
     </div>
   );
@@ -187,11 +186,7 @@ export function RedemptionRequestPanel() {
         registryMessage={registry.message}
         summary={[{ label: "Function", value: "RedemptionRegistry.requestRedemption" }]}
         title="Request redemption on testnet"
-        writeRequest={(contracts) => ({
-          kind: "redemptionRequest",
-          contracts,
-          tokenId: tokenId ?? 0n
-        })}
+        writeRequest={(contracts) => createRedemptionRequestForToken(contracts, tokenId)}
       />
     </div>
   );

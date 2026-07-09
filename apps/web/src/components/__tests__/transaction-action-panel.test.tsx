@@ -21,7 +21,7 @@ const packWrite = {
   abi: [],
   functionName: "purchase",
   args: [1n],
-  value: 9_000_000_000_000_000n
+  value: 10_000_000_000_000_000n
 } satisfies PreparedWrite;
 
 function setEthereumProvider(request: ReturnType<typeof vi.fn>) {
@@ -118,6 +118,60 @@ describe("TransactionActionPanel", () => {
       "href",
       expect.stringContaining("/tx/0x1234567890abcdef")
     );
+  });
+
+  it("treats reverted receipts as failed transactions", async () => {
+    const request = vi.fn(async ({ method }: { method: string }) => {
+      if (method === "eth_requestAccounts") {
+        return ["0x1234567890abcdef1234567890abcdef12345678"];
+      }
+      if (method === "eth_chainId") {
+        return "0xb626";
+      }
+      return null;
+    });
+    const receiptClient = {
+      waitForTransactionReceipt: vi.fn().mockResolvedValue({
+        blockNumber: 42n,
+        status: "reverted",
+        transactionHash: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef" as Hash
+      })
+    };
+    setEthereumProvider(request);
+    renderPanel({ receiptClient });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Connect wallet/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Reserve pack/i }));
+
+    await waitFor(() => expect(screen.getByText(/Transaction failed or could not be confirmed/i)).toBeInTheDocument());
+    expect(screen.queryByText(/confirmed in block 42/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps disabled primary actions from preparing writes", async () => {
+    const request = vi.fn(async ({ method }: { method: string }) => {
+      if (method === "eth_requestAccounts") {
+        return ["0x1234567890abcdef1234567890abcdef12345678"];
+      }
+      if (method === "eth_chainId") {
+        return "0xb626";
+      }
+      return null;
+    });
+    const writeRequest = vi.fn(() => packWrite);
+    setEthereumProvider(request);
+    const { sendWrite } = renderPanel({
+      actionDisabledReason: "Enter an owned inventory token ID before listing.",
+      ctaLabel: "List item",
+      writeRequest
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Connect wallet/i }));
+    const listButton = await screen.findByRole("button", { name: /List item/i });
+
+    expect(listButton).toBeDisabled();
+    fireEvent.click(listButton);
+    expect(writeRequest).not.toHaveBeenCalled();
+    expect(sendWrite).not.toHaveBeenCalled();
   });
 
   it("renders a sanitized rejected state with retry", async () => {

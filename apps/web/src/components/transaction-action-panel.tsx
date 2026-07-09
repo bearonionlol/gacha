@@ -35,7 +35,7 @@ type TransactionSummaryRow = {
 type TransactionPanelAction = {
   ctaLabel: string;
   description: string;
-  writeRequest: (contracts: ProtocolContracts) => WriteRequest | PreparedWrite;
+  writeRequest: (contracts: ProtocolContracts) => WriteRequest | PreparedWrite | null;
 };
 
 type TransactionActionPanelProps = TransactionPanelAction & {
@@ -126,18 +126,47 @@ export function TransactionActionPanel({
   }
 
   async function handleSubmit(action: TransactionPanelAction) {
-    if (!canSubmit) {
+    if (!canSubmit || contracts === null || provider === null || account === null) {
+      return;
+    }
+
+    if (action.ctaLabel === ctaLabel && actionDisabledReason !== null) {
+      setTransactionState({
+        status: "failed",
+        label: action.ctaLabel,
+        message: actionDisabledReason
+      });
       return;
     }
 
     setTransactionState({ status: "submitting", label: action.ctaLabel });
 
     try {
-      const preparedWrite = prepareWrite(action.writeRequest(contracts));
+      const request = action.writeRequest(contracts);
+
+      if (request === null) {
+        setTransactionState({
+          status: "failed",
+          label: action.ctaLabel,
+          message: "Enter required testnet action details before submitting."
+        });
+        return;
+      }
+
+      const preparedWrite = prepareWrite(request);
       const hash = await sendWrite(provider, account, preparedWrite);
       setTransactionState({ status: "submitted", hash, label: action.ctaLabel });
 
       const receipt = await waitForTransactionReceipt(receiptClient ?? createRobinhoodPublicClient(), hash);
+      if (receipt.status !== "success") {
+        setTransactionState({
+          status: "failed",
+          label: action.ctaLabel,
+          message: "Transaction failed or could not be confirmed. Review wallet details and retry."
+        });
+        return;
+      }
+
       setTransactionState({ status: "confirmed", hash, label: action.ctaLabel, receipt });
     } catch (error) {
       setTransactionState({
