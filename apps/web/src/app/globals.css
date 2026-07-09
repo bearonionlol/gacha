@@ -678,13 +678,217 @@ h1 {
   padding-top: 8px;
 }
 
+.forge-workbench,
+.admin-console {
+  display: grid;
+  gap: 18px;
+}
+
+.forge-workbench {
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+  align-items: start;
+}
+
+.recipe-book,
+.ingredient-tray {
+  display: grid;
+  gap: 14px;
+}
+
+.recipe-list,
+.ingredient-list {
+  display: grid;
+  gap: 12px;
+}
+
+.recipe-card,
+.ingredient-row {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 14px;
+}
+
+.recipe-card h3,
+.ingredient-row h3 {
+  margin: 4px 0 0;
+  letter-spacing: 0;
+}
+
+.recipe-card p,
+.ingredient-row p,
+.output-preview p,
+.export-panel p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.forge-grid-panel,
+.output-preview {
+  display: grid;
+  gap: 16px;
+}
+
+.forge-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.forge-slot {
+  display: grid;
+  min-height: 118px;
+  place-items: center;
+  gap: 6px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  padding: 12px;
+  text-align: center;
+}
+
+.forge-slot strong {
+  color: var(--text);
+}
+
+.forge-slot span {
+  font-size: 0.78rem;
+}
+
+.forge-slot.protected {
+  border-style: solid;
+  border-color: var(--green-line);
+  background: var(--green-soft);
+  color: #c8f8d6;
+}
+
+.ingredient-tray,
+.output-preview {
+  grid-column: span 2;
+}
+
+.admin-console {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+
+.admin-fields-panel,
+.lifecycle-panel,
+.inventory-table-panel,
+.export-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.inventory-table-panel {
+  grid-column: span 2;
+}
+
+.required-field-list,
+.inventory-lifecycle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.required-field-list code,
+.inventory-lifecycle li {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  padding: 7px 9px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.76rem;
+  letter-spacing: 0;
+}
+
+.inventory-lifecycle {
+  list-style: none;
+}
+
+.inventory-lifecycle li {
+  color: var(--green);
+}
+
+.inventory-table {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.inventory-table-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.25fr) repeat(3, minmax(92px, 0.62fr)) minmax(150px, 0.8fr) repeat(
+      2,
+      minmax(92px, 0.55fr)
+    );
+  gap: 12px;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  background: rgba(18, 23, 21, 0.72);
+  padding: 12px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.inventory-table-row:first-child {
+  border-top: 0;
+}
+
+.inventory-table-row.header {
+  background: var(--surface-3);
+  color: var(--green);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.inventory-table-row strong,
+.inventory-table-row code {
+  display: block;
+}
+
+.inventory-table-row strong {
+  color: var(--text);
+}
+
+.inventory-table-row code {
+  margin-top: 4px;
+  color: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0;
+}
+
 @media (max-width: 980px) {
   .app-shell,
   .status-rail,
   .dashboard-grid,
   .vault-grid,
-  .market-listings {
+  .market-listings,
+  .forge-workbench,
+  .admin-console {
     grid-template-columns: 1fr;
+  }
+
+  .ingredient-tray,
+  .output-preview,
+  .inventory-table-panel {
+    grid-column: auto;
+  }
+
+  .inventory-table {
+    overflow-x: auto;
+  }
+
+  .inventory-table-row {
+    min-width: 860px;
   }
 
   .shell-sidebar {
@@ -721,7 +925,8 @@ h1 {
   .portfolio-summary,
   .detail-grid,
   .timeline-state-row,
-  .request-steps {
+  .request-steps,
+  .forge-grid {
     grid-template-columns: 1fr;
   }
 
