@@ -1,3 +1,13 @@
+export const inventoryRegistryAbi = [
+  {
+    type: "function",
+    name: "derivePhysicalTokenId",
+    stateMutability: "pure",
+    inputs: [{ name: "inventoryId", type: "string" }],
+    outputs: [{ type: "uint256" }]
+  }
+] as const;
+
 export const packSaleAbi = [
   { type: "function", name: "nextDropId", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "nextPurchaseId", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
