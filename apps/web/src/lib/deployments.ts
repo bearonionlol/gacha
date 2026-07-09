@@ -31,16 +31,28 @@ export function resolveDeploymentStatus(snapshot: DeploymentRegistrySnapshot | n
     };
   }
 
-  const chainName = snapshot.chainId === ROBINHOOD_CHAIN_MAINNET_ID ? robinhoodChain.name : robinhoodChainTestnet.name;
-  const mode = snapshot.chainId === ROBINHOOD_CHAIN_MAINNET_ID ? "mainnet" : "testnet";
   const contracts = Object.entries(snapshot.contracts ?? {}).map(([name, address]) => ({ name, address }));
   const deployedAt = snapshot.deployedAt === undefined ? "from the local registry" : `at ${snapshot.deployedAt}`;
+  const knownChain =
+    snapshot.chainId === ROBINHOOD_CHAIN_MAINNET_ID || snapshot.chainId === ROBINHOOD_CHAIN_TESTNET_ID;
+
+  if (!knownChain) {
+    return {
+      mode: "demo",
+      chainName: "Unsupported chain",
+      chainId: snapshot.chainId,
+      message: `${snapshot.network} registry loaded ${deployedAt}, but chain ${snapshot.chainId} is an unsupported chain for this app build.`,
+      contracts
+    };
+  }
+
+  const chainName = snapshot.chainId === ROBINHOOD_CHAIN_MAINNET_ID ? robinhoodChain.name : robinhoodChainTestnet.name;
+  const mode = snapshot.chainId === ROBINHOOD_CHAIN_MAINNET_ID ? "mainnet" : "testnet";
 
   return {
     mode,
     chainName,
-    chainId:
-      snapshot.chainId === ROBINHOOD_CHAIN_MAINNET_ID ? ROBINHOOD_CHAIN_MAINNET_ID : ROBINHOOD_CHAIN_TESTNET_ID,
+    chainId: snapshot.chainId,
     message: `${snapshot.network} deployment registry loaded ${deployedAt}.`,
     contracts
   };

@@ -33,6 +33,21 @@ describe("Phase 3 app state", () => {
     expect(status.contracts).toHaveLength(2);
   });
 
+  it("does not coerce unsupported deployment chain IDs to Robinhood testnet", () => {
+    const status = resolveDeploymentStatus({
+      network: "localhost",
+      chainId: 31337,
+      contracts: {
+        ItemToken: "0x0000000000000000000000000000000000000001"
+      }
+    });
+
+    expect(status.mode).toBe("demo");
+    expect(status.chainName).toBe("Unsupported chain");
+    expect(status.chainId).toBe(31337);
+    expect(status.message).toMatch(/unsupported chain/i);
+  });
+
   it("keeps Signal Run separate from pull odds", () => {
     expect(signalRun.disclosure).toMatch(/does not change pull odds/i);
     expect(signalRun.recipeProgressPercent).toBeGreaterThan(0);
