@@ -2,11 +2,14 @@ import { BadgeDollarSign, HandCoins, LockKeyhole, PercentCircle, Store } from "l
 import { MarketplaceListPanel } from "./testnet-write-panels";
 import { formatCents } from "../lib/format";
 import { marketListings } from "../lib/game-state";
+import { enrichMarketListings } from "../lib/marketplace";
 
 const marketplaceDisclosure =
   "Listings are escrowed until sale or cancellation. Seller proceeds are net of protocol fee.";
 
 export function MarketBoard() {
+  const enrichedListings = enrichMarketListings(marketListings);
+
   return (
     <section className="portfolio-section" aria-labelledby="market-board-title">
       <div className="section-heading-row">
@@ -20,7 +23,7 @@ export function MarketBoard() {
       <p className="disclosure">{marketplaceDisclosure}</p>
 
       <div className="market-listings">
-        {marketListings.map((listing) => (
+        {enrichedListings.map((listing) => (
           <article className="listing-card" key={listing.id}>
             <div className="panel-header compact">
               <div>
@@ -48,9 +51,9 @@ export function MarketBoard() {
               <div>
                 <dt>
                   <PercentCircle size={14} aria-hidden="true" />
-                  Fee bps
+                  Protocol fee
                 </dt>
-                <dd>{listing.feeBps} bps</dd>
+                <dd>{formatCents(listing.protocolFeeCents)}</dd>
               </div>
               <div>
                 <dt>
@@ -59,9 +62,28 @@ export function MarketBoard() {
                 </dt>
                 <dd>Until sale/cancel</dd>
               </div>
+              <div>
+                <dt>Seller receives</dt>
+                <dd>{formatCents(listing.sellerReceivesCents)}</dd>
+              </div>
+              <div>
+                <dt>Floor delta</dt>
+                <dd>{formatCents(listing.floorDeltaCents)}</dd>
+              </div>
+              <div>
+                <dt>Buyback delta</dt>
+                <dd>{formatCents(listing.buybackDeltaCents)}</dd>
+              </div>
+              <div>
+                <dt>Listing health</dt>
+                <dd>{listing.risk.message}</dd>
+              </div>
             </dl>
 
-            <p>{listing.escrowDisclosure}</p>
+            <p>
+              {listing.escrowDisclosure ?? marketplaceDisclosure} Seller receives{" "}
+              {formatCents(listing.sellerReceivesCents)} after a {listing.feeBps} bps protocol fee.
+            </p>
             <button
               aria-label={`Open listing for ${listing.title}`}
               className="secondary-action"
