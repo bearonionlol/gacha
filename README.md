@@ -111,7 +111,7 @@ Deployment scripts write registries to `deployments/<network>.json`.
 
 ## Web App
 
-The Phase 3 web app lives in `apps/web`. It is a demo/testnet command surface for drops, reveal actions, vault portfolio, fixed-price market, Forge, redemption, and admin inventory intake.
+The web app lives in `apps/web`. It is a demo/testnet command surface for drops, reveal actions, vault portfolio, fixed-price market, Forge, redemption, admin inventory intake, and public testnet readiness checks.
 
 Run the web app locally:
 
@@ -127,7 +127,7 @@ pnpm --filter @gacha/web typecheck
 pnpm --filter @gacha/web build
 ```
 
-The app runs in deterministic demo mode when no deployment registry is present. After Robinhood testnet deployment, review `deployments/robinhoodTestnet.json`; the app deployment adapter expects the Phase 2 registry shape with Robinhood chain ID and the eight protocol contract addresses.
+The app runs in deterministic demo mode when no deployment registry is present. After Robinhood testnet deployment, review `deployments/robinhoodTestnet.json`; the app deployment adapter expects Robinhood chain ID `46630` and the eight protocol contract addresses. The `/admin/inventory` route includes a public testnet readiness panel that checks the deployment registry, public RPC URL, chain mode, operator controls, and mainnet cutover gate.
 
 ## Runbooks
 

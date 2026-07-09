@@ -1,6 +1,7 @@
 import { Download, FileJson, ShieldCheck } from "lucide-react";
 import { inventoryStatuses, sampleInventory } from "@gacha/inventory";
 import { formatCents } from "../lib/format";
+import { PublicTestnetReadinessPanel } from "./public-testnet-readiness-panel";
 import { RedemptionOpsPanel } from "./testnet-write-panels";
 
 const requiredFields = [
@@ -16,6 +17,8 @@ const requiredFields = [
 export function AdminInventoryConsole() {
   return (
     <section className="admin-console" aria-label="Admin inventory console">
+      <PublicTestnetReadinessPanel />
+
       <div className="panel admin-fields-panel">
         <div className="panel-header compact">
           <div>
