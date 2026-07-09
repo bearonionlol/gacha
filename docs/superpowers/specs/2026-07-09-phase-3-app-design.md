@@ -28,6 +28,7 @@ Phase 3 includes:
 - Premium app shell with navigation, network status, wallet status placeholders, and legal/testnet disclaimers.
 - Dashboard/drop lobby showing active sample drop, odds, pack price, supply, inventory backing, and randomness disclosure.
 - Pack reveal simulation that mirrors the protocol decision flow and routes to keep, list, buyback, redeem, craft, or hold.
+- Optional arcade panel named Signal Run that gives users a skill-flavored way to earn non-monetary streak, XP, and recipe progress during the reveal loop.
 - Vault portfolio using real sample inventory from `packages/inventory`.
 - Marketplace browse/listing cards with fee and escrow disclosures.
 - Forge page with recipe book, ingredient tray, grid-style crafting surface, output preview, caps, fees, and grail warnings.
@@ -80,6 +81,7 @@ Core components:
 - `AppShell`: shared layout, navigation, mode badges, wallet panel, disclaimer footer.
 - `StatusRail`: deployment registry status, chain mode, testnet/mainnet warnings.
 - `DropLobby`: odds, price, supply, inventory-backed disclosure.
+- `ArcadePanel`: fast tap/route challenge preview with streak, XP, recipe progress, and clear no-odds-boost disclosure.
 - `RevealPanel`: reveal state and next-action buttons.
 - `VaultGrid`: collection cards from sample inventory and game items.
 - `MarketBoard`: listing cards and fee/proceeds disclosure.
@@ -100,6 +102,7 @@ Client data modules:
 - `src/lib/inventory.ts`: maps sample inventory into display cards, vault stats, drop candidates, grail markers, and export payloads.
 - `src/lib/deployments.ts`: safely reads known deployment registry snapshots at build/dev time when files exist, and exposes `demo` status when absent.
 - `src/lib/game-state.ts`: deterministic local view-models for drops, listings, recipes, redemptions, activity, and reveal outcomes.
+- `src/lib/arcade.ts`: deterministic Signal Run levels, streak scoring, XP labels, and recipe progress copy.
 - `src/lib/format.ts`: currency, cents, token IDs, addresses, and status labels.
 
 This phase can run without a deployed blockchain. After testnet deployment, the deployment client will surface real addresses and mode status, and later phases can replace local view-model actions with wagmi/viem writes.
@@ -110,6 +113,7 @@ Every primary screen must show one or more relevant safety cues:
 
 - Testnet/demo mode status.
 - Odds shown before purchase.
+- Arcade XP and streaks do not change pull odds or guarantee item value.
 - Operator-controlled testnet randomness disclosure.
 - Resale inventory descriptor disclaimer for real brands.
 - No affiliation/endorsement disclaimer.
@@ -124,6 +128,7 @@ Use focused tests where they catch product regressions:
 - Navigation tests: app shell exposes core routes.
 - Vault tests: real inventory fields and brand disclaimers render.
 - Forge tests: recipe book, ingredient safety, and output preview render.
+- Arcade tests: Signal Run renders streak/progress and no-odds-boost disclosure.
 - Admin tests: lifecycle/export controls and required fields render.
 - Deployment client tests: missing registry produces demo status; valid registry is parsed.
 
@@ -150,4 +155,3 @@ After Phase 3 is merged or ready:
 2. Run protocol `deploy:testnet`, `seed:testnet`, and `smoke:testnet`.
 3. Confirm `deployments/robinhoodTestnet.json`.
 4. Point the web app to the testnet registry and run web QA against Robinhood testnet.
-
