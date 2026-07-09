@@ -27,13 +27,13 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <div className="app-shell">
       <aside className="shell-sidebar" aria-label="Application navigation">
-        <a className="brand-mark" href="/" aria-label="Gacha home">
+        <a className="brand-mark" href="/" aria-label="Gacha Markets home">
           <span className="brand-icon" aria-hidden="true">
             <Boxes size={18} />
           </span>
           <span>
-            <strong>Gacha</strong>
-            <small>Terminal</small>
+            <strong>Gacha Markets</strong>
+            <small>Vault Arcade</small>
           </span>
         </a>
 
@@ -52,8 +52,8 @@ export function AppShell({ children }: AppShellProps) {
       <div className="shell-content">
         {children}
         <footer className="shell-footer">
-          Testnet demo mode. Resale inventory descriptors identify sample items only; no official affiliation or
-          endorsement is implied.
+          Robinhood Chain testnet build. Resale descriptors identify collector inventory only; no official affiliation
+          or endorsement is implied.
         </footer>
       </div>
     </div>

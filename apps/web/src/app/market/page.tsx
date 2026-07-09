@@ -14,8 +14,8 @@ export default function MarketPage() {
             <span className="chain-pill">Fees visible</span>
           </div>
           <p>
-            Browse deterministic demo listings with seller identity, ask price, buyback floor, fee bps, and escrow
-            disclosure before protocol writes are connected.
+            Browse vault-backed listings with seller identity, ask price, buyback floor, visible fees, and escrow
+            details before sending a testnet write.
           </p>
         </section>
         <MarketBoard />

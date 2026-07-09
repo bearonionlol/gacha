@@ -253,7 +253,7 @@ export function TransactionActionPanel({
     <aside className="transaction-panel" aria-label={`${title} transaction panel`}>
       <div className="transaction-state-row">
         <div>
-          <span className="eyebrow">Phase 4B testnet write</span>
+          <span className="eyebrow">Wallet action</span>
           <strong>{title}</strong>
         </div>
         {account !== null && isTargetChain ? (
@@ -275,7 +275,9 @@ export function TransactionActionPanel({
           {summary.map((row) => (
             <div key={row.label}>
               <dt>{row.label}</dt>
-              <dd>{row.value}</dd>
+              <dd className="breakable-value" title={row.value}>
+                {row.value}
+              </dd>
             </div>
           ))}
         </dl>

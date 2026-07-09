@@ -226,4 +226,15 @@ describe("TransactionActionPanel", () => {
     expect(await screen.findByRole("button", { name: /Approve Marketplace/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /List item/i })).toBeInTheDocument();
   });
+
+  it("marks long transaction summary values as breakable metadata", () => {
+    renderPanel({
+      summary: [{ label: "Function", value: "RedemptionRegistry.requestRedemption" }]
+    });
+
+    const functionValue = screen.getByText("RedemptionRegistry.requestRedemption");
+
+    expect(functionValue).toHaveClass("breakable-value");
+    expect(functionValue).toHaveAttribute("title", "RedemptionRegistry.requestRedemption");
+  });
 });

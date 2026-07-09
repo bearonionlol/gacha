@@ -20,6 +20,8 @@ describe("vault, market, and redemption routes", () => {
     render(<MarketPage />);
 
     expect(screen.getByText(/Fixed-price market/i)).toBeInTheDocument();
+    expect(screen.getByText(/vault-backed listings/i)).toBeInTheDocument();
+    expect(screen.queryByText(/deterministic demo listings/i)).not.toBeInTheDocument();
     expect(screen.getByText(/escrowed until sale or cancellation/i)).toBeInTheDocument();
     expect(screen.getAllByText(/protocol fee/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Seller receives/i).length).toBeGreaterThan(0);
