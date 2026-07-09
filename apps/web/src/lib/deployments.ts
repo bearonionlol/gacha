@@ -35,7 +35,34 @@ export const requiredProtocolContracts = [
   "RedemptionRegistry"
 ] as const;
 
+type DeploymentRegistryEnv = Record<string, string | undefined>;
+
 const evmAddressPattern = /^0x[a-fA-F0-9]{40}$/;
+
+function isDeploymentRegistrySnapshot(value: unknown): value is DeploymentRegistrySnapshot {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+
+  const snapshot = value as Partial<DeploymentRegistrySnapshot>;
+  return typeof snapshot.network === "string" && typeof snapshot.chainId === "number";
+}
+
+export function loadDeploymentRegistrySnapshotFromEnv(
+  env: DeploymentRegistryEnv = process.env
+): DeploymentRegistrySnapshot | null {
+  const rawRegistry = env.NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY;
+  if (rawRegistry === undefined || rawRegistry.trim() === "" || rawRegistry === "demo") {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawRegistry) as unknown;
+    return isDeploymentRegistrySnapshot(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 export function resolveDeploymentStatus(snapshot: DeploymentRegistrySnapshot | null): DeploymentStatus {
   if (snapshot === null) {

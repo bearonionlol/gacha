@@ -1,8 +1,8 @@
 import { Activity, CheckCircle2, RadioTower } from "lucide-react";
-import { resolveDeploymentStatus } from "../lib/deployments";
+import { loadDeploymentRegistrySnapshotFromEnv, resolveDeploymentStatus } from "../lib/deployments";
 
 export function StatusRail() {
-  const status = resolveDeploymentStatus(null);
+  const status = resolveDeploymentStatus(loadDeploymentRegistrySnapshotFromEnv());
 
   return (
     <section className="status-rail" aria-labelledby="status-rail-title">
