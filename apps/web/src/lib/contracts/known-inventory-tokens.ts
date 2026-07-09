@@ -1,4 +1,5 @@
 import { sampleInventory } from "@gacha/inventory";
+import type { GrailTier } from "@gacha/inventory";
 import type { Abi, Address } from "viem";
 import { inventoryRegistryAbi, itemTokenAbi } from "./abis";
 import { createRobinhoodPublicClient } from "./public-client";
@@ -20,7 +21,7 @@ export type KnownInventoryToken = {
   tokenId: bigint;
   balance: bigint;
   redeemable: boolean;
-  grailTier: string;
+  grailTier: GrailTier;
 };
 
 export type KnownInventoryTokenScan =
