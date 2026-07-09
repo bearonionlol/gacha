@@ -40,6 +40,7 @@ export type ItemToken = Omit<BaseContract, "connect"> & {
   PAUSER_ROLE(): Promise<string>;
   balanceOf(account: string, tokenId: BigNumberish): Promise<bigint>;
   "totalSupply(uint256)"(tokenId: BigNumberish): Promise<bigint>;
+  tokenKind(tokenId: BigNumberish): Promise<bigint>;
   uri(tokenId: BigNumberish): Promise<string>;
   mintInventoryItem(
     to: string,
@@ -200,6 +201,7 @@ export interface ForgeRecipe {
 
 export type Forge = Omit<BaseContract, "connect"> & {
   RECIPE_ADMIN_ROLE(): Promise<string>;
+  nextRecipeId(): Promise<bigint>;
   createRecipe(params: CreateRecipeParams): Promise<ContractTransactionResponse>;
   setRecipeStatus(
     recipeId: BigNumberish,

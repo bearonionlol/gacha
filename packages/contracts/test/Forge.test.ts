@@ -9,6 +9,7 @@ const inputTokenB = 6102n;
 const outputTokenId = 9101n;
 const inputTokenUri = "ipfs://items/forge-input.json";
 const outputTokenUri = "ipfs://items/forge-output.json";
+const alternateOutputTokenUri = "ipfs://items/forge-output-alt.json";
 const recipeFee = ethers.parseEther("0.05");
 const farFuture = 4_102_444_800n;
 
@@ -143,6 +144,63 @@ describe("Forge", function () {
     expect(inputAmounts).to.deep.equal(params.inputAmounts);
   });
 
+  it("rejects inventory-kind output token ids at recipe creation", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, itemToken, minter, owner, recipeAdmin } = fixture;
+    const inventoryOutputId = physicalTokenIdFor("forge-output-inventory-001");
+
+    await itemToken
+      .connect(minter)
+      .mintInventoryItem(
+        owner.address,
+        inventoryOutputId,
+        "forge-output-inventory-001",
+        "ipfs://items/forge-output-inventory-001.json"
+      );
+
+    await expect(
+      forge.connect(recipeAdmin).createRecipe(recipeParams({ outputTokenId: inventoryOutputId }))
+    )
+      .to.be.revertedWithCustomError(forge, "InvalidOutputTokenKind")
+      .withArgs(inventoryOutputId, 1n);
+    expect(await forge.nextRecipeId()).to.equal(1n);
+  });
+
+  it("enforces one output URI per Forge output token id", async function () {
+    const { forge, recipeAdmin } = await deployProtocolFixture();
+    const sharedOutputId = outputTokenId + 100n;
+
+    await forge.connect(recipeAdmin).createRecipe(
+      recipeParams({
+        outputTokenId: sharedOutputId,
+        outputUri: outputTokenUri
+      })
+    );
+
+    await expect(
+      forge.connect(recipeAdmin).createRecipe(
+        recipeParams({
+          outputTokenId: sharedOutputId,
+          outputUri: outputTokenUri
+        })
+      )
+    )
+      .to.emit(forge, "RecipeCreated")
+      .withArgs(2n, recipeAdmin.address);
+
+    await expect(
+      forge.connect(recipeAdmin).createRecipe(
+        recipeParams({
+          outputTokenId: sharedOutputId,
+          outputUri: alternateOutputTokenUri
+        })
+      )
+    )
+      .to.be.revertedWithCustomError(forge, "OutputUriMismatch")
+      .withArgs(sharedOutputId, outputTokenUri, alternateOutputTokenUri);
+    expect(await forge.nextRecipeId()).to.equal(3n);
+  });
+
   it("activates an admin-reviewed recipe", async function () {
     const fixture = await deployProtocolFixture();
     const { forge, recipeAdmin } = fixture;
@@ -157,6 +215,35 @@ describe("Forge", function () {
 
     const recipe = await forge.recipes(recipeId);
     expect(recipe.status).to.equal(RecipeStatus.Active);
+  });
+
+  it("rejects invalid lifecycle shortcuts and same-status transitions", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, recipeAdmin } = fixture;
+    const recipeId = await createRecipe(fixture);
+
+    await expect(forge.connect(recipeAdmin).setRecipeStatus(recipeId, RecipeStatus.Active))
+      .to.be.revertedWithCustomError(forge, "InvalidRecipeStatusTransition")
+      .withArgs(recipeId, RecipeStatus.Draft, RecipeStatus.Active);
+
+    await expect(forge.connect(recipeAdmin).setRecipeStatus(recipeId, RecipeStatus.Draft))
+      .to.be.revertedWithCustomError(forge, "InvalidRecipeStatusTransition")
+      .withArgs(recipeId, RecipeStatus.Draft, RecipeStatus.Draft);
+
+    await forge.connect(recipeAdmin).setRecipeStatus(recipeId, RecipeStatus.Simulated);
+
+    await expect(forge.connect(recipeAdmin).setRecipeStatus(recipeId, RecipeStatus.Active))
+      .to.be.revertedWithCustomError(forge, "InvalidRecipeStatusTransition")
+      .withArgs(recipeId, RecipeStatus.Simulated, RecipeStatus.Active);
+
+    await forge.connect(recipeAdmin).setRecipeStatus(recipeId, RecipeStatus.AdminReviewed);
+    await forge.connect(recipeAdmin).setRecipeStatus(recipeId, RecipeStatus.Scheduled);
+    await forge.connect(recipeAdmin).setRecipeStatus(recipeId, RecipeStatus.Active);
+    await forge.connect(recipeAdmin).setRecipeStatus(recipeId, RecipeStatus.Retired);
+
+    await expect(forge.connect(recipeAdmin).setRecipeStatus(recipeId, RecipeStatus.Active))
+      .to.be.revertedWithCustomError(forge, "InvalidRecipeStatusTransition")
+      .withArgs(recipeId, RecipeStatus.Retired, RecipeStatus.Active);
   });
 
   it("rejects crafts while paused", async function () {
@@ -329,6 +416,10 @@ describe("Forge", function () {
     await expect(
       forge.connect(recipeAdmin).createRecipe(recipeParams({ outputAmount: 0n }))
     ).to.be.revertedWithCustomError(forge, "InvalidRecipeParams");
+
+    await expect(
+      forge.connect(recipeAdmin).createRecipe(recipeParams({ outputUri: "" }))
+    ).to.be.revertedWithCustomError(forge, "InvalidRecipeParams");
   });
 
   it("requires the exact fee including rejecting overpayment", async function () {
@@ -362,6 +453,34 @@ describe("Forge", function () {
     await expect(forge.connect(owner).craft(recipeId, { value: recipeFee }))
       .to.be.revertedWithCustomError(itemToken, "BurnNotApproved")
       .withArgs(owner.address);
+  });
+
+  it("rolls back recipe accounting when an input burn fails", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, itemToken, owner, treasury } = fixture;
+    const recipeId = await createActiveRecipe(fixture);
+
+    await mintInputsTo(fixture, owner);
+
+    const beforeRecipe = await forge.recipes(recipeId);
+    const beforeWalletCrafts = await forge.walletCrafts(recipeId, owner.address);
+    const beforeTreasuryCredit = await forge.treasuryFeesCredit(treasury.address);
+    const beforeInputABalance = await itemToken.balanceOf(owner.address, inputTokenA);
+    const beforeInputBBalance = await itemToken.balanceOf(owner.address, inputTokenB);
+    const beforeOutputBalance = await itemToken.balanceOf(owner.address, outputTokenId);
+
+    await expect(forge.connect(owner).craft(recipeId, { value: recipeFee }))
+      .to.be.revertedWithCustomError(itemToken, "BurnNotApproved")
+      .withArgs(owner.address);
+
+    const afterRecipe = await forge.recipes(recipeId);
+    expect(afterRecipe.totalCrafts).to.equal(beforeRecipe.totalCrafts);
+    expect(await forge.walletCrafts(recipeId, owner.address)).to.equal(beforeWalletCrafts);
+    expect(await forge.treasuryFeesCredit(treasury.address)).to.equal(beforeTreasuryCredit);
+    expect(await itemToken.balanceOf(owner.address, inputTokenA)).to.equal(beforeInputABalance);
+    expect(await itemToken.balanceOf(owner.address, inputTokenB)).to.equal(beforeInputBBalance);
+    expect(await itemToken.balanceOf(owner.address, outputTokenId)).to.equal(beforeOutputBalance);
+    expect(await ethers.provider.getBalance(await forge.getAddress())).to.equal(0n);
   });
 
   it("enforces schedule window start and end", async function () {

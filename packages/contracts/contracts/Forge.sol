@@ -71,6 +71,8 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
 
     error InvalidAddress();
     error InvalidRecipeParams();
+    error InvalidOutputTokenKind(uint256 tokenId, uint8 tokenKind);
+    error OutputUriMismatch(uint256 tokenId, string expectedUri, string actualUri);
     error RecipeNotFound(uint256 recipeId);
     error InvalidRecipeStatusTransition(uint256 recipeId, RecipeStatus currentStatus, RecipeStatus nextStatus);
     error RecipeNotActive(uint256 recipeId, RecipeStatus status);
@@ -101,6 +103,7 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
     uint256 public nextRecipeId = 1;
 
     mapping(uint256 recipeId => Recipe recipe) private _recipes;
+    mapping(uint256 outputTokenId => string outputUri) private _forgeOutputUris;
     mapping(uint256 recipeId => mapping(address wallet => uint256 crafts)) public walletCrafts;
     mapping(address account => uint256 amount) public treasuryFeesCredit;
 
@@ -142,6 +145,8 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
             recipe.inputTokenIds.push(params.inputTokenIds[index]);
             recipe.inputAmounts.push(params.inputAmounts[index]);
         }
+
+        _lockOutputUri(params.outputTokenId, params.outputUri);
 
         emit RecipeCreated(recipeId, msg.sender);
     }
@@ -215,10 +220,11 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         _unpause();
     }
 
-    function _validateCreateRecipeParams(CreateRecipeParams calldata params) private pure {
+    function _validateCreateRecipeParams(CreateRecipeParams calldata params) private view {
         uint256 inputCount = params.inputTokenIds.length;
         if (
             inputCount == 0 || inputCount != params.inputAmounts.length || params.outputAmount == 0
+                || bytes(params.outputUri).length == 0
                 || params.startTime >= params.endTime || params.maxTotalCrafts == 0
                 || params.maxCraftsPerWallet == 0 || params.maxCraftsPerWallet > params.maxTotalCrafts
         ) {
@@ -229,6 +235,22 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
             if (params.inputAmounts[index] == 0) {
                 revert InvalidRecipeParams();
             }
+        }
+
+        ItemToken.TokenKind outputKind = itemToken.tokenKind(params.outputTokenId);
+        if (outputKind == ItemToken.TokenKind.Inventory) {
+            revert InvalidOutputTokenKind(params.outputTokenId, uint8(outputKind));
+        }
+
+        string storage configuredOutputUri = _forgeOutputUris[params.outputTokenId];
+        if (bytes(configuredOutputUri).length != 0 && !_sameString(configuredOutputUri, params.outputUri)) {
+            revert OutputUriMismatch(params.outputTokenId, configuredOutputUri, params.outputUri);
+        }
+    }
+
+    function _lockOutputUri(uint256 outputTokenId, string calldata outputUri) private {
+        if (bytes(_forgeOutputUris[outputTokenId]).length == 0) {
+            _forgeOutputUris[outputTokenId] = outputUri;
         }
     }
 
@@ -345,5 +367,9 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         if (!success) {
             revert TransferFailed(to, amount);
         }
+    }
+
+    function _sameString(string storage left, string calldata right) private pure returns (bool) {
+        return keccak256(bytes(left)) == keccak256(bytes(right));
     }
 }

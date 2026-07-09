@@ -110,6 +110,20 @@ describe("ItemToken", function () {
     ).to.be.revertedWithCustomError(itemToken, "InvalidAmount");
   });
 
+  it("exposes token kind for unknown, inventory, and game tokens", async function () {
+    const { itemToken, minter, owner } = await deployProtocolFixture();
+
+    expect(await itemToken.tokenKind(gameTokenId + 99n)).to.equal(0n);
+
+    await itemToken
+      .connect(minter)
+      .mintInventoryItem(owner.address, inventoryTokenId, inventoryId, inventoryTokenUri);
+    await itemToken.connect(minter).mintGameItem(owner.address, gameTokenId, 1n, gameTokenUri);
+
+    expect(await itemToken.tokenKind(inventoryTokenId)).to.equal(1n);
+    expect(await itemToken.tokenKind(gameTokenId)).to.equal(2n);
+  });
+
   it("rejects game minting an inventory token id", async function () {
     const { itemToken, minter, owner, other } = await deployProtocolFixture();
 

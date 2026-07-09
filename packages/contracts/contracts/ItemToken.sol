@@ -120,6 +120,10 @@ contract ItemToken is ERC1155, ERC1155Supply, AccessControl, Pausable {
         _unpause();
     }
 
+    function tokenKind(uint256 tokenId) external view returns (TokenKind) {
+        return _tokenKinds[tokenId];
+    }
+
     function uri(uint256 tokenId) public view override returns (string memory) {
         string memory tokenUri = _tokenUris[tokenId];
 
