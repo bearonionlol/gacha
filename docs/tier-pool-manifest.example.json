@@ -1,0 +1,10 @@
+[
+  {
+    "inventoryId": "inv-reviewed-custody-001",
+    "setFocused": false
+  },
+  {
+    "inventoryId": "inv-reviewed-custody-002",
+    "setFocused": true
+  }
+]

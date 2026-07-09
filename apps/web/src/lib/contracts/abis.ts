@@ -198,6 +198,106 @@ export const forgeAbi = [
   }
 ] as const;
 
+export const dustLedgerAbi = [
+  {
+    type: "function",
+    name: "balancesOf",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "amounts", type: "uint256[4]" }]
+  }
+] as const;
+
+export const vaultPassportAbi = [
+  {
+    type: "function",
+    name: "rankOf",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ type: "uint8" }]
+  }
+] as const;
+
+export const vaultForgeAbi = [
+  {
+    type: "function",
+    name: "getRecipeConfig",
+    stateMutability: "view",
+    inputs: [{ name: "recipeKind", type: "uint8" }],
+    outputs: [
+      {
+        name: "config",
+        type: "tuple",
+        components: [
+          { name: "dustAmounts", type: "uint256[4]" },
+          { name: "fee", type: "uint256" },
+          { name: "maxTotalClaims", type: "uint256" },
+          { name: "maxClaimsPerWallet", type: "uint256" },
+          { name: "version", type: "uint32" },
+          { name: "tradeInCount", type: "uint8" },
+          { name: "optionCount", type: "uint8" },
+          { name: "active", type: "bool" }
+        ]
+      }
+    ]
+  },
+  {
+    type: "function",
+    name: "craft",
+    stateMutability: "payable",
+    inputs: [
+      { name: "recipeKind", type: "uint8" },
+      { name: "anchorTokenId", type: "uint256" },
+      { name: "tradeInTokenIds", type: "uint256[]" },
+      { name: "duplicateProofTokenIds", type: "uint256[]" },
+      { name: "imprintHash", type: "bytes32" }
+    ],
+    outputs: [{ name: "claimId", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "reveal",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "claimId", type: "uint256" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "selectCandidate",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "claimId", type: "uint256" },
+      { name: "selectedIndex", type: "uint256" },
+      { name: "to", type: "address" }
+    ],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "settleDefault",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "claimId", type: "uint256" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "cancelExpired",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "claimId", type: "uint256" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "exchangeDust",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "fromKind", type: "uint8" },
+      { name: "toKind", type: "uint8" }
+    ],
+    outputs: []
+  }
+] as const;
+
 export const buybackVaultAbi = [
   {
     type: "function",

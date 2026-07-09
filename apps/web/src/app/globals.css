@@ -1917,3 +1917,1240 @@ h1 {
     justify-self: start;
   }
 }
+
+/* Vault Ascension V4 is isolated from the legacy Forge surface. */
+.vault-ascension-workbench {
+  --va-echo: #55d8ff;
+  --va-prism: #ff7ab8;
+  --va-star: #f3ba2f;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(10, 13, 12, 0.94);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
+}
+
+.vault-ascension-workbench h2,
+.vault-ascension-workbench h3,
+.vault-ascension-workbench h4,
+.vault-ascension-workbench p {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.vault-ascension-workbench button,
+.vault-ascension-workbench select {
+  letter-spacing: 0;
+}
+
+.va-command-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid var(--line);
+  padding: 20px 22px;
+}
+
+.va-command-bar h2 {
+  margin-top: 5px;
+  font-size: 1.45rem;
+}
+
+.va-command-bar p {
+  max-width: 680px;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.va-mode-control {
+  display: grid;
+  width: 270px;
+  flex: 0 0 270px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.va-mode-control button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.va-mode-control button.active {
+  border-color: var(--green-line);
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.va-mode-control button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.va-mode-control > span {
+  grid-column: 1 / -1;
+  color: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.68rem;
+  text-align: right;
+}
+
+.va-dust-bank {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: stretch;
+  border-bottom: 1px solid var(--line);
+  background: rgba(18, 23, 21, 0.46);
+}
+
+.va-section-label {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  border-right: 1px solid var(--line);
+  padding: 15px 18px;
+}
+
+.va-section-label strong {
+  font-size: 0.9rem;
+}
+
+.va-dust-balances {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.va-dust-control {
+  display: grid;
+  min-width: 0;
+  min-height: 72px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  padding: 11px 14px;
+  text-align: left;
+  cursor: grab;
+}
+
+.va-dust-control:first-child {
+  border-left: 0;
+}
+
+.va-dust-control:hover,
+.va-dust-control:focus-visible {
+  background: var(--surface-2);
+  outline: none;
+}
+
+.va-dust-control:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--green-line);
+}
+
+.va-dust-control > span:nth-child(2) {
+  min-width: 0;
+}
+
+.va-dust-control strong,
+.va-dust-control small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.va-dust-control strong {
+  font-size: 0.8rem;
+}
+
+.va-dust-control small {
+  margin-top: 3px;
+  color: var(--faint);
+  font-size: 0.68rem;
+}
+
+.va-dust-control b {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1rem;
+}
+
+.va-dust-icon,
+.va-anchor-icon,
+.va-cell-rune {
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+
+.va-dust-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.dust-magic .va-dust-icon,
+.dust-magic b,
+.token-magic {
+  color: var(--green);
+}
+
+.dust-echo .va-dust-icon,
+.dust-echo b,
+.token-echo {
+  color: var(--va-echo);
+}
+
+.dust-prism .va-dust-icon,
+.dust-prism b,
+.token-prism {
+  color: var(--va-prism);
+}
+
+.dust-star .va-dust-icon,
+.dust-star b,
+.token-star {
+  color: var(--va-star);
+}
+
+.token-duplicate {
+  color: #f4f7f2;
+}
+
+.token-matching {
+  color: var(--muted);
+}
+
+.va-workspace {
+  display: grid;
+  grid-template-columns: 260px minmax(430px, 1fr) 282px;
+  align-items: start;
+}
+
+.va-recipe-book,
+.va-outcome {
+  min-width: 0;
+  padding: 18px;
+}
+
+.va-recipe-book {
+  border-right: 1px solid var(--line);
+}
+
+.va-outcome {
+  border-left: 1px solid var(--line);
+}
+
+.va-column-heading,
+.va-anchor-heading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.va-column-heading > svg {
+  color: var(--green);
+}
+
+.va-column-heading h3 {
+  margin-top: 3px;
+  font-size: 1rem;
+}
+
+.va-recipe-group {
+  margin-top: 18px;
+}
+
+.va-recipe-group h4,
+.va-disposition h4,
+.va-cost-summary h4 {
+  color: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.va-recipe-list {
+  margin-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.va-recipe-row {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 45px;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--text);
+  padding: 11px 5px 11px 9px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.va-recipe-row:hover,
+.va-recipe-row:focus-visible {
+  background: rgba(244, 247, 242, 0.035);
+  outline: none;
+}
+
+.va-recipe-row.selected {
+  border-left-color: var(--green);
+  background: var(--green-soft);
+}
+
+.va-recipe-copy {
+  min-width: 0;
+}
+
+.va-recipe-copy strong,
+.va-recipe-copy small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.va-recipe-copy strong {
+  font-size: 0.79rem;
+}
+
+.va-recipe-copy small {
+  margin-top: 4px;
+  color: var(--faint);
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+.va-pattern-mini {
+  display: grid;
+  width: 45px;
+  height: 45px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+}
+
+.va-pattern-mini i {
+  display: grid;
+  min-width: 0;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  background: rgba(6, 8, 7, 0.7);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.48rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.va-pattern-mini i.empty {
+  border-color: rgba(244, 247, 242, 0.08);
+  color: transparent;
+}
+
+.va-lab {
+  min-width: 0;
+}
+
+.va-anchor-control {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 0.82fr) minmax(220px, 1.18fr);
+  gap: 16px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  background: rgba(0, 200, 5, 0.045);
+  padding: 15px 18px;
+}
+
+.va-anchor-icon {
+  width: 38px;
+  height: 38px;
+  color: var(--green);
+}
+
+.va-anchor-heading strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--green);
+  font-size: 0.78rem;
+}
+
+.va-anchor-control label,
+.va-exchange-controls label {
+  display: grid;
+  gap: 5px;
+}
+
+.va-anchor-control label > span,
+.va-exchange-controls label > span {
+  color: var(--faint);
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.va-anchor-control select,
+.va-exchange-controls select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 0 9px;
+  font-size: 0.76rem;
+}
+
+.va-anchor-readout {
+  min-width: 0;
+  border-left: 1px solid var(--green-line);
+  padding-left: 13px;
+}
+
+.va-anchor-readout span,
+.va-anchor-readout strong,
+.va-anchor-readout small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.va-anchor-readout span {
+  color: var(--green);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.65rem;
+}
+
+.va-anchor-readout strong {
+  margin-top: 3px;
+  font-size: 0.78rem;
+}
+
+.va-anchor-readout small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.va-grid-stage {
+  padding: 20px 22px;
+}
+
+.va-grid-heading,
+.va-trade-in-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.va-grid-heading h3,
+.va-trade-in-heading h3 {
+  margin-top: 4px;
+  font-size: 1rem;
+}
+
+.va-grid-heading p {
+  max-width: 560px;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.va-grid-actions {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.va-grid-actions .secondary-action {
+  min-height: 36px;
+  font-size: 0.75rem;
+}
+
+.va-icon-button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.va-icon-button:hover,
+.va-icon-button:focus-visible {
+  border-color: var(--green-line);
+  color: var(--text);
+  outline: none;
+}
+
+.va-exchange-controls {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(120px, 1fr);
+  gap: 12px;
+  align-items: end;
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 12px 0;
+}
+
+.va-exchange-controls > svg {
+  margin-bottom: 9px;
+  color: var(--green);
+}
+
+.va-grid {
+  display: grid;
+  max-width: 620px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 18px auto 0;
+}
+
+.va-grid-cell {
+  display: grid;
+  min-width: 0;
+  aspect-ratio: 1;
+  place-content: center;
+  place-items: center;
+  gap: 6px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--muted);
+  padding: 8px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.va-grid-cell.center {
+  border-style: solid;
+  box-shadow: inset 0 0 0 1px rgba(0, 200, 5, 0.18);
+}
+
+.va-grid-cell:hover,
+.va-grid-cell:focus-visible {
+  border-color: var(--green-line);
+  outline: none;
+}
+
+.va-grid-cell.matched {
+  border-style: solid;
+  border-color: var(--green-line);
+  background: rgba(0, 200, 5, 0.055);
+}
+
+.va-grid-cell.misplaced {
+  border-style: solid;
+  border-color: rgba(255, 90, 95, 0.6);
+  background: rgba(255, 90, 95, 0.07);
+}
+
+.va-grid-cell.trade-in {
+  border-color: rgba(243, 186, 47, 0.62);
+  background: rgba(243, 186, 47, 0.055);
+}
+
+.va-grid-cell strong,
+.va-grid-cell small {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.va-grid-cell strong {
+  color: var(--text);
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+.va-grid-cell small {
+  color: var(--faint);
+  font-size: 0.62rem;
+  line-height: 1.25;
+}
+
+.va-cell-rune {
+  width: 32px;
+  height: 32px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.va-cell-rune.token-empty {
+  border-color: var(--line);
+  color: var(--faint);
+}
+
+.va-grid-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 620px;
+  margin: 11px auto 0;
+}
+
+.va-grid-status > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.va-grid-status > span.complete {
+  color: var(--green);
+}
+
+.va-grid-status small {
+  color: var(--faint);
+  font-size: 0.66rem;
+  text-align: right;
+}
+
+.va-trade-ins {
+  border-top: 1px solid var(--line);
+  padding: 18px 22px 22px;
+}
+
+.va-trade-in-heading > span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  padding: 5px 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.66rem;
+}
+
+.va-trade-in-list {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.va-trade-in-row {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  padding: 10px 4px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.va-trade-in-row:hover,
+.va-trade-in-row:focus-visible {
+  background: rgba(244, 247, 242, 0.035);
+  outline: none;
+}
+
+.va-trade-in-row.selected {
+  color: var(--va-star);
+}
+
+.va-trade-in-row:disabled {
+  cursor: not-allowed;
+  opacity: 0.43;
+}
+
+.va-check-box {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+}
+
+.va-trade-in-row.selected .va-check-box {
+  border-color: var(--va-star);
+  background: rgba(243, 186, 47, 0.11);
+}
+
+.va-trade-in-row strong,
+.va-trade-in-row small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.va-trade-in-row strong {
+  color: var(--text);
+  font-size: 0.76rem;
+}
+
+.va-trade-in-row small {
+  margin-top: 3px;
+  color: var(--faint);
+  font-size: 0.64rem;
+}
+
+.va-trade-in-row b {
+  color: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.64rem;
+}
+
+.va-trade-in-row.selected b {
+  color: var(--va-star);
+}
+
+.va-custody-warning,
+.va-no-trade-ins {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  margin-top: 12px;
+  border-left: 2px solid var(--va-star);
+  background: rgba(243, 186, 47, 0.055);
+  color: var(--muted);
+  padding: 9px 10px;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.va-custody-warning > svg,
+.va-no-trade-ins > svg {
+  flex: 0 0 auto;
+  color: var(--va-star);
+}
+
+.va-custody-warning strong {
+  display: block;
+  color: var(--text);
+}
+
+.va-outcome > section,
+.va-outcome > div:not(.va-column-heading) {
+  margin-top: 20px;
+}
+
+.va-result-block {
+  border-left: 3px solid var(--green);
+  padding-left: 13px;
+}
+
+.va-result-type {
+  color: var(--green);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.va-result-block > strong {
+  display: block;
+  margin-top: 7px;
+  color: var(--text);
+  font-size: 1.15rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.va-result-block p {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.va-result-block small {
+  display: block;
+  margin-top: 9px;
+  color: var(--faint);
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.va-disposition,
+.va-cost-summary {
+  border-top: 1px solid var(--line);
+  padding-top: 15px;
+}
+
+.va-disposition dl {
+  display: grid;
+  gap: 9px;
+  margin: 11px 0 0;
+}
+
+.va-disposition dl div,
+.va-cost-summary li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.va-disposition dt,
+.va-disposition dd {
+  margin: 0;
+  font-size: 0.72rem;
+}
+
+.va-disposition dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.va-disposition dd {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.va-cost-summary ul {
+  display: grid;
+  gap: 7px;
+  margin: 11px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.va-cost-summary li {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 7px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.va-cost-summary li strong {
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.va-settlement-state {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--faint);
+  padding: 10px;
+}
+
+.va-settlement-state.ready {
+  border-color: var(--green-line);
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.va-settlement-state p {
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.va-settlement-state strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text);
+}
+
+.va-live-action {
+  width: 100%;
+  margin-top: 10px;
+}
+
+@media (max-width: 1240px) {
+  .va-workspace {
+    grid-template-columns: 255px minmax(430px, 1fr);
+  }
+
+  .va-outcome {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+
+  .va-outcome > section,
+  .va-outcome > div:not(.va-column-heading) {
+    margin-top: 0;
+  }
+
+  .va-outcome > .va-column-heading {
+    grid-column: 1 / -1;
+  }
+
+  .va-result-block,
+  .va-disposition,
+  .va-cost-summary {
+    min-width: 0;
+  }
+
+  .va-live-action {
+    align-self: end;
+  }
+}
+
+@media (max-width: 980px) {
+  .va-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .va-recipe-book {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .va-recipe-book > .va-column-heading {
+    grid-column: 1 / -1;
+  }
+
+  .va-recipe-group {
+    margin-top: 0;
+  }
+
+  .va-outcome {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .va-command-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .va-mode-control {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .va-mode-control > span {
+    text-align: left;
+  }
+
+  .va-dust-bank {
+    grid-template-columns: 1fr;
+  }
+
+  .va-section-label {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .va-dust-balances {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .va-dust-control:nth-child(3) {
+    border-left: 0;
+  }
+
+  .va-dust-control:nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
+
+  .va-recipe-book {
+    grid-template-columns: 1fr;
+  }
+
+  .va-recipe-book > .va-column-heading {
+    grid-column: auto;
+  }
+
+  .va-anchor-control {
+    grid-template-columns: 1fr;
+  }
+
+  .va-anchor-readout {
+    border-top: 1px solid var(--green-line);
+    border-left: 0;
+    padding-top: 10px;
+    padding-left: 0;
+  }
+
+  .va-grid-heading,
+  .va-trade-in-heading,
+  .va-grid-status {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .va-grid-actions {
+    width: 100%;
+  }
+
+  .va-grid-actions .secondary-action {
+    width: 100%;
+  }
+
+  .va-grid-status small {
+    text-align: left;
+  }
+
+  .va-outcome {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .va-command-bar,
+  .va-recipe-book,
+  .va-outcome {
+    padding: 16px;
+  }
+
+  .va-grid-stage,
+  .va-trade-ins {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .va-dust-control {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 10px;
+  }
+
+  .va-dust-control b {
+    grid-column: 2;
+    font-size: 0.82rem;
+  }
+
+  .va-exchange-controls {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .va-exchange-controls > svg {
+    margin: 0 auto;
+    transform: rotate(90deg);
+  }
+
+  .va-grid {
+    gap: 5px;
+  }
+
+  .va-grid-cell {
+    gap: 4px;
+    padding: 5px 3px;
+  }
+
+  .va-grid-cell strong {
+    font-size: 0.63rem;
+  }
+
+  .va-grid-cell small {
+    font-size: 0.56rem;
+  }
+
+  .va-cell-rune {
+    width: 27px;
+    height: 27px;
+  }
+
+  .va-trade-in-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .va-trade-in-row b {
+    grid-column: 2;
+  }
+}
+
+.vault-forge-live {
+  overflow: hidden;
+  margin-top: 16px;
+  background: rgba(10, 13, 12, 0.96);
+}
+
+.vault-forge-live > .panel-header {
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 18px 20px;
+}
+
+.vault-forge-live > .panel-header h2 {
+  margin: 4px 0 0;
+  font-size: 1.15rem;
+  letter-spacing: 0;
+}
+
+.vault-forge-live-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line);
+  background: rgba(18, 23, 21, 0.5);
+}
+
+.vault-forge-live-metrics > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 8px;
+  align-items: center;
+  border-left: 1px solid var(--line);
+  padding: 12px 14px;
+}
+
+.vault-forge-live-metrics > div:first-child {
+  border-left: 0;
+}
+
+.vault-forge-live-metrics svg {
+  grid-row: span 2;
+  color: var(--green);
+}
+
+.vault-forge-live-metrics > div:nth-child(3) svg {
+  color: #55d8ff;
+}
+
+.vault-forge-live-metrics > div:nth-child(4) svg {
+  color: #ff7ab8;
+}
+
+.vault-forge-live-metrics > div:nth-child(5) svg {
+  color: var(--warm);
+}
+
+.vault-forge-live-metrics span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--faint);
+  font-size: 0.67rem;
+  text-transform: uppercase;
+}
+
+.vault-forge-live-metrics strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88rem;
+}
+
+.vault-forge-live-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px 20px;
+}
+
+.vault-forge-live-fields label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.vault-forge-live-fields label > span {
+  color: var(--faint);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.vault-forge-live-fields input,
+.vault-forge-live-fields select {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 0 10px;
+}
+
+.vault-forge-live-fields input:focus,
+.vault-forge-live-fields select:focus {
+  border-color: var(--green-line);
+  outline: 2px solid rgba(0, 200, 5, 0.12);
+}
+
+.vault-forge-live-pair {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  border-left: 2px solid var(--green-line);
+  background: rgba(0, 200, 5, 0.035);
+  padding: 11px 12px;
+}
+
+.vault-forge-live-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 20px 18px;
+  border: 1px solid rgba(243, 186, 47, 0.3);
+  border-left: 2px solid var(--warm);
+  background: rgba(243, 186, 47, 0.055);
+  padding: 11px 12px;
+}
+
+.vault-forge-live-note svg {
+  flex: 0 0 auto;
+  color: var(--warm);
+}
+
+.vault-forge-live-note p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.vault-forge-live > .transaction-panel {
+  margin: 0 20px 20px;
+  background: rgba(18, 23, 21, 0.7);
+}
+
+@media (max-width: 760px) {
+  .vault-forge-live-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vault-forge-live-metrics > div:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .vault-forge-live-fields,
+  .vault-forge-live-pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .vault-forge-live > .panel-header,
+  .vault-forge-live-fields {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .vault-forge-live-note,
+  .vault-forge-live > .transaction-panel {
+    margin-right: 16px;
+    margin-left: 16px;
+  }
+}

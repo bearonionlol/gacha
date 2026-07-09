@@ -1,5 +1,6 @@
 import { AppShell } from "../../components/app-shell";
-import { ForgeWorkbench } from "../../components/forge-workbench";
+import { VaultAscensionWorkbench } from "../../components/vault-ascension-workbench";
+import { VaultForgeLivePanel } from "../../components/vault-forge-live-panel";
 
 export default function ForgePage() {
   return (
@@ -8,17 +9,18 @@ export default function ForgePage() {
         <section className="panel route-hero" aria-labelledby="forge-title">
           <div className="panel-header">
             <div>
-              <span className="eyebrow">On-chain crafting</span>
-              <h1 id="forge-title">Forge</h1>
+              <span className="eyebrow">Inventory-backed crafting</span>
+              <h1 id="forge-title">Vault Ascension</h1>
             </div>
-            <span className="chain-pill">Forge v3</span>
+            <span className="chain-pill">Forge V4</span>
           </div>
           <p>
-            Recycle duplicates, solve bounded blueprints, and sign each output with a personal imprint. Physical cards
-            can unlock catalyst paths but are never burned by Forge.
+            Shape mixed Dust into exact 3 by 3 seals, trade eligible duplicates, and reveal real cards from reserved
+            vault inventory. Your protected Anchor never leaves your wallet.
           </p>
         </section>
-        <ForgeWorkbench />
+        <VaultAscensionWorkbench />
+        <VaultForgeLivePanel />
       </main>
     </AppShell>
   );

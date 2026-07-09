@@ -30,6 +30,11 @@ const validItem: InventoryItem = {
   marketEstimateCents: 4500,
   buybackQuoteCents: 3000,
   grailTier: "minor",
+  canonicalCollectibleKey: "pokemon:base-set:pikachu:58-102:yellow-cheeks",
+  forgeTier: 1,
+  tradeInEligible: true,
+  tierPoolEligible: true,
+  forgeSetKey: "pokemon:base-set",
   craftingTags: ["electric", "base_set"],
   dropEligibility: true,
   legalDisclaimer: "Authentic resale collectible descriptor only; no affiliation or endorsement is claimed.",
@@ -65,6 +70,26 @@ describe("InventoryItemSchema", () => {
     expect(() => InventoryItemSchema.parse({ ...validItem, category: "booster_pack" })).toThrow();
     expect(() => InventoryItemSchema.parse({ ...validItem, custodyStatus: "archived" })).toThrow();
     expect(() => InventoryItemSchema.parse({ ...validItem, grailTier: "mythic" })).toThrow();
+  });
+
+  it("rejects Forge tiers outside integer levels 1 through 4", () => {
+    for (const forgeTier of [0, 1.5, 5]) {
+      expect(() => InventoryItemSchema.parse({ ...validItem, forgeTier })).toThrow();
+    }
+  });
+
+  it("rejects empty and whitespace-only Forge policy keys", () => {
+    for (const emptyKey of ["", "   "]) {
+      expect(() => InventoryItemSchema.parse({ ...validItem, canonicalCollectibleKey: emptyKey })).toThrow();
+      expect(() => InventoryItemSchema.parse({ ...validItem, forgeSetKey: emptyKey })).toThrow();
+    }
+  });
+
+  it("preserves strict validation for unknown and missing Forge policy fields", () => {
+    expect(() => InventoryItemSchema.parse({ ...validItem, unexpectedForgeFlag: true })).toThrow();
+
+    const { canonicalCollectibleKey: _omitted, ...missingCanonicalKey } = validItem;
+    expect(() => InventoryItemSchema.parse(missingCanonicalKey)).toThrow();
   });
 
   it("rejects malformed hashes, negative cents, and non-ISO dates", () => {
@@ -106,6 +131,8 @@ describe("InventoryItemSchema", () => {
       )
     ).toBe(true);
     expect(parsed.every((item) => item.legalDisclaimer.toLowerCase().includes("no affiliation"))).toBe(true);
+    expect(parsed.every((item) => item.canonicalCollectibleKey.length > 0 && item.forgeSetKey.length > 0)).toBe(true);
+    expect(parsed.find((item) => item.grailTier === "grail")?.tradeInEligible).toBe(false);
   });
 
   it("rejects duplicate inventory IDs in inventory lists", () => {

@@ -37,6 +37,25 @@ type RejectingPackBuyer = Omit<BaseContract, "connect"> & {
 
 type RejectingNativeParticipant = BaseContract;
 
+type DustLedgerContract = BaseContract & {
+  CREDIT_ROLE(): Promise<string>;
+  grantRole(role: string, account: string): Promise<ContractTransactionResponse>;
+  balancesOf(account: string): Promise<[bigint, bigint, bigint, bigint]>;
+};
+
+type DustRewardPolicyContract = BaseContract & {
+  POLICY_ADMIN_ROLE(): Promise<string>;
+  grantRole(role: string, account: string): Promise<ContractTransactionResponse>;
+  createPolicy(
+    magicAmount: BigNumberish,
+    specialtyAmount: BigNumberish,
+    specialtyRolls: BigNumberish,
+    echoWeight: BigNumberish,
+    prismWeight: BigNumberish,
+    starWeight: BigNumberish
+  ): Promise<ContractTransactionResponse>;
+};
+
 function inventoryHashFor(inventoryId: string): string {
   return ethers.keccak256(ethers.toUtf8Bytes(`inventory:${inventoryId}:v1`));
 }
@@ -226,6 +245,40 @@ describe("PackSale", function () {
     const [bonusTokenIds, bonusAmounts] = await packSale.getDropBonus(dropId);
     expect(bonusTokenIds).to.deep.equal([fireShardTokenId, vaultSealTokenId]);
     expect(bonusAmounts).to.deep.equal([3n, 1n]);
+  });
+
+  it("awards one idempotent wallet-bound Dust bundle from the disclosed drop policy", async function () {
+    const {
+      fixture: { packSale, randomnessProvider, revealer, buyer, deployer },
+      dropId
+    } = await createActiveDrop({ maxSupply: 1n });
+    const dustLedger = (await ethers.deployContract("DustLedger")) as unknown as DustLedgerContract;
+    const dustRewardPolicy = (await ethers.deployContract("DustRewardPolicy")) as unknown as DustRewardPolicyContract;
+    await dustLedger.waitForDeployment();
+    await dustRewardPolicy.waitForDeployment();
+    await dustLedger.grantRole(await dustLedger.CREDIT_ROLE(), await packSale.getAddress());
+    await dustRewardPolicy.grantRole(await dustRewardPolicy.POLICY_ADMIN_ROLE(), deployer.address);
+    await dustRewardPolicy.createPolicy(100n, 10n, 2, 10_000, 0, 0);
+    await packSale.configureDustRewards(await dustLedger.getAddress(), await dustRewardPolicy.getAddress());
+    const dropAdminRole = await packSale.DROP_ADMIN_ROLE();
+    await packSale.grantRole(dropAdminRole, deployer.address);
+    await packSale.setDropDustPolicy(dropId, 1n);
+
+    const chainId = (await ethers.provider.getNetwork()).chainId;
+    const requestId = requestIdFor(await packSale.getAddress(), 1n, buyer.address, chainId);
+    const seed = ethers.id("wallet-bound-dust-seed");
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    await makeRandomnessReady(randomnessProvider, revealer, requestId, seed);
+
+    await expect(packSale.connect(buyer).reveal(1n))
+      .to.emit(packSale, "PackDustAwarded")
+      .withArgs(1n, buyer.address, 1n, [100n, 20n, 0n, 0n]);
+    expect(await dustLedger.balancesOf(buyer.address)).to.deep.equal([100n, 20n, 0n, 0n]);
+    await expect(packSale.connect(buyer).reveal(1n)).to.be.revertedWithCustomError(
+      packSale,
+      "PurchaseAlreadyRevealed"
+    );
+    expect(await dustLedger.balancesOf(buyer.address)).to.deep.equal([100n, 20n, 0n, 0n]);
   });
 
   it("rejects malformed or physical-token starter bundles", async function () {

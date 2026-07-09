@@ -40,10 +40,11 @@ export type ForgeRecipeView = {
   title: string;
   tier: "utility" | "rare" | "grail";
   status: "known" | "discovery" | "locked";
-  category: "recycle" | "craft" | "catalyst";
+  category: "recycle" | "craft" | "catalyst" | "refine";
   description: string;
   pattern: ForgeSlot[];
   catalystCardIds: string[];
+  catalystMaterialIds: string[];
   output: string;
   outputTokenId: string;
   outputSupplyCap: number;
@@ -61,6 +62,7 @@ export type ForgeMaterialView = {
   labBalance: number;
   source: string;
   tone: string;
+  catalystOnly?: boolean;
 };
 
 export type ForgeIngredientView = {
@@ -85,6 +87,11 @@ type LiveForgeState =
   | { status: "loading" }
   | { status: "ready"; snapshot: ForgeWalletSnapshot }
   | { status: "error" };
+
+type ForgeTokenRequirement = {
+  tokenId: bigint;
+  amount: bigint;
+};
 
 const gridSlots = Array.from({ length: 9 }, (_, index) => index);
 const frameOptions: Array<{ id: ForgeFrame; label: string }> = [
@@ -122,6 +129,17 @@ export function ForgeWorkbenchClient({ ingredients, materials, recipes }: ForgeW
   const catalystIngredients = activeRecipe.catalystCardIds
     .map((id) => ingredientById.get(id))
     .filter((ingredient): ingredient is ForgeIngredientView => ingredient !== undefined);
+  const catalystMaterials = activeRecipe.catalystMaterialIds
+    .map((id) => materialById.get(id))
+    .filter((material): material is ForgeMaterialView => material !== undefined);
+  const burnMaterials = activeRecipe.pattern
+    .map((materialId) => materialId === null ? undefined : materialById.get(materialId))
+    .filter((material): material is ForgeMaterialView => material !== undefined);
+  const burnRequirements = buildTokenRequirements(burnMaterials.map((material) => BigInt(material.tokenId)));
+  const catalystRequirements = buildTokenRequirements([
+    ...catalystMaterials.map((material) => BigInt(material.tokenId)),
+    ...catalystIngredients.map((ingredient) => BigInt(ingredient.tokenId))
+  ]);
   const recipeId = BigInt(activeRecipe.chainRecipeId);
   const configuredFeeWei = BigInt(activeRecipe.feeWei);
   const readySnapshot = liveForgeState.status === "ready" ? liveForgeState.snapshot : null;
@@ -135,10 +153,10 @@ export function ForgeWorkbenchClient({ ingredients, materials, recipes }: ForgeW
     maxTotalCrafts: outputSupplyCap,
     totalCrafts
   });
-  const requiredTokenIds = [
-    ...materials.map((material) => BigInt(material.tokenId)),
-    ...catalystIngredients.map((ingredient) => BigInt(ingredient.tokenId))
-  ];
+  const requiredTokenIds = [...new Set([
+    ...burnRequirements.map((requirement) => requirement.tokenId),
+    ...catalystRequirements.map((requirement) => requirement.tokenId)
+  ])];
   const requiredTokenKey = requiredTokenIds.map(String).join(":");
   const registry = useMemo(
     () => getReadyContractRegistry(
@@ -186,7 +204,10 @@ export function ForgeWorkbenchClient({ ingredients, materials, recipes }: ForgeW
     recipe: activeRecipe,
     liveForgeState,
     materials,
+    burnRequirements,
+    catalystMaterials,
     catalystIngredients,
+    catalystRequirements,
     walletAccount
   });
 
@@ -203,6 +224,10 @@ export function ForgeWorkbenchClient({ ingredients, materials, recipes }: ForgeW
   function placeMaterial(materialId: string, preferredSlot?: number) {
     const material = materialById.get(materialId);
     if (!material) {
+      return;
+    }
+    if (material.catalystOnly) {
+      appendLog(`${material.label} is a held catalyst and cannot enter the burn grid`);
       return;
     }
 
@@ -422,6 +447,7 @@ export function ForgeWorkbenchClient({ ingredients, materials, recipes }: ForgeW
             const placed = slotMaterialIds.filter((materialId) => materialId === material.id).length;
             const remaining = Math.max(0, material.labBalance - placed);
             const walletBalance = readySnapshot?.balances.get(BigInt(material.tokenId));
+            const isCatalystOnly = material.catalystOnly === true;
             return (
               <article className="material-card" key={material.id}>
                 <div>
@@ -435,14 +461,14 @@ export function ForgeWorkbenchClient({ ingredients, materials, recipes }: ForgeW
                 <p>{material.source}</p>
                 <button
                   className="secondary-action"
-                  disabled={remaining === 0}
-                  draggable={remaining > 0}
+                  disabled={isCatalystOnly || remaining === 0}
+                  draggable={!isCatalystOnly && remaining > 0}
                   onClick={() => placeMaterial(material.id)}
                   onDragStart={(event) => handleDragStart(material.id, event)}
                   type="button"
                 >
-                  <PackagePlus size={15} aria-hidden="true" />
-                  Add {material.label}
+                  {isCatalystOnly ? <LockKeyhole size={15} aria-hidden="true" /> : <PackagePlus size={15} aria-hidden="true" />}
+                  {isCatalystOnly ? "Held catalyst" : `Add ${material.label}`}
                 </button>
               </article>
             );
@@ -453,15 +479,27 @@ export function ForgeWorkbenchClient({ ingredients, materials, recipes }: ForgeW
       <div className="panel catalyst-panel">
         <div className="panel-header compact">
           <div>
-            <span className="eyebrow">Ownership gates</span>
-            <h2>Card catalysts</h2>
+            <span className="eyebrow">Retained holdings</span>
+            <h2>Required catalysts</h2>
           </div>
           <Gem size={18} aria-hidden="true" />
         </div>
-        {catalystIngredients.length === 0 ? (
-          <p className="forge-empty-state">No card catalyst in this blueprint.</p>
+        {catalystMaterials.length === 0 && catalystIngredients.length === 0 ? (
+          <p className="forge-empty-state">No retained catalyst in this blueprint.</p>
         ) : (
           <div className="catalyst-list">
+            {catalystMaterials.map((material) => (
+              <article className="catalyst-row" key={material.id}>
+                <Gem size={18} aria-hidden="true" />
+                <div>
+                  <strong>{material.label}</strong>
+                  <span>{material.source} / held, never burned</span>
+                </div>
+                <span className="chain-pill">
+                  {readySnapshot ? `${readySnapshot.balances.get(BigInt(material.tokenId)) ?? 0n} held` : "wallet check"}
+                </span>
+              </article>
+            ))}
             {catalystIngredients.map((ingredient) => (
               <article className="catalyst-row" key={ingredient.id}>
                 <LockKeyhole size={18} aria-hidden="true" />
@@ -643,7 +681,10 @@ function getCraftDisabledReason(input: {
   recipe: ForgeRecipeView;
   liveForgeState: LiveForgeState;
   materials: ForgeMaterialView[];
+  burnRequirements: ForgeTokenRequirement[];
+  catalystMaterials: ForgeMaterialView[];
   catalystIngredients: ForgeIngredientView[];
+  catalystRequirements: ForgeTokenRequirement[];
   walletAccount: Address | null;
 }): string | null {
   if (input.recipe.status === "locked") {
@@ -672,6 +713,12 @@ function getCraftDisabledReason(input: {
   if (snapshot.recipe.outputTokenId !== BigInt(input.recipe.outputTokenId)) {
     return "The live output token does not match this blueprint.";
   }
+  if (!sameTokenRequirements(snapshot.recipe.inputTokenIds, snapshot.recipe.inputAmounts, input.burnRequirements)) {
+    return "The live burn inputs do not match this blueprint.";
+  }
+  if (!sameTokenRequirements(snapshot.recipe.catalystTokenIds, snapshot.recipe.catalystAmounts, input.catalystRequirements)) {
+    return "The live retained catalysts do not match this blueprint.";
+  }
   if (snapshot.recipe.totalCrafts >= snapshot.recipe.maxTotalCrafts) {
     return "This recipe has reached its global craft cap.";
   }
@@ -698,7 +745,46 @@ function getCraftDisabledReason(input: {
     }
   }
 
+  for (const catalyst of input.catalystMaterials) {
+    const available = snapshot.balances.get(BigInt(catalyst.tokenId)) ?? 0n;
+    if (available < 1n) {
+      return `Wallet does not hold the required ${catalyst.label} catalyst.`;
+    }
+  }
+
   return null;
+}
+
+function buildTokenRequirements(tokenIds: readonly bigint[]): ForgeTokenRequirement[] {
+  const amounts = new Map<bigint, bigint>();
+  for (const tokenId of tokenIds) {
+    amounts.set(tokenId, (amounts.get(tokenId) ?? 0n) + 1n);
+  }
+
+  return [...amounts.entries()]
+    .map(([tokenId, amount]) => ({ tokenId, amount }))
+    .sort((left, right) => left.tokenId < right.tokenId ? -1 : left.tokenId > right.tokenId ? 1 : 0);
+}
+
+function sameTokenRequirements(
+  actualTokenIds: readonly bigint[],
+  actualAmounts: readonly bigint[],
+  expected: readonly ForgeTokenRequirement[]
+): boolean {
+  if (actualTokenIds.length !== actualAmounts.length || actualTokenIds.length !== expected.length) {
+    return false;
+  }
+
+  const actual = actualTokenIds
+    .map((tokenId, index) => ({ tokenId, amount: actualAmounts[index] ?? 0n }))
+    .sort((left, right) => left.tokenId < right.tokenId ? -1 : left.tokenId > right.tokenId ? 1 : 0);
+
+  return actual.every((requirement, index) => {
+    const expectedRequirement = expected[index];
+    return expectedRequirement !== undefined
+      && requirement.tokenId === expectedRequirement.tokenId
+      && requirement.amount === expectedRequirement.amount;
+  });
 }
 
 function formatWei(value: bigint): string {

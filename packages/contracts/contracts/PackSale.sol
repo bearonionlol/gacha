@@ -9,6 +9,8 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {ERC165Checker} from "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
 import {InventoryRegistry} from "./InventoryRegistry.sol";
 import {ItemToken} from "./ItemToken.sol";
+import {DustLedger} from "./DustLedger.sol";
+import {DustRewardPolicy} from "./DustRewardPolicy.sol";
 import {IRandomnessProvider} from "./randomness/IRandomnessProvider.sol";
 
 contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
@@ -91,6 +93,11 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     error DropStillActive(uint256 dropId);
     error PendingPurchasesRemaining(uint256 dropId);
     error TransferFailed(address to, uint256 amount);
+    error DustRewardsAlreadyConfigured();
+    error DustRewardsNotConfigured();
+    error DropDustPolicyMissing(uint256 dropId);
+    error DropDustPolicyLocked(uint256 dropId);
+    error InactiveDustPolicy(uint256 policyId);
 
     event DropCreated(
         uint256 indexed dropId,
@@ -122,11 +129,21 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     event TreasuryCreditRecorded(address indexed treasury, uint256 amount, uint256 totalCredit);
     event TreasuryCreditWithdrawn(address indexed caller, address indexed to, uint256 amount);
     event DropClosed(uint256 indexed dropId, uint256 releasedInventory);
+    event DustRewardsConfigured(address indexed dustLedger, address indexed dustRewardPolicy);
+    event DropDustPolicySet(uint256 indexed dropId, uint256 indexed policyId);
+    event PackDustAwarded(
+        uint256 indexed purchaseId,
+        address indexed buyer,
+        uint256 indexed policyId,
+        uint256[4] amounts
+    );
 
     InventoryRegistry public immutable inventoryRegistry;
     ItemToken public immutable itemToken;
     IRandomnessProvider public immutable randomnessProvider;
     address payable public immutable treasury;
+    DustLedger public dustLedger;
+    DustRewardPolicy public dustRewardPolicy;
 
     uint256 public nextDropId = 1;
     uint256 public nextPurchaseId = 1;
@@ -138,6 +155,7 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     mapping(bytes32 inventoryKey => bool reserved) private _reservedInventory;
     mapping(uint256 tokenId => string tokenUri) private _bonusTokenUris;
     mapping(address account => uint256 amount) public refundCredit;
+    mapping(uint256 dropId => uint256 policyId) public dropDustPolicyId;
 
     constructor(
         InventoryRegistry inventoryRegistry_,
@@ -235,8 +253,39 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         );
     }
 
+    function configureDustRewards(DustLedger dustLedger_, DustRewardPolicy dustRewardPolicy_)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        if (address(dustLedger_) == address(0) || address(dustRewardPolicy_) == address(0)) {
+            revert InvalidAddress();
+        }
+        if (address(dustLedger) != address(0) || address(dustRewardPolicy) != address(0)) {
+            revert DustRewardsAlreadyConfigured();
+        }
+        dustLedger = dustLedger_;
+        dustRewardPolicy = dustRewardPolicy_;
+        emit DustRewardsConfigured(address(dustLedger_), address(dustRewardPolicy_));
+    }
+
+    function setDropDustPolicy(uint256 dropId, uint256 policyId) external onlyRole(DROP_ADMIN_ROLE) {
+        if (address(dustLedger) == address(0) || address(dustRewardPolicy) == address(0)) {
+            revert DustRewardsNotConfigured();
+        }
+        Drop storage drop = _dropFor(dropId);
+        if (drop.sold != 0 || drop.pendingPurchases != 0) revert DropDustPolicyLocked(dropId);
+        DustRewardPolicy.Policy memory policy = dustRewardPolicy.getPolicy(policyId);
+        if (!policy.active) revert InactiveDustPolicy(policyId);
+        dropDustPolicyId[dropId] = policyId;
+        emit DropDustPolicySet(dropId, policyId);
+    }
+
     function purchase(uint256 dropId) external payable nonReentrant whenNotPaused returns (uint256 purchaseId) {
         Drop storage drop = _dropFor(dropId);
+
+        if (address(dustLedger) != address(0) && dropDustPolicyId[dropId] == 0) {
+            revert DropDustPolicyMissing(dropId);
+        }
 
         if (msg.value != drop.price) {
             revert ExactPaymentRequired(drop.price, msg.value);
@@ -333,6 +382,7 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         delete _reservedInventory[_inventoryKey(inventoryId)];
         itemToken.mintInventoryItem(address(this), tokenId, inventoryId, metadataUri);
         _mintBonusBundle(purchaseId, drop);
+        _awardDust(purchaseId, purchaseRecord, randomness);
         drop.pendingPurchases -= 1;
         _advanceRevealCursor(drop, purchaseRecord.dropId);
         treasuryCredit += purchaseRecord.price;
@@ -584,6 +634,31 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
             itemToken.mintGameItem(address(this), tokenId, amount, drop.bonusUris[index]);
             emit PackBonusMinted(purchaseId, tokenId, amount);
         }
+    }
+
+    function _awardDust(uint256 purchaseId, Purchase storage purchaseRecord, uint256 randomness) private {
+        uint256 policyId = dropDustPolicyId[purchaseRecord.dropId];
+        if (policyId == 0) return;
+
+        DustRewardPolicy.Policy memory policy = dustRewardPolicy.getPolicy(policyId);
+        uint256[4] memory amounts;
+        amounts[uint256(DustLedger.DustKind.Magic)] = policy.magicAmount;
+        for (uint256 index = 0; index < policy.specialtyRolls; index++) {
+            uint256 roll = uint256(
+                keccak256(abi.encode(randomness, address(this), purchaseId, "DUST_REWARD_V1", index))
+            ) % dustRewardPolicy.WEIGHT_DENOMINATOR();
+            if (roll < policy.echoWeight) {
+                amounts[uint256(DustLedger.DustKind.Echo)] += policy.specialtyAmount;
+            } else if (roll < uint256(policy.echoWeight) + uint256(policy.prismWeight)) {
+                amounts[uint256(DustLedger.DustKind.Prism)] += policy.specialtyAmount;
+            } else {
+                amounts[uint256(DustLedger.DustKind.Star)] += policy.specialtyAmount;
+            }
+        }
+
+        bytes32 contextId = keccak256(abi.encode("PACK_DUST_REWARD", address(this), purchaseId));
+        dustLedger.credit(purchaseRecord.buyer, amounts, contextId);
+        emit PackDustAwarded(purchaseId, purchaseRecord.buyer, policyId, amounts);
     }
 
     function _revealedBundle(Purchase storage purchaseRecord, Drop storage drop)

@@ -7,6 +7,7 @@ cache/
 artifacts/
 typechain-types/
 .next/
+.next-dev/
 out/
 *.tsbuildinfo
 .env

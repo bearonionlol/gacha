@@ -36,6 +36,11 @@ type InventoryItem = {
   marketEstimateCents: number;
   buybackQuoteCents: number;
   grailTier: string;
+  canonicalCollectibleKey: string;
+  forgeTier: 1 | 2 | 3 | 4;
+  tradeInEligible: boolean;
+  tierPoolEligible: boolean;
+  forgeSetKey: string;
   craftingTags: string[];
   dropEligibility: boolean;
   legalDisclaimer: string;
@@ -51,6 +56,9 @@ type DeploymentFile = {
     Marketplace: string;
     BuybackVault: string;
     Forge: string;
+    DustRewardPolicy: string;
+    CollectibleForgePolicy: string;
+    VaultForge: string;
   };
 };
 
@@ -80,6 +88,75 @@ type PackSaleContract = BaseContract & {
     bonusAmounts: BigNumberish[];
     bonusUris: string[];
   }): Promise<ContractTransactionResponse>;
+  dropDustPolicyId(dropId: BigNumberish): Promise<bigint>;
+  setDropDustPolicy(dropId: BigNumberish, policyId: BigNumberish): Promise<ContractTransactionResponse>;
+};
+
+type DustRewardPolicyView = {
+  magicAmount: bigint;
+  specialtyAmount: bigint;
+  specialtyRolls: bigint;
+  echoWeight: bigint;
+  prismWeight: bigint;
+  starWeight: bigint;
+  active: boolean;
+  exists: boolean;
+};
+
+type DustRewardPolicyContract = BaseContract & {
+  nextPolicyId(): Promise<bigint>;
+  createPolicy(
+    magicAmount: BigNumberish,
+    specialtyAmount: BigNumberish,
+    specialtyRolls: BigNumberish,
+    echoWeight: BigNumberish,
+    prismWeight: BigNumberish,
+    starWeight: BigNumberish
+  ): Promise<ContractTransactionResponse>;
+  getPolicy(policyId: BigNumberish): Promise<DustRewardPolicyView>;
+};
+
+type CollectibleForgePolicyContract = BaseContract & {
+  hasPolicy(tokenId: BigNumberish): Promise<boolean>;
+  setTokenPolicy(
+    tokenId: BigNumberish,
+    canonicalKey: string,
+    setKey: string,
+    tier: BigNumberish,
+    tradeInEligible: boolean,
+    tierPoolEligible: boolean
+  ): Promise<ContractTransactionResponse>;
+};
+
+type VaultForgeRecipeView = {
+  dustAmounts: readonly bigint[];
+  fee: bigint;
+  maxTotalClaims: bigint;
+  maxClaimsPerWallet: bigint;
+  version: bigint;
+  tradeInCount: bigint;
+  optionCount: bigint;
+  active: boolean;
+};
+
+type VaultForgeContract = BaseContract & {
+  getRecipeConfig(recipeKind: BigNumberish): Promise<VaultForgeRecipeView>;
+  configureRecipe(
+    recipeKind: BigNumberish,
+    dustAmounts: readonly BigNumberish[],
+    fee: BigNumberish,
+    maxTotalClaims: BigNumberish,
+    maxClaimsPerWallet: BigNumberish,
+    active: boolean
+  ): Promise<ContractTransactionResponse>;
+  exchangeMagicCost(): Promise<bigint>;
+  exchangeInputAmount(): Promise<bigint>;
+  exchangeOutputAmount(): Promise<bigint>;
+  configureDustExchange(
+    magicCost: BigNumberish,
+    inputAmount: BigNumberish,
+    outputAmount: BigNumberish
+  ): Promise<ContractTransactionResponse>;
 };
 
 type ItemTokenContract = BaseContract & {
@@ -183,10 +260,28 @@ const recipeStatus = {
 const fireShardTokenId = 7_001n;
 const vaultSealTokenId = 7_002n;
 const forgeDustTokenId = 7_003n;
+const resonanceDustTokenId = 7_004n;
 const signalBadgeTokenId = 9_001n;
 const resonanceAuraTokenId = 9_002n;
+const curatorSigilTokenId = 9_003n;
 const marketplaceFeeBps = 250n;
 const sampleBuybackQuote = ethers.parseEther("0.004");
+const sampleDustPolicy = {
+  magicAmount: 100n,
+  specialtyAmount: 10n,
+  specialtyRolls: 2n,
+  echoWeight: 5_000n,
+  prismWeight: 3_500n,
+  starWeight: 1_500n
+} as const;
+
+const sampleVaultForgeRecipes = [
+  { dust: [5n, 10n, 0n, 0n], fee: ethers.parseEther("0.0005"), maxTotal: 1_000n, maxWallet: 100n },
+  { dust: [8n, 12n, 0n, 4n], fee: ethers.parseEther("0.001"), maxTotal: 500n, maxWallet: 50n },
+  { dust: [15n, 10n, 6n, 0n], fee: ethers.parseEther("0.0015"), maxTotal: 250n, maxWallet: 10n },
+  { dust: [20n, 12n, 8n, 6n], fee: ethers.parseEther("0.0025"), maxTotal: 100n, maxWallet: 5n },
+  { dust: [24n, 12n, 10n, 8n], fee: ethers.parseEther("0.002"), maxTotal: 100n, maxWallet: 5n }
+] as const;
 
 const sampleStarterMaterials = [
   {
@@ -267,6 +362,38 @@ function sampleForgeRecipes(catalystTokenId: bigint): readonly SeedForgeRecipe[]
       catalystAmounts: [1n],
       outputSupplyCap: 25n,
       metadataHash: ethers.id("forge-blueprint:vault-resonance:v3")
+    },
+    {
+      inputTokenIds: [signalBadgeTokenId],
+      inputAmounts: [1n],
+      outputTokenId: resonanceDustTokenId,
+      outputAmount: 1n,
+      outputUri: "ipfs://metadata/game/resonance-dust.json",
+      fee: 0n,
+      maxTotalCrafts: 250n,
+      maxCraftsPerWallet: 5n,
+      requiresManualReview: false,
+      excludeGrailProtectedInputs: true,
+      catalystTokenIds: [resonanceAuraTokenId],
+      catalystAmounts: [1n],
+      outputSupplyCap: 250n,
+      metadataHash: ethers.id("forge-blueprint:resonant-refinery:v3")
+    },
+    {
+      inputTokenIds: [resonanceDustTokenId],
+      inputAmounts: [1n],
+      outputTokenId: curatorSigilTokenId,
+      outputAmount: 1n,
+      outputUri: "ipfs://metadata/game/curator-sigil.json",
+      fee: ethers.parseEther("0.001"),
+      maxTotalCrafts: 50n,
+      maxCraftsPerWallet: 1n,
+      requiresManualReview: false,
+      excludeGrailProtectedInputs: true,
+      catalystTokenIds: [resonanceAuraTokenId, catalystTokenId],
+      catalystAmounts: [1n, 1n],
+      outputSupplyCap: 50n,
+      metadataHash: ethers.id("forge-blueprint:curator-sigil:v3")
     }
   ];
 }
@@ -391,6 +518,11 @@ function stableInventoryHash(item: InventoryItem): string {
     marketEstimateCents: item.marketEstimateCents,
     buybackQuoteCents: item.buybackQuoteCents,
     grailTier: item.grailTier,
+    canonicalCollectibleKey: item.canonicalCollectibleKey,
+    forgeTier: item.forgeTier,
+    tradeInEligible: item.tradeInEligible,
+    tierPoolEligible: item.tierPoolEligible,
+    forgeSetKey: item.forgeSetKey,
     craftingTags: item.craftingTags,
     dropEligibility: item.dropEligibility,
     legalDisclaimer: item.legalDisclaimer,
@@ -524,6 +656,111 @@ async function seedDrop(packSale: PackSaleContract, item: InventoryItem): Promis
     })
   );
   console.log(`created sample drop for ${item.inventoryId}`);
+}
+
+async function seedDustRewards(
+  dustRewardPolicy: DustRewardPolicyContract,
+  packSale: PackSaleContract
+): Promise<void> {
+  const nextPolicyId = await dustRewardPolicy.nextPolicyId();
+  if (nextPolicyId === 1n) {
+    await waitFor(
+      dustRewardPolicy.createPolicy(
+        sampleDustPolicy.magicAmount,
+        sampleDustPolicy.specialtyAmount,
+        sampleDustPolicy.specialtyRolls,
+        sampleDustPolicy.echoWeight,
+        sampleDustPolicy.prismWeight,
+        sampleDustPolicy.starWeight
+      )
+    );
+    console.log("created sample Dust reward policy 1");
+  }
+
+  const policy = await dustRewardPolicy.getPolicy(1n);
+  if (
+    policy.magicAmount !== sampleDustPolicy.magicAmount
+      || policy.specialtyAmount !== sampleDustPolicy.specialtyAmount
+      || policy.specialtyRolls !== sampleDustPolicy.specialtyRolls
+      || policy.echoWeight !== sampleDustPolicy.echoWeight
+      || policy.prismWeight !== sampleDustPolicy.prismWeight
+      || policy.starWeight !== sampleDustPolicy.starWeight
+  ) {
+    throw new Error("Dust reward policy 1 does not match the reviewed sample policy");
+  }
+
+  const currentDropPolicy = await packSale.dropDustPolicyId(1n);
+  if (currentDropPolicy === 0n) {
+    await waitFor(packSale.setDropDustPolicy(1n, 1n));
+    console.log("attached Dust reward policy 1 to sample drop 1");
+  } else if (currentDropPolicy !== 1n) {
+    throw new Error(`Sample drop 1 uses unexpected Dust policy ${currentDropPolicy}`);
+  }
+}
+
+async function seedCollectiblePolicies(
+  collectibleForgePolicy: CollectibleForgePolicyContract,
+  inventoryRegistry: InventoryRegistryContract,
+  inventory: readonly InventoryItem[]
+): Promise<void> {
+  for (const item of inventory) {
+    const tokenId = await inventoryRegistry.derivePhysicalTokenId(item.inventoryId);
+    if (await collectibleForgePolicy.hasPolicy(tokenId)) {
+      console.log(`collectible Forge policy already configured: ${item.inventoryId}`);
+      continue;
+    }
+    await waitFor(
+      collectibleForgePolicy.setTokenPolicy(
+        tokenId,
+        ethers.id(item.canonicalCollectibleKey),
+        ethers.id(item.forgeSetKey),
+        item.forgeTier,
+        item.tradeInEligible,
+        item.tierPoolEligible
+      )
+    );
+    console.log(`configured collectible Forge policy: ${item.inventoryId}`);
+  }
+}
+
+async function seedVaultForge(vaultForge: VaultForgeContract): Promise<void> {
+  for (const [recipeKind, expected] of sampleVaultForgeRecipes.entries()) {
+    const current = await vaultForge.getRecipeConfig(recipeKind);
+    if (current.version === 0n) {
+      await waitFor(
+        vaultForge.configureRecipe(
+          recipeKind,
+          expected.dust,
+          expected.fee,
+          expected.maxTotal,
+          expected.maxWallet,
+          true
+        )
+      );
+      console.log(`configured VaultForge recipe ${recipeKind}`);
+      continue;
+    }
+    if (
+      current.fee !== expected.fee || current.maxTotalClaims !== expected.maxTotal
+        || current.maxClaimsPerWallet !== expected.maxWallet || !current.active
+        || current.dustAmounts.length !== expected.dust.length
+        || current.dustAmounts.some((amount, index) => amount !== expected.dust[index])
+    ) {
+      throw new Error(`VaultForge recipe ${recipeKind} does not match the reviewed sample config`);
+    }
+  }
+
+  const exchange = [
+    await vaultForge.exchangeMagicCost(),
+    await vaultForge.exchangeInputAmount(),
+    await vaultForge.exchangeOutputAmount()
+  ] as const;
+  if (exchange.every((value) => value === 0n)) {
+    await waitFor(vaultForge.configureDustExchange(5n, 3n, 1n));
+    console.log("configured VaultForge Dust Exchange at 3:1 plus 5 Magic Dust");
+  } else if (exchange[0] !== 5n || exchange[1] !== 3n || exchange[2] !== 1n) {
+    throw new Error("VaultForge Dust Exchange does not match the reviewed sample config");
+  }
 }
 
 async function configureMarketplace(marketplace: MarketplaceContract): Promise<void> {
@@ -812,12 +1049,27 @@ async function main(): Promise<void> {
     "Forge",
     deployment.contracts.Forge
   )) as unknown as ForgeContract;
+  const dustRewardPolicy = (await ethers.getContractAt(
+    "DustRewardPolicy",
+    deployment.contracts.DustRewardPolicy
+  )) as unknown as DustRewardPolicyContract;
+  const collectibleForgePolicy = (await ethers.getContractAt(
+    "CollectibleForgePolicy",
+    deployment.contracts.CollectibleForgePolicy
+  )) as unknown as CollectibleForgePolicyContract;
+  const vaultForge = (await ethers.getContractAt(
+    "VaultForge",
+    deployment.contracts.VaultForge
+  )) as unknown as VaultForgeContract;
 
   for (const item of inventory) {
     await anchorInventory(inventoryRegistry, item);
   }
 
   await seedDrop(packSale, dropItem);
+  await seedDustRewards(dustRewardPolicy, packSale);
+  await seedCollectiblePolicies(collectibleForgePolicy, inventoryRegistry, inventory);
+  await seedVaultForge(vaultForge);
   await configureMarketplace(marketplace);
   await ensureSampleForgeInputs(itemToken, forge, deployerAddress);
   const catalystTokenId = await inventoryRegistry.derivePhysicalTokenId(dropItem.inventoryId);

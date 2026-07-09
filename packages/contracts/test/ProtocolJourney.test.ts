@@ -12,10 +12,13 @@ const RecipeStatus = {
 const fireShardTokenId = 7_001n;
 const vaultSealTokenId = 7_002n;
 const forgeDustTokenId = 7_003n;
+const resonanceDustTokenId = 7_004n;
 const signalBadgeTokenId = 9_001n;
 const resonanceAuraTokenId = 9_002n;
+const curatorSigilTokenId = 9_003n;
 const craftFee = ethers.parseEther("0.001");
 const resonanceFee = ethers.parseEther("0.002");
+const curatorSigilFee = ethers.parseEther("0.001");
 
 function physicalTokenIdFor(inventoryId: string): bigint {
   return BigInt(ethers.keccak256(ethers.solidityPacked(["string", "string"], ["inventory:", inventoryId])));
@@ -82,6 +85,7 @@ describe("Protocol collector journey", function () {
       itemToken,
       forge,
       recipeAdmin,
+      minter,
       marketplace,
       redemptionRegistry,
       redemptionAdmin,
@@ -141,13 +145,39 @@ describe("Protocol collector journey", function () {
         catalystAmounts: [1n]
       }
     );
+    const refineryRecipe = recipe(
+      latestBlock.timestamp,
+      { inputTokenIds: [signalBadgeTokenId], inputAmounts: [1n] },
+      { outputTokenId: resonanceDustTokenId, outputAmount: 1n, outputSupplyCap: 250n },
+      {
+        maxTotalCrafts: 250n,
+        catalystTokenIds: [resonanceAuraTokenId],
+        catalystAmounts: [1n]
+      }
+    );
+    const curatorSigilRecipe = recipe(
+      latestBlock.timestamp,
+      { inputTokenIds: [resonanceDustTokenId], inputAmounts: [1n] },
+      { outputTokenId: curatorSigilTokenId, outputAmount: 1n, outputSupplyCap: 50n },
+      {
+        fee: curatorSigilFee,
+        maxTotalCrafts: 50n,
+        maxCraftsPerWallet: 1n,
+        catalystTokenIds: [resonanceAuraTokenId, physicalTokenId],
+        catalystAmounts: [1n, 1n]
+      }
+    );
 
     await forge.connect(recipeAdmin).createRecipe(recyclerRecipe);
     await forge.connect(recipeAdmin).createRecipe(signalRecipe);
     await forge.connect(recipeAdmin).createRecipe(resonanceRecipe);
+    await forge.connect(recipeAdmin).createRecipe(refineryRecipe);
+    await forge.connect(recipeAdmin).createRecipe(curatorSigilRecipe);
     await activateRecipe(forge, recipeAdmin, 1n);
     await activateRecipe(forge, recipeAdmin, 2n);
     await activateRecipe(forge, recipeAdmin, 3n);
+    await activateRecipe(forge, recipeAdmin, 4n);
+    await activateRecipe(forge, recipeAdmin, 5n);
 
     await packSale.connect(buyer).purchase(1n, { value: ethers.parseEther("0.01") });
     const chainId = (await ethers.provider.getNetwork()).chainId;
@@ -166,10 +196,19 @@ describe("Protocol collector journey", function () {
     await forge.connect(buyer).craftWithImprint(2n, ethers.id("signal:journey"), { value: craftFee });
     await forge.connect(buyer).craftWithImprint(3n, ethers.id("resonance:journey"), { value: resonanceFee });
 
+    await itemToken.connect(minter).mintGameItem(buyer.address, fireShardTokenId, 3n, "ipfs://items/fire-shard.json");
+    await itemToken.connect(minter).mintGameItem(buyer.address, vaultSealTokenId, 1n, "ipfs://items/vault-seal.json");
+    await forge.connect(buyer).craftWithImprint(1n, ethers.id("recycle-refine:journey"));
+    await forge.connect(buyer).craftWithImprint(2n, ethers.id("signal-refine:journey"), { value: craftFee });
+    await forge.connect(buyer).craftWithImprint(4n, ethers.id("refinery:journey"));
+    await forge.connect(buyer).craftWithImprint(5n, ethers.id("sigil:journey"), { value: curatorSigilFee });
+
     expect(await itemToken.balanceOf(buyer.address, physicalTokenId)).to.equal(1n);
     expect(await itemToken.balanceOf(buyer.address, signalBadgeTokenId)).to.equal(0n);
     expect(await itemToken.balanceOf(buyer.address, resonanceAuraTokenId)).to.equal(1n);
-    expect(await forge.treasuryFeesCredit(treasury.address)).to.equal(craftFee + resonanceFee);
+    expect(await itemToken.balanceOf(buyer.address, resonanceDustTokenId)).to.equal(0n);
+    expect(await itemToken.balanceOf(buyer.address, curatorSigilTokenId)).to.equal(1n);
+    expect(await forge.treasuryFeesCredit(treasury.address)).to.equal(craftFee * 2n + resonanceFee + curatorSigilFee);
 
     const ask = ethers.parseEther("0.02");
     await itemToken.connect(buyer).setApprovalForAll(await marketplace.getAddress(), true);

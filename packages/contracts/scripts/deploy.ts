@@ -26,6 +26,7 @@ type RandomnessProviderContract = RoleContract & {
 
 type PackSaleContract = RoleContract & {
   DROP_ADMIN_ROLE(): Promise<string>;
+  configureDustRewards(dustLedger: string, dustRewardPolicy: string): Promise<ContractTransactionResponse>;
 };
 
 type MarketplaceContract = RoleContract & {
@@ -41,6 +42,41 @@ type ForgeContract = RoleContract & {
   CRAFT_REVIEWER_ROLE(): Promise<string>;
 };
 
+type DustLedgerContract = RoleContract & {
+  CREDIT_ROLE(): Promise<string>;
+  SPENDER_ROLE(): Promise<string>;
+  RESTORER_ROLE(): Promise<string>;
+  PAUSER_ROLE(): Promise<string>;
+};
+
+type DustRewardPolicyContract = RoleContract & {
+  POLICY_ADMIN_ROLE(): Promise<string>;
+};
+
+type CollectibleForgePolicyContract = RoleContract & {
+  POLICY_ADMIN_ROLE(): Promise<string>;
+};
+
+type TradeInVaultContract = RoleContract & {
+  CUSTODY_ADMIN_ROLE(): Promise<string>;
+  configureForge(forge: string): Promise<ContractTransactionResponse>;
+};
+
+type TierPoolContract = RoleContract & {
+  POOL_ADMIN_ROLE(): Promise<string>;
+  PAUSER_ROLE(): Promise<string>;
+  configureForge(forge: string): Promise<ContractTransactionResponse>;
+};
+
+type VaultPassportContract = RoleContract & {
+  FORGE_ROLE(): Promise<string>;
+};
+
+type VaultForgeContract = RoleContract & {
+  RECIPE_ADMIN_ROLE(): Promise<string>;
+  PAUSER_ROLE(): Promise<string>;
+};
+
 type RedemptionRegistryContract = RoleContract & {
   REDEMPTION_ADMIN_ROLE(): Promise<string>;
 };
@@ -54,6 +90,13 @@ type DeploymentAddresses = {
   BuybackVault: string;
   Forge: string;
   RedemptionRegistry: string;
+  DustLedger: string;
+  DustRewardPolicy: string;
+  CollectibleForgePolicy: string;
+  TradeInVault: string;
+  TierPool: string;
+  VaultPassport: string;
+  VaultForge: string;
 };
 
 async function deployContract<TContract extends BaseContract>(
@@ -116,6 +159,20 @@ async function main(): Promise<void> {
   const randomnessProvider = await deployContract<RandomnessProviderContract>(
     "CommitRevealRandomnessProvider"
   );
+  const dustLedger = await deployContract<DustLedgerContract>("DustLedger");
+  const dustRewardPolicy = await deployContract<DustRewardPolicyContract>("DustRewardPolicy");
+  const collectibleForgePolicy = await deployContract<CollectibleForgePolicyContract>(
+    "CollectibleForgePolicy",
+    [await inventoryRegistry.getAddress()]
+  );
+  const tradeInVault = await deployContract<TradeInVaultContract>("TradeInVault", [
+    await itemToken.getAddress()
+  ]);
+  const tierPool = await deployContract<TierPoolContract>("TierPool", [
+    await itemToken.getAddress(),
+    await collectibleForgePolicy.getAddress()
+  ]);
+  const vaultPassport = await deployContract<VaultPassportContract>("VaultPassport");
   const packSale = await deployContract<PackSaleContract>("PackSale", [
     await inventoryRegistry.getAddress(),
     await itemToken.getAddress(),
@@ -132,6 +189,17 @@ async function main(): Promise<void> {
   const forge = await deployContract<ForgeContract>("Forge", [
     await itemToken.getAddress(),
     await inventoryRegistry.getAddress(),
+    deployerAddress
+  ]);
+  const vaultForge = await deployContract<VaultForgeContract>("VaultForge", [
+    await itemToken.getAddress(),
+    await inventoryRegistry.getAddress(),
+    await collectibleForgePolicy.getAddress(),
+    await dustLedger.getAddress(),
+    await tradeInVault.getAddress(),
+    await tierPool.getAddress(),
+    await vaultPassport.getAddress(),
+    await randomnessProvider.getAddress(),
     deployerAddress
   ]);
   const redemptionRegistry = await deployContract<RedemptionRegistryContract>(
@@ -153,6 +221,12 @@ async function main(): Promise<void> {
   );
   await grantRole(
     itemToken,
+    await itemToken.MINTER_ROLE(),
+    await tierPool.getAddress(),
+    "ItemToken.MINTER_ROLE for TierPool custody onboarding"
+  );
+  await grantRole(
+    itemToken,
     await itemToken.BURNER_ROLE(),
     await forge.getAddress(),
     "ItemToken.BURNER_ROLE for Forge"
@@ -170,11 +244,34 @@ async function main(): Promise<void> {
     "InventoryRegistry.TOKENIZER_ROLE for PackSale"
   );
   await grantRole(
+    inventoryRegistry,
+    await inventoryRegistry.TOKENIZER_ROLE(),
+    await tierPool.getAddress(),
+    "InventoryRegistry.TOKENIZER_ROLE for TierPool custody onboarding"
+  );
+  await grantRole(
     randomnessProvider,
     await randomnessProvider.REQUESTER_ROLE(),
     await packSale.getAddress(),
     "CommitRevealRandomnessProvider.REQUESTER_ROLE for PackSale"
   );
+  await grantRole(
+    randomnessProvider,
+    await randomnessProvider.REQUESTER_ROLE(),
+    await vaultForge.getAddress(),
+    "CommitRevealRandomnessProvider.REQUESTER_ROLE for VaultForge"
+  );
+  await grantRole(dustLedger, await dustLedger.CREDIT_ROLE(), await packSale.getAddress(), "DustLedger.CREDIT_ROLE for PackSale");
+  await grantRole(dustLedger, await dustLedger.CREDIT_ROLE(), await vaultForge.getAddress(), "DustLedger.CREDIT_ROLE for VaultForge");
+  await grantRole(dustLedger, await dustLedger.SPENDER_ROLE(), await vaultForge.getAddress(), "DustLedger.SPENDER_ROLE for VaultForge");
+  await grantRole(dustLedger, await dustLedger.RESTORER_ROLE(), await vaultForge.getAddress(), "DustLedger.RESTORER_ROLE for VaultForge");
+  await grantRole(vaultPassport, await vaultPassport.FORGE_ROLE(), await vaultForge.getAddress(), "VaultPassport.FORGE_ROLE for VaultForge");
+  await (await tradeInVault.configureForge(await vaultForge.getAddress())).wait();
+  console.log(`configured TradeInVault for ${await vaultForge.getAddress()}`);
+  await (await tierPool.configureForge(await vaultForge.getAddress())).wait();
+  console.log(`configured TierPool for ${await vaultForge.getAddress()}`);
+  await (await packSale.configureDustRewards(await dustLedger.getAddress(), await dustRewardPolicy.getAddress())).wait();
+  console.log("configured PackSale Dust rewards");
 
   await grantRole(
     inventoryRegistry,
@@ -236,6 +333,14 @@ async function main(): Promise<void> {
     deployerAddress,
     "RedemptionRegistry.REDEMPTION_ADMIN_ROLE for deployer"
   );
+  await grantRole(dustLedger, await dustLedger.PAUSER_ROLE(), deployerAddress, "DustLedger.PAUSER_ROLE for deployer");
+  await grantRole(dustRewardPolicy, await dustRewardPolicy.POLICY_ADMIN_ROLE(), deployerAddress, "DustRewardPolicy.POLICY_ADMIN_ROLE for deployer");
+  await grantRole(collectibleForgePolicy, await collectibleForgePolicy.POLICY_ADMIN_ROLE(), deployerAddress, "CollectibleForgePolicy.POLICY_ADMIN_ROLE for deployer");
+  await grantRole(tradeInVault, await tradeInVault.CUSTODY_ADMIN_ROLE(), deployerAddress, "TradeInVault.CUSTODY_ADMIN_ROLE for deployer");
+  await grantRole(tierPool, await tierPool.POOL_ADMIN_ROLE(), deployerAddress, "TierPool.POOL_ADMIN_ROLE for deployer");
+  await grantRole(tierPool, await tierPool.PAUSER_ROLE(), deployerAddress, "TierPool.PAUSER_ROLE for deployer");
+  await grantRole(vaultForge, await vaultForge.RECIPE_ADMIN_ROLE(), deployerAddress, "VaultForge.RECIPE_ADMIN_ROLE for deployer");
+  await grantRole(vaultForge, await vaultForge.PAUSER_ROLE(), deployerAddress, "VaultForge.PAUSER_ROLE for deployer");
 
   const addresses: DeploymentAddresses = {
     InventoryRegistry: await inventoryRegistry.getAddress(),
@@ -245,7 +350,14 @@ async function main(): Promise<void> {
     Marketplace: await marketplace.getAddress(),
     BuybackVault: await buybackVault.getAddress(),
     Forge: await forge.getAddress(),
-    RedemptionRegistry: await redemptionRegistry.getAddress()
+    RedemptionRegistry: await redemptionRegistry.getAddress(),
+    DustLedger: await dustLedger.getAddress(),
+    DustRewardPolicy: await dustRewardPolicy.getAddress(),
+    CollectibleForgePolicy: await collectibleForgePolicy.getAddress(),
+    TradeInVault: await tradeInVault.getAddress(),
+    TierPool: await tierPool.getAddress(),
+    VaultPassport: await vaultPassport.getAddress(),
+    VaultForge: await vaultForge.getAddress()
   };
 
   const deployment = {
