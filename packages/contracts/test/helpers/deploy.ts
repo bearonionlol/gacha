@@ -123,6 +123,8 @@ export type PackSale = Omit<BaseContract, "connect"> & {
   closeDrop(dropId: BigNumberish): Promise<ContractTransactionResponse>;
   remainingInventory(dropId: BigNumberish): Promise<bigint>;
   getDropBonus(dropId: BigNumberish): Promise<[bigint[], bigint[], string[]]>;
+  configureDustRewards(dustLedger: string, dustRewardPolicy: string): Promise<ContractTransactionResponse>;
+  setDropDustPolicy(dropId: BigNumberish, policyId: BigNumberish): Promise<ContractTransactionResponse>;
   pause(): Promise<ContractTransactionResponse>;
   unpause(): Promise<ContractTransactionResponse>;
   grantRole(role: string, account: string): Promise<ContractTransactionResponse>;

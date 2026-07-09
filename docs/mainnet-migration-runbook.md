@@ -36,8 +36,9 @@ Complete these gates before running `deploy:mainnet`:
 - Randomness-provider review: replace the default `CommitRevealRandomnessProvider` with approved fair/verifiable randomness before production launch, or explicitly document that any mainnet deployment is only a controlled unsafe rehearsal.
 - Deployment registry review: confirm the expected `deployments/robinhoodMainnet.json` path, chain ID, deployer address, and address review procedure.
 - Admin role review: approve the deployer and post-deploy role holders for default admin and operational roles.
-- Treasury review: approve treasury addresses used by `PackSale`, `Marketplace`, and `Forge`.
+- Treasury review: approve treasury addresses used by `PackSale`, `Marketplace`, `Forge`, and `VaultForge`.
 - Forge economy review: approve every recipe input, retained catalyst, fee, wallet cap, global output cap, schedule, metadata hash, and reviewer allowance policy. Reconcile reserved output capacity before activating overlapping recipes.
+- Vault Ascension review: approve each Dust reward distribution, mixed-Dust cost, fee, claim cap, Passport transition, duplicate-proof rule, and timeout. Reconcile tier-wide and set-specific real-card pool depth against all guided reservations.
 - Liquidity review: approve marketplace fee basis points, buyback quote methodology, maximum inventory exposure, and independently reserved native liquidity. Buyback liquidity is a balance-sheet commitment, not protocol revenue.
 - Launch plan review: define a private smoke window and a separate public launch decision.
 
@@ -99,6 +100,14 @@ For local and testnet craft rehearsal, the seed script also mints the sample For
 
 Mainnet inventory anchoring must use frozen, reviewed production inventory metadata and custody verification. Real-brand names may appear only as resale inventory descriptors and must not imply affiliation, endorsement, sponsorship, or investment exposure.
 
+Production TierPool loading requires a separately reviewed manifest and explicit mainnet override. Run it only after the immutable collectible policies, custody records, and destination pool modes have been signed off:
+
+```bash
+export TIER_POOL_MANIFEST_PATH=/absolute/path/to/reviewed-mainnet-pools.json
+export ALLOW_POOL_ONBOARDING_MAINNET=true
+pnpm --filter @gacha/contracts exec hardhat run scripts/onboard-pool.ts --network robinhoodMainnet
+```
+
 ## Post-Deploy Controls
 
 After private smoke passes:
@@ -108,6 +117,8 @@ After private smoke passes:
 - Confirm treasury addresses and fee settings before enabling public flows.
 - Confirm physical inventory cannot appear in any Forge burn-input list and that physical catalysts remain in the collector wallet after a private craft simulation.
 - Confirm every active Forge recipe's immutable output cap and aggregate reserved emissions match the approved economy ledger.
+- Confirm VaultForge requires retained same-identity proofs, blocks grail trade-ins, restores exact assets on timeout, and cannot reserve more output choices than TierPool custody can satisfy.
+- Confirm `CREDIT_ROLE`, `SPENDER_ROLE`, and `RESTORER_ROLE` are assigned only to reviewed protocol contracts, and move policy, pool, custody, pause, and recipe administration to approved multisigs.
 - Confirm public drop inventory IDs match the frozen production inventory list.
 - Confirm physical token IDs derived from production inventory IDs match the reviewed launch record.
 - Keep `deployments/robinhoodMainnet.json` under deployment registry review for any later operational scripts.

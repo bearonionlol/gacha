@@ -28,6 +28,11 @@ const item: InventoryItem = {
   marketEstimateCents: 4500,
   buybackQuoteCents: 3000,
   grailTier: "minor",
+  canonicalCollectibleKey: "pokemon:base-set:pikachu:58-102:yellow-cheeks",
+  forgeTier: 1,
+  tradeInEligible: true,
+  tierPoolEligible: true,
+  forgeSetKey: "pokemon:base-set",
   craftingTags: ["electric", "base_set"],
   dropEligibility: true,
   legalDisclaimer: "Authentic resale collectible descriptor only; no affiliation or endorsement is claimed.",
@@ -47,8 +52,45 @@ describe("inventory exports", () => {
     const csv = exportInventoryAsCsv([item]);
     const [header, row] = csv.split("\n");
 
-    expect(header).toBe(inventoryCsvColumns.join(","));
+    expect(header).toBe(
+      [
+        "inventoryId",
+        "brand",
+        "category",
+        "cardName",
+        "setName",
+        "cardNumber",
+        "language",
+        "edition",
+        "variant",
+        "rawConditionEstimate",
+        "conditionNotes",
+        "gradingCompany",
+        "grade",
+        "certNumber",
+        "certUrl",
+        "photoUrls",
+        "photoHash",
+        "vaultLocationLabel",
+        "custodyStatus",
+        "redeemable",
+        "marketEstimateCents",
+        "buybackQuoteCents",
+        "grailTier",
+        "canonicalCollectibleKey",
+        "forgeTier",
+        "tradeInEligible",
+        "tierPoolEligible",
+        "forgeSetKey",
+        "craftingTags",
+        "dropEligibility",
+        "legalDisclaimer",
+        "createdAt",
+        "updatedAt"
+      ].join(",")
+    );
     expect(row).toContain('"Pokemon TCG Pikachu, Yellow Cheeks"');
+    expect(row).toContain("pokemon:base-set:pikachu:58-102:yellow-cheeks,1,true,true,pokemon:base-set");
     expect(row).toContain('"[""front.jpg"",""back.jpg""]"');
     expect(row).toContain('"[""electric"",""base_set""]"');
   });

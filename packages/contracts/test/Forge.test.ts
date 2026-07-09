@@ -240,6 +240,31 @@ describe("Forge", function () {
     expect(await itemToken.balanceOf(owner.address, outputTokenId)).to.equal(1n);
   });
 
+  it("retains a game-item catalyst while consuming its selected reagent", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, itemToken, minter, owner } = fixture;
+    const refinedOutputTokenId = 9_201n;
+    const params = recipeParams({
+      inputTokenIds: [inputTokenA],
+      inputAmounts: [1n],
+      outputTokenId: refinedOutputTokenId,
+      outputUri: "ipfs://items/forge-refined-output.json",
+      catalystTokenIds: [inputTokenB],
+      catalystAmounts: [1n],
+      outputSupplyCap: 10n
+    });
+    const recipeId = await createActiveRecipe(fixture, params);
+    await mintInputsTo(fixture, owner, params);
+    await itemToken.connect(minter).mintGameItem(owner.address, inputTokenB, 1n, inputTokenUri);
+    await approveForge(fixture, owner);
+
+    await forge.connect(owner).craft(recipeId, { value: recipeFee });
+
+    expect(await itemToken.balanceOf(owner.address, inputTokenA)).to.equal(0n);
+    expect(await itemToken.balanceOf(owner.address, inputTokenB)).to.equal(1n);
+    expect(await itemToken.balanceOf(owner.address, refinedOutputTokenId)).to.equal(1n);
+  });
+
   it("requires ownership of every catalyst", async function () {
     const fixture = await deployProtocolFixture();
     const { forge, registry, inventoryAdmin, owner } = fixture;

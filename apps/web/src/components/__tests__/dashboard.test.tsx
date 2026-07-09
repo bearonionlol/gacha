@@ -18,6 +18,8 @@ describe("dashboard", () => {
 
     expect(screen.getAllByText(/Vaulted physical card/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Fire shards/i)).toBeInTheDocument();
+    expect(screen.getByText("Magic Dust")).toBeInTheDocument();
+    expect(screen.getByText(/50% Echo, 35% Prism, and 15% Star/i)).toBeInTheDocument();
     expect(screen.getByText(/randomness adapter is operator-controlled/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Keep in vault/i })).toHaveAttribute("href", "/vault");
     expect(screen.getByRole("link", { name: /List on market/i })).toHaveAttribute("href", "/market");
@@ -43,7 +45,14 @@ describe("dashboard", () => {
         Marketplace: "0x2d4Cfd663DDAef48ae4659c09068E842FC31423C",
         BuybackVault: "0x78d0d7C799A6D44085cb4372F1FF6BA49eD224b0",
         Forge: "0x26F77058552b9E69e7d1EE6AADeFeD4BbF555B4B",
-        RedemptionRegistry: "0x36C37cb08c78E50a87BB705D6F06EBae11C07451"
+        RedemptionRegistry: "0x36C37cb08c78E50a87BB705D6F06EBae11C07451",
+        DustLedger: "0x0000000000000000000000000000000000000009",
+        DustRewardPolicy: "0x000000000000000000000000000000000000000a",
+        CollectibleForgePolicy: "0x000000000000000000000000000000000000000b",
+        TradeInVault: "0x000000000000000000000000000000000000000c",
+        TierPool: "0x000000000000000000000000000000000000000d",
+        VaultPassport: "0x000000000000000000000000000000000000000e",
+        VaultForge: "0x000000000000000000000000000000000000000f"
       }
     });
 

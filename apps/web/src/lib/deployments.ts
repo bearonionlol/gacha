@@ -35,6 +35,21 @@ export const requiredProtocolContracts = [
   "RedemptionRegistry"
 ] as const;
 
+export const requiredVaultForgeContracts = [
+  "DustLedger",
+  "DustRewardPolicy",
+  "CollectibleForgePolicy",
+  "TradeInVault",
+  "TierPool",
+  "VaultPassport",
+  "VaultForge"
+] as const;
+
+export const requiredDeploymentContracts = [
+  ...requiredProtocolContracts,
+  ...requiredVaultForgeContracts
+] as const;
+
 type DeploymentRegistryEnv = Record<string, string | undefined>;
 
 const evmAddressPattern = /^0x[a-fA-F0-9]{40}$/;
@@ -95,7 +110,7 @@ export function resolveDeploymentStatus(snapshot: DeploymentRegistrySnapshot | n
 
   const chainName = snapshot.chainId === ROBINHOOD_CHAIN_MAINNET_ID ? robinhoodChain.name : robinhoodChainTestnet.name;
   const mode = snapshot.chainId === ROBINHOOD_CHAIN_MAINNET_ID ? "mainnet" : "testnet";
-  const missingContracts = requiredProtocolContracts.filter((name) => snapshot.contracts?.[name] === undefined);
+  const missingContracts = requiredDeploymentContracts.filter((name) => snapshot.contracts?.[name] === undefined);
   const invalidContracts = contracts
     .filter(({ address }) => !evmAddressPattern.test(address))
     .map(({ name }) => name);

@@ -56,6 +56,10 @@ export const grailTiers = ["none", "minor", "major", "grail"] as const;
 
 export type GrailTier = "none" | "minor" | "major" | "grail";
 
+export const forgeTiers = [1, 2, 3, 4] as const;
+
+export type ForgeTier = (typeof forgeTiers)[number];
+
 export type InventoryItem = {
   inventoryId: string;
   brand: SupportedBrand;
@@ -80,6 +84,11 @@ export type InventoryItem = {
   marketEstimateCents: number;
   buybackQuoteCents: number;
   grailTier: GrailTier;
+  canonicalCollectibleKey: string;
+  forgeTier: ForgeTier;
+  tradeInEligible: boolean;
+  tierPoolEligible: boolean;
+  forgeSetKey: string;
   craftingTags: string[];
   dropEligibility: boolean;
   legalDisclaimer: string;
@@ -89,6 +98,9 @@ export type InventoryItem = {
 
 const textField = z.string();
 const requiredTextField = z.string().min(1);
+const nonBlankTextField = z.string().refine((value) => value.trim().length > 0, {
+  message: "Value must contain non-whitespace characters"
+});
 const isoDateTime = z.string().datetime({ offset: true });
 const cents = z.number().int().nonnegative();
 const photoHash = z.string().regex(/^sha256:[a-f0-9]{64}$/);
@@ -101,6 +113,7 @@ export const SupportedBrandSchema = z.enum(supportedBrands);
 export const InventoryCategorySchema = z.enum(inventoryCategories);
 export const InventoryStatusSchema = z.enum(inventoryStatuses);
 export const GrailTierSchema = z.enum(grailTiers);
+export const ForgeTierSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]);
 
 export const InventoryItemSchema: z.ZodType<InventoryItem> = z
   .object({
@@ -127,6 +140,11 @@ export const InventoryItemSchema: z.ZodType<InventoryItem> = z
     marketEstimateCents: cents,
     buybackQuoteCents: cents,
     grailTier: GrailTierSchema,
+    canonicalCollectibleKey: nonBlankTextField,
+    forgeTier: ForgeTierSchema,
+    tradeInEligible: z.boolean(),
+    tierPoolEligible: z.boolean(),
+    forgeSetKey: nonBlankTextField,
     craftingTags: z.array(requiredTextField),
     dropEligibility: z.boolean(),
     legalDisclaimer: requiredTextField,

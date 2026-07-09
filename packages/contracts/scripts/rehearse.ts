@@ -33,6 +33,10 @@ type PackSaleContract = BaseContract & {
   treasuryCredit(): Promise<bigint>;
 };
 
+type DustLedgerContract = BaseContract & {
+  balancesOf(account: string): Promise<readonly bigint[]>;
+};
+
 type RandomnessProviderContract = BaseContract & {
   commitRandomness(requestId: string, commitment: string): Promise<ContractTransactionResponse>;
   revealRandomness(requestId: string, seed: string): Promise<ContractTransactionResponse>;
@@ -90,11 +94,14 @@ const sampleInventoryId = "inv-sample-graded-001";
 const fireShardTokenId = 7_001n;
 const vaultSealTokenId = 7_002n;
 const forgeDustTokenId = 7_003n;
+const resonanceDustTokenId = 7_004n;
 const signalBadgeTokenId = 9_001n;
 const resonanceAuraTokenId = 9_002n;
+const curatorSigilTokenId = 9_003n;
 const packPrice = ethers.parseEther("0.01");
 const signalFee = ethers.parseEther("0.001");
 const resonanceFee = ethers.parseEther("0.002");
+const curatorSigilFee = ethers.parseEther("0.001");
 const marketAsk = ethers.parseEther("0.012");
 const expectedMarketFeeBps = 250n;
 const rehearsalGasReserve = ethers.parseEther("0.005");
@@ -229,6 +236,10 @@ async function main(): Promise<void> {
     "PackSale",
     contractAddress(deployment, "PackSale")
   )) as unknown as PackSaleContract;
+  const dustLedger = (await ethers.getContractAt(
+    "DustLedger",
+    contractAddress(deployment, "DustLedger")
+  )) as unknown as DustLedgerContract;
   const forge = (await ethers.getContractAt(
     "Forge",
     contractAddress(deployment, "Forge")
@@ -264,7 +275,7 @@ async function main(): Promise<void> {
 
   const deployerBalance = await ethers.provider.getBalance(account);
   const minimumWorkingBalance =
-    packPrice + signalFee + resonanceFee + marketAsk + rehearsalGasReserve;
+    packPrice + signalFee * 2n + resonanceFee + curatorSigilFee + marketAsk + rehearsalGasReserve;
   if (deployerBalance < minimumWorkingBalance) {
     throw new Error(
       `Insufficient deployer testnet ETH for rehearsal: have ${ethers.formatEther(deployerBalance)} ETH, need at least ${ethers.formatEther(minimumWorkingBalance)} ETH including gas reserve`
@@ -283,12 +294,21 @@ async function main(): Promise<void> {
   await submit("reveal seed", randomnessProvider.revealRandomness(requestId, randomnessSeed));
   await submit("reveal pack", packSale.reveal(purchaseId));
 
+  const dustBalances = await dustLedger.balancesOf(account);
+  const specialtyDust = dustBalances[1]! + dustBalances[2]! + dustBalances[3]!;
+  if (
+    dustBalances[0] !== 100n || specialtyDust !== 20n
+      || dustBalances.slice(1).some((amount) => amount % 10n !== 0n)
+  ) {
+    throw new Error("Pack reveal did not credit the reviewed Magic and specialty Dust policy");
+  }
+
   if (
     (await itemToken.balanceOf(account, physicalTokenId)) !== 1n
-      || (await itemToken.balanceOf(account, fireShardTokenId)) < 3n
-      || (await itemToken.balanceOf(account, vaultSealTokenId)) < 1n
+      || (await itemToken.balanceOf(account, fireShardTokenId)) < 6n
+      || (await itemToken.balanceOf(account, vaultSealTokenId)) < 2n
   ) {
-    throw new Error("Pack reveal did not atomically deliver the physical card and starter materials");
+    throw new Error("Pack reveal and seeded Forge reserve did not provide the two required starter bundles");
   }
 
   await ensureApproval(itemToken, account, await forge.getAddress(), "Forge");
@@ -313,6 +333,30 @@ async function main(): Promise<void> {
       || (await itemToken.balanceOf(account, physicalTokenId)) !== 1n
   ) {
     throw new Error("Vault Resonance failed or consumed its protected physical catalyst");
+  }
+  await submit("craft second duplicate recycler", forge.craftWithImprint(1n, ethers.id(`recycler-refine:${imprintBase}`)));
+  await submit(
+    "craft second Fire Signal",
+    forge.craftWithImprint(2n, ethers.id(`signal-refine:${imprintBase}`), { value: signalFee })
+  );
+  await submit(
+    "refine Signal badge",
+    forge.craftWithImprint(4n, ethers.id(`refinery:${imprintBase}`))
+  );
+  if ((await itemToken.balanceOf(account, resonanceDustTokenId)) < 1n) {
+    throw new Error("Resonant Refinery did not mint Resonance dust");
+  }
+  await submit(
+    "craft Curator Sigil",
+    forge.craftWithImprint(5n, ethers.id(`sigil:${imprintBase}`), { value: curatorSigilFee })
+  );
+  if (
+    (await itemToken.balanceOf(account, resonanceDustTokenId)) !== 0n
+      || (await itemToken.balanceOf(account, curatorSigilTokenId)) !== 1n
+      || (await itemToken.balanceOf(account, resonanceAuraTokenId)) !== 1n
+      || (await itemToken.balanceOf(account, physicalTokenId)) !== 1n
+  ) {
+    throw new Error("Curator Sigil did not consume only its reagent and retain both catalysts");
   }
 
   await ensureApproval(itemToken, account, await marketplace.getAddress(), "Marketplace");
@@ -353,12 +397,13 @@ async function main(): Promise<void> {
   const packRevenue = await packSale.treasuryCredit();
   const forgeRevenue = await forge.treasuryFeesCredit(account);
   const marketFee = (marketAsk * expectedMarketFeeBps) / 10_000n;
-  if (packRevenue !== packPrice || forgeRevenue !== signalFee + resonanceFee) {
+  if (packRevenue !== packPrice || forgeRevenue !== signalFee * 2n + resonanceFee + curatorSigilFee) {
     throw new Error("Protocol revenue credits do not match the disclosed pack and Forge fees");
   }
   if (
     (await itemToken.balanceOf(account, physicalTokenId)) !== 1n
-      || (await itemToken.balanceOf(account, resonanceAuraTokenId)) < 1n
+      || (await itemToken.balanceOf(account, resonanceAuraTokenId)) !== 1n
+      || (await itemToken.balanceOf(account, curatorSigilTokenId)) !== 1n
   ) {
     throw new Error("Rehearsal did not restore the collectible and crafted output to the operator wallet");
   }

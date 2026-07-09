@@ -28,6 +28,12 @@ describe("Forge live wallet state", () => {
         if (functionName === "walletCrafts") {
           return 2n;
         }
+        if (functionName === "getRecipeInputs") {
+          return [[7_001n, 7_002n, 7_003n], [1n, 1n, 1n]];
+        }
+        if (functionName === "getRecipeCatalysts") {
+          return [[99_001n], [1n]];
+        }
         if (functionName === "isApprovedForAll") {
           return true;
         }
@@ -51,7 +57,11 @@ describe("Forge live wallet state", () => {
       fee: 1_000n,
       totalCrafts: 20n,
       status: 4,
-      outputSupplyCap: 100n
+      outputSupplyCap: 100n,
+      inputTokenIds: [7_001n, 7_002n, 7_003n],
+      inputAmounts: [1n, 1n, 1n],
+      catalystTokenIds: [99_001n],
+      catalystAmounts: [1n]
     });
     expect(snapshot.walletCrafts).toBe(2n);
     expect(snapshot.approved).toBe(true);
@@ -67,6 +77,7 @@ describe("Forge live wallet state", () => {
         if (functionName === "recipes") return tuple;
         if (functionName === "walletCrafts") return 0n;
         if (functionName === "isApprovedForAll") return false;
+        if (functionName === "getRecipeInputs" || functionName === "getRecipeCatalysts") return [[], []];
         return 0n;
       }
     };

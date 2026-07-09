@@ -98,6 +98,13 @@ Confirm that the file includes the expected network name, chain ID, deployer, ti
 - `BuybackVault`
 - `Forge`
 - `RedemptionRegistry`
+- `DustLedger`
+- `DustRewardPolicy`
+- `CollectibleForgePolicy`
+- `TradeInVault`
+- `TierPool`
+- `VaultPassport`
+- `VaultForge`
 
 ## Testnet Seed
 
@@ -107,15 +114,31 @@ Seed the deployed contracts:
 pnpm --filter @gacha/contracts seed:testnet
 ```
 
-The seed script reads `packages/inventory/src/sample-inventory.ts`, anchors sample inventory hashes, creates one sample drop from drop-ready sample inventory, and guarantees three Fire shards plus one Vault seal with its physical-card reveal. It creates and activates the Duplicate Recycler, Fire Signal, and Vault Resonance Forge blueprints; configures a 250 bps marketplace fee; publishes a 0.004 ETH sample buyback quote; and funds one unreserved payout.
+The seed script reads `packages/inventory/src/sample-inventory.ts`, anchors sample inventory hashes, creates one sample drop from drop-ready sample inventory, and guarantees three Fire shards plus one Vault seal with its physical-card reveal. It creates the legacy rehearsal recipes, the five VaultForge V4 recipe policies, a weighted per-pack Dust policy, immutable collectible Forge metadata, a 250 bps marketplace fee, and a funded 0.004 ETH sample buyback quote.
 
-The three Forge recipes form a complete starter loop:
+The five Forge recipes form a two-bundle mastery loop:
 
 - Duplicate Recycler burns two Fire shards for one Forge dust at no protocol fee.
 - Fire Signal burns one Fire shard, one Vault seal, and one Forge dust for a Signal badge at a 0.001 ETH fee.
 - Vault Resonance burns one Signal badge for a capped Resonance aura at a 0.002 ETH fee while requiring the sample physical card as a retained catalyst.
+- Resonant Refinery burns a later Signal badge for Resonance dust while retaining the Aura as a catalyst.
+- Curator Sigil burns Resonance dust at a 0.001 ETH fee while retaining both the Aura and the linked physical card.
 
 Physical inventory can never be configured as a Forge burn input. Recipe output caps, blueprint hashes, and user imprint hashes are enforced onchain. The sample seed exits immediately on Robinhood mainnet.
+
+VaultForge V4 adds Recast, Guided Recast, Ascension, Guided Ascension, and Set-Focused Ascension. Every craft spends Magic Dust plus recipe-specific Echo, Prism, or Star Dust. Each surrendered card requires a retained same-identity proof token. Ascension requires an Anchor at the wallet's current Passport rank. Trade-ins move into claim-specific custody only after output inventory is reserved; an expired randomness request restores the exact cards, Dust, and fee. Passport rank advances only after output settlement.
+
+## TierPool Custody Onboarding
+
+VaultForge cannot settle without real, inventory-backed output cards. Review and anchor each custody record, seed its immutable collectible Forge policy, then list the inventory IDs and pool modes in a JSON manifest matching `docs/tier-pool-manifest.example.json`.
+
+```bash
+export TIER_POOL_MANIFEST_PATH=docs/tier-pool-manifest.example.json
+pnpm --filter @gacha/contracts onboard-pool:testnet
+pnpm --filter @gacha/contracts smoke:testnet
+```
+
+`setFocused: false` loads the tier-wide pool. `setFocused: true` loads the exact set pool. The operator script is idempotent for cards already in the expected pool and fails closed for unanchored, non-redeemable, policy-ineligible, differently pooled, or externally tokenized records. Maintain enough distinct eligible cards for the largest guided reservation before enabling a recipe.
 
 Testnet seed data uses sample inventory and placeholder metadata URIs such as `ipfs://metadata/<inventoryId>.json`. Do not treat testnet seed metadata as production-reviewed inventory metadata or custody evidence.
 
@@ -129,7 +152,7 @@ Run a read-only smoke check:
 pnpm --filter @gacha/contracts smoke:testnet
 ```
 
-The smoke script reads `deployments/robinhoodTestnet.json`, verifies deployed bytecode, checks contract wiring and roles, and validates the seeded starter bundle, active Forge recipes, retained physical catalyst, marketplace fee, active buyback quote, and unreserved buyback liquidity.
+The smoke script reads `deployments/robinhoodTestnet.json`, verifies all fifteen deployed contracts, checks wiring and least-privilege runtime roles, and validates starter bundles, legacy recipes, all five VaultForge V4 Dust/fee/cap policies, Dust Exchange, collectible metadata, marketplace fee, active buyback quote, and unreserved buyback liquidity.
 
 ## Automated Collector Rehearsal
 
@@ -139,7 +162,7 @@ Run this only once against a fresh seeded deployment:
 pnpm --filter @gacha/contracts rehearse:testnet
 ```
 
-The script records transaction hashes while it purchases and reveals the pack, crafts the full three-stage Forge path, performs a marketplace settlement, requests and cancels redemption, accepts and withdraws the buyback quote, returns the physical collectible, and restores the buyback reserve. It then verifies 0.01 ETH of pack credit, 0.003 ETH of Forge credit, and the 250 bps market fee path.
+The script records transaction hashes while it purchases and reveals the pack, verifies 100 Magic Dust plus two 10-Dust specialty rolls, crafts the full five-stage legacy Forge path, performs a marketplace settlement, requests and cancels redemption, accepts and withdraws the buyback quote, returns the physical collectible, and restores the buyback reserve. It then verifies 0.01 ETH of pack credit, 0.005 ETH of Forge credit, and the 250 bps market fee path.
 
 Run the read-only smoke again after rehearsal:
 
@@ -193,7 +216,7 @@ Browser smoke path:
 - Open `/market`, scan known seeded inventory, select an owned token, approve Marketplace, and list the item.
 - In the live market ticket, read an onchain listing ID, buy at its exact price, cancel as the seller, or withdraw credited proceeds.
 - In the buyback desk, select an owned quoted token, review the exact onchain quote, approve BuybackVault, accept, and withdraw the credited payout.
-- Open `/forge`, connect the wallet, load each recipe, place the exact 3 x 3 pattern, review the output cap and fee, create an imprint, approve Forge, and craft.
+- Open `/forge`, connect the wallet, preview each 3 by 3 seal, then use Live settlement with the exact Anchor, trade-in, retained duplicate-proof, fee, and claim IDs. Verify reveal, guided selection, default settlement, Dust Exchange, and timeout cancellation states.
 - Open `/redemption`, scan known seeded inventory, select a redeemable token, approve RedemptionRegistry, and request redemption.
 - Open `/admin/inventory` with an operator wallet that holds `REDEMPTION_ADMIN_ROLE`.
 - Submit redemption lifecycle updates as separate transactions: approve, mark packed, mark shipped, complete, or cancel.

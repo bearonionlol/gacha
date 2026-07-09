@@ -14,11 +14,13 @@ export const activeDrop = {
   totalSupply: 1,
   remainingSupply: 1,
   inventoryBackedCount: 1,
-  randomnessDisclosure: "Every seeded testnet pack contains one vaulted physical card plus the published starter-material bundle. The current randomness adapter is operator-controlled and testnet-only.",
+  randomnessDisclosure: "Every seeded testnet pack contains one vaulted physical card, the published starter-material bundle, and 100 Magic Dust. It also rolls two 10-Dust specialty rewards independently: 50% Echo, 35% Prism, and 15% Star. The current randomness adapter is operator-controlled and testnet-only.",
   guarantees: [
     { label: "Vaulted physical card", amount: "1" },
     { label: "Fire shards", amount: "3" },
-    { label: "Vault seal", amount: "1" }
+    { label: "Vault seal", amount: "1" },
+    { label: "Magic Dust", amount: "100" },
+    { label: "Specialty Dust rolls", amount: "2 x 10" }
   ]
 };
 
