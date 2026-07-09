@@ -1,4 +1,5 @@
 import { Hammer, LockKeyhole, PackagePlus, ShieldCheck, Sparkles } from "lucide-react";
+import { ActionGuardPanel } from "./action-guard-panel";
 import { formatCents } from "../lib/format";
 import { forgeRecipes } from "../lib/game-state";
 import { collectibleCards } from "../lib/inventory";
@@ -158,6 +159,7 @@ export function ForgeWorkbench() {
         <p className="disclosure">
           Preview copy only: this workbench does not submit burns, guarantee recipe outcomes, or promise resale value.
         </p>
+        <ActionGuardPanel action="Craft recipe" operator="Forge" />
       </div>
     </section>
   );

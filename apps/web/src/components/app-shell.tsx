@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import {
   Boxes,
-  CircuitBoard,
   Gem,
   Hammer,
   LayoutDashboard,
@@ -9,6 +8,7 @@ import {
   Store,
   WalletCards
 } from "lucide-react";
+import { WalletConnectPanel } from "./wallet-connect-panel";
 
 const navItems = [
   { label: "Home", href: "/", icon: LayoutDashboard },
@@ -46,11 +46,7 @@ export function AppShell({ children }: AppShellProps) {
           ))}
         </nav>
 
-        <div className="wallet-card" aria-label="Wallet status">
-          <CircuitBoard size={16} aria-hidden="true" />
-          <span>Demo wallet</span>
-          <strong>Read only</strong>
-        </div>
+        <WalletConnectPanel />
       </aside>
 
       <div className="shell-content">

@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import HomePage from "../../app/page";
+import { StatusRail } from "../status-rail";
 
 describe("dashboard", () => {
   const originalRegistry = process.env.NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY;
@@ -12,8 +13,8 @@ describe("dashboard", () => {
     }
   });
 
-  it("shows odds, randomness disclosure, and reveal next actions", () => {
-    render(<HomePage />);
+  it("shows odds, randomness disclosure, and reveal next actions", async () => {
+    render(await HomePage());
 
     expect(screen.getByText(/Physical grail/i)).toBeInTheDocument();
     expect(screen.getByText(/operator-controlled testnet randomness/i)).toBeInTheDocument();
@@ -21,8 +22,8 @@ describe("dashboard", () => {
     expect(screen.getByRole("button", { name: /List on market/i })).toBeInTheDocument();
   });
 
-  it("shows Signal Run without promising better odds", () => {
-    render(<HomePage />);
+  it("shows Signal Run without promising better odds", async () => {
+    render(await HomePage());
 
     expect(screen.getByText(/Signal Run/i)).toBeInTheDocument();
     expect(screen.getByText(/does not change pull odds/i)).toBeInTheDocument();
@@ -45,11 +46,27 @@ describe("dashboard", () => {
       }
     });
 
-    render(<HomePage />);
+    render(<StatusRail />);
 
     expect(screen.getByText(/robinhoodTestnet deployment registry loaded/i)).toBeInTheDocument();
     expect(screen.getByText("testnet")).toBeInTheDocument();
     expect(screen.getByText("46630")).toBeInTheDocument();
     expect(screen.getByText("ready")).toBeInTheDocument();
+  });
+
+  it("shows the live protocol panel without blocking demo browsing", async () => {
+    render(await HomePage());
+
+    expect(screen.getByRole("heading", { name: /Live protocol offline/i })).toBeInTheDocument();
+  });
+
+  it("shows Phase 4A guards on dashboard actions", async () => {
+    render(await HomePage());
+
+    expect(screen.getAllByText(/Phase 4A guard/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/Connect wallet before this action can send a testnet transaction/i).length).toBeGreaterThanOrEqual(
+      2
+    );
+    expect(screen.getAllByText(/Transaction submission lands in Phase 4B/i).length).toBeGreaterThanOrEqual(2);
   });
 });
