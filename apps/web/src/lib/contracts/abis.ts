@@ -8,12 +8,30 @@ export const packSaleAbi = [
     stateMutability: "view",
     inputs: [{ name: "dropId", type: "uint256" }],
     outputs: [{ type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "purchase",
+    stateMutability: "payable",
+    inputs: [{ name: "dropId", type: "uint256" }],
+    outputs: [{ name: "purchaseId", type: "uint256" }]
   }
 ] as const;
 
 export const marketplaceAbi = [
   { type: "function", name: "nextListingId", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "feeBps", stateMutability: "view", inputs: [], outputs: [{ type: "uint96" }] }
+  { type: "function", name: "feeBps", stateMutability: "view", inputs: [], outputs: [{ type: "uint96" }] },
+  {
+    type: "function",
+    name: "list",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "tokenId", type: "uint256" },
+      { name: "amount", type: "uint256" },
+      { name: "price", type: "uint256" }
+    ],
+    outputs: [{ name: "listingId", type: "uint256" }]
+  }
 ] as const;
 
 export const forgeAbi = [
@@ -43,11 +61,25 @@ export const forgeAbi = [
         ]
       }
     ]
+  },
+  {
+    type: "function",
+    name: "craft",
+    stateMutability: "payable",
+    inputs: [{ name: "recipeId", type: "uint256" }],
+    outputs: [{ name: "outputTokenId", type: "uint256" }]
   }
 ] as const;
 
 export const redemptionRegistryAbi = [
-  { type: "function", name: "nextRequestId", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }
+  { type: "function", name: "nextRequestId", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  {
+    type: "function",
+    name: "requestRedemption",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "requestId", type: "uint256" }]
+  }
 ] as const;
 
 export const itemTokenAbi = [
@@ -70,5 +102,15 @@ export const itemTokenAbi = [
       { name: "operator", type: "address" }
     ],
     outputs: [{ type: "bool" }]
+  },
+  {
+    type: "function",
+    name: "setApprovalForAll",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "operator", type: "address" },
+      { name: "approved", type: "bool" }
+    ],
+    outputs: []
   }
 ] as const;
