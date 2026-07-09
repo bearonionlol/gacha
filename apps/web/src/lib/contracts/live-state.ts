@@ -1,4 +1,5 @@
 import type { Abi, Address } from "viem";
+import { ROBINHOOD_CHAIN_TESTNET_ID } from "@gacha/shared";
 import type { DeploymentRegistrySnapshot } from "../deployments";
 import { forgeAbi, marketplaceAbi, packSaleAbi, redemptionRegistryAbi } from "./abis";
 import { createRobinhoodPublicClient } from "./public-client";
@@ -68,6 +69,15 @@ export async function getLiveProtocolSnapshot({
     };
   }
 
+  if (registry.chainId !== ROBINHOOD_CHAIN_TESTNET_ID) {
+    return {
+      state: "demo",
+      title: "Live protocol locked to testnet",
+      message: "Phase 4A live reads are testnet only. Switch the deployment registry to Robinhood Chain Testnet.",
+      metrics: []
+    };
+  }
+
   try {
     const [
       nextDropId,
@@ -112,7 +122,7 @@ export async function getLiveProtocolSnapshot({
     return {
       state: "degraded",
       title: "Live protocol degraded",
-      message: error instanceof Error ? error.message : "Robinhood testnet RPC read failed.",
+      message: "Robinhood testnet RPC is temporarily unavailable. Browsing remains in read-only mode.",
       metrics: []
     };
   }

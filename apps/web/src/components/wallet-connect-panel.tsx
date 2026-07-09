@@ -25,7 +25,6 @@ export function WalletConnectPanel() {
 
   useEffect(() => {
     const nextProvider = getInjectedEthereumProvider(window);
-    let cancelled = false;
 
     setProvider(nextProvider);
     setIsReady(true);
@@ -33,17 +32,6 @@ export function WalletConnectPanel() {
     if (nextProvider === null) {
       return undefined;
     }
-
-    void Promise.all([
-      readWalletAccounts(nextProvider).catch(() => []),
-      readWalletChainId(nextProvider).catch(() => null)
-    ]).then(([accounts, nextChainId]) => {
-      if (!cancelled) {
-        setAccount(accounts[0] ?? null);
-        setChainId(nextChainId);
-        setErrorMessage(null);
-      }
-    });
 
     const handleAccountsChanged = (accounts: unknown) => {
       if (!Array.isArray(accounts)) {
@@ -67,7 +55,6 @@ export function WalletConnectPanel() {
     nextProvider.on?.("chainChanged", handleChainChanged);
 
     return () => {
-      cancelled = true;
       nextProvider.removeListener?.("accountsChanged", handleAccountsChanged);
       nextProvider.removeListener?.("chainChanged", handleChainChanged);
     };

@@ -6,6 +6,8 @@ import { LiveProtocolPanel } from "../components/live-protocol-panel";
 import { RevealPanel } from "../components/reveal-panel";
 import { StatusRail } from "../components/status-rail";
 
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   const liveProtocolPanel = await LiveProtocolPanel();
 

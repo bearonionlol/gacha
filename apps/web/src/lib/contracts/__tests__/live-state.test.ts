@@ -18,6 +18,12 @@ const registry = {
   contracts: addresses
 };
 
+const mainnetRegistry = {
+  network: "robinhoodMainnet",
+  chainId: 4663,
+  contracts: addresses
+};
+
 describe("live protocol state", () => {
   it("returns demo state without a ready registry", async () => {
     const snapshot = await getLiveProtocolSnapshot({ registrySnapshot: null });
@@ -54,13 +60,27 @@ describe("live protocol state", () => {
   it("returns degraded state when an RPC read fails", async () => {
     const client: ProtocolReadClient = {
       readContract: async () => {
-        throw new Error("rpc unavailable");
+        throw new Error("rpc unavailable at https://secret.example/rpc");
       }
     };
 
     const snapshot = await getLiveProtocolSnapshot({ registrySnapshot: registry, client });
 
     expect(snapshot.state).toBe("degraded");
-    expect(snapshot.message).toMatch(/rpc unavailable/i);
+    expect(snapshot.message).toBe("Robinhood testnet RPC is temporarily unavailable. Browsing remains in read-only mode.");
+    expect(snapshot.message).not.toContain("https://secret.example");
+  });
+
+  it("does not read mainnet registries during the Phase 4A testnet slice", async () => {
+    const client: ProtocolReadClient = {
+      readContract: async () => {
+        throw new Error("mainnet should not be read");
+      }
+    };
+
+    const snapshot = await getLiveProtocolSnapshot({ registrySnapshot: mainnetRegistry, client });
+
+    expect(snapshot.state).toBe("demo");
+    expect(snapshot.message).toMatch(/testnet only/i);
   });
 });

@@ -21,14 +21,14 @@ describe("WalletConnectPanel", () => {
     expect(screen.queryByRole("button", { name: /Connect wallet/i })).not.toBeInTheDocument();
   });
 
-  it("does not request wallet accounts on page load", async () => {
+  it("does not call the wallet provider on page load", async () => {
     const request = vi.fn().mockResolvedValue([]);
     setEthereumProvider({ request });
 
     render(<WalletConnectPanel />);
 
     await waitFor(() => expect(screen.getByRole("button", { name: /Connect wallet/i })).toBeInTheDocument());
-    expect(request).not.toHaveBeenCalledWith({ method: "eth_requestAccounts" });
+    expect(request).not.toHaveBeenCalled();
   });
 
   it("connects and shows Robinhood testnet status", async () => {
