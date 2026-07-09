@@ -61,7 +61,12 @@ export function MarketBoard() {
             </dl>
 
             <p>{listing.escrowDisclosure}</p>
-            <button className="secondary-action" type="button">
+            <button
+              aria-label={`Open listing for ${listing.title}`}
+              className="secondary-action"
+              disabled
+              type="button"
+            >
               Open listing
             </button>
           </article>

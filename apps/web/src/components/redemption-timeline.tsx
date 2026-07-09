@@ -10,6 +10,9 @@ const stepIcons: Record<string, typeof Clock3> = {
   fulfilled: CheckCircle2
 };
 
+const formatRequestDate = (value: string): string =>
+  new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(value));
+
 export function RedemptionTimeline() {
   return (
     <section className="portfolio-section" aria-labelledby="redemption-timeline-title">
@@ -45,8 +48,8 @@ export function RedemptionTimeline() {
               <span className="tier-pill">{request.status}</span>
             </div>
             <p>
-              Opened on {new Date(request.requestedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-              . Completion remains modeled until off-chain shipping terms are connected.
+              Opened on {formatRequestDate(request.requestedAt)}. Completion remains modeled until off-chain shipping
+              terms are connected.
             </p>
             <ol className="request-steps">
               {request.steps.map((step) => (

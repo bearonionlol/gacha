@@ -84,7 +84,12 @@ export function VaultGrid() {
               ))}
             </div>
 
-            <button className="secondary-action" type="button">
+            <button
+              aria-label={`Review vault item ${card.title}`}
+              className="secondary-action"
+              disabled
+              type="button"
+            >
               <PackageCheck size={16} aria-hidden="true" />
               Review vault item
             </button>
