@@ -11,11 +11,11 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { label: "Command", href: "/", icon: LayoutDashboard },
+  { label: "Home", href: "/", icon: LayoutDashboard },
   { label: "Vault", href: "/vault", icon: WalletCards },
   { label: "Market", href: "/market", icon: Store },
   { label: "Forge", href: "/forge", icon: Hammer },
-  { label: "Redemption", href: "/redemption", icon: Gem },
+  { label: "Redeem", href: "/redemption", icon: Gem },
   { label: "Admin", href: "/admin/inventory", icon: ShieldCheck }
 ];
 

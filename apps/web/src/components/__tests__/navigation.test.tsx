@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { AppShell } from "../app-shell";
 
 describe("app navigation", () => {
@@ -9,8 +9,10 @@ describe("app navigation", () => {
       </AppShell>
     );
 
-    for (const label of ["Command", "Vault", "Market", "Forge", "Redemption", "Admin"]) {
-      expect(screen.getByRole("link", { name: new RegExp(label, "i") })).toBeInTheDocument();
+    const routeNav = screen.getByRole("navigation", { name: /Core routes/i });
+
+    for (const label of ["Home", "Vault", "Market", "Forge", "Redeem", "Admin"]) {
+      expect(within(routeNav).getByRole("link", { name: new RegExp(label, "i") })).toBeInTheDocument();
     }
   });
 });
