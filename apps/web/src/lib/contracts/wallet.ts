@@ -6,14 +6,13 @@ export type Eip1193Provider = {
   removeListener?: (event: string, listener: (...args: unknown[]) => void) => void;
 };
 
-type EthereumHost = {
-  ethereum?: unknown;
-};
-
 export const robinhoodTestnetChainId = robinhoodChainTestnet.id;
 
-export function getInjectedEthereumProvider(host?: EthereumHost | null): Eip1193Provider | null {
-  const provider = host?.ethereum;
+export function getInjectedEthereumProvider(host?: unknown): Eip1193Provider | null {
+  const provider =
+    typeof host === "object" && host !== null && "ethereum" in host
+      ? (host as { ethereum?: unknown }).ethereum
+      : null;
 
   if (typeof provider !== "object" || provider === null || !("request" in provider)) {
     return null;
