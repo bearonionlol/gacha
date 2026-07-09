@@ -1,6 +1,6 @@
-# Testnet Protocol Runbook
+# Testnet Runbook
 
-This runbook covers protocol-package operations for Robinhood testnet and local Hardhat development. It does not deploy or verify any web app, indexer, metadata service, or public production drop.
+This runbook covers protocol-package operations, Phase 3 web app verification, Robinhood testnet deployment, and local Hardhat development. It does not deploy an indexer, metadata service, or public production drop.
 
 ## Environment
 
@@ -136,3 +136,32 @@ git diff --check
 ```
 
 If a command fails, resolve the failure within the relevant task scope or report the blocker with the exact command and error.
+
+## Phase 3 Web App Verification
+
+Run the local app:
+
+```bash
+pnpm --filter @gacha/web dev
+```
+
+Run web checks:
+
+```bash
+pnpm --filter @gacha/web test
+pnpm --filter @gacha/web typecheck
+pnpm --filter @gacha/web build
+```
+
+Browser QA routes:
+
+- `/`
+- `/vault`
+- `/market`
+- `/forge`
+- `/redemption`
+- `/admin/inventory`
+
+Confirm each route renders in demo/testnet mode, shows required odds or lifecycle disclosures, avoids official-affiliation claims, and has no overlapping text at desktop or mobile widths.
+
+After Robinhood testnet deployment writes `deployments/robinhoodTestnet.json`, confirm the registry includes chain ID `46630` and all eight protocol contract addresses before using the web app as a testnet readiness surface.
