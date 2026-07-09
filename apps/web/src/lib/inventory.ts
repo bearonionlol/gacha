@@ -47,7 +47,7 @@ export const collectibleCards: CollectibleCard[] = sampleInventory.map((item) =>
   buybackCents: item.buybackQuoteCents,
   grailTier: item.grailTier,
   redeemable: item.redeemable,
-  tags: item.craftingTags,
+  tags: [...item.craftingTags],
   legalDisclaimer: item.legalDisclaimer,
   photoHash: item.photoHash
 }));

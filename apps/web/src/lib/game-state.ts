@@ -1,6 +1,9 @@
 import { signalRun } from "./arcade";
 import { collectibleCards, vaultStats } from "./inventory";
 
+const redemptionCard =
+  collectibleCards.find((card) => card.id === "inv-sample-graded-001") ?? collectibleCards[0];
+
 export const activeDrop = {
   id: "drop-rht-001",
   title: "Vault Signal Drop",
@@ -63,8 +66,8 @@ export const forgeRecipes = [
 export const redemptionRequests = [
   {
     id: "redeem-001",
-    cardId: collectibleCards[2]?.id ?? "sample-graded-card",
-    title: collectibleCards[2]?.title ?? "Pokemon TCG Lugia V Alternate Art",
+    cardId: redemptionCard?.id ?? "sample-graded-card",
+    title: redemptionCard?.title ?? "Pokemon TCG Lugia V Alternate Art",
     status: "reviewing",
     requestedAt: "2026-07-09T00:00:00.000Z",
     steps: ["Requested", "Vault review", "Shipping quote", "Completed"]

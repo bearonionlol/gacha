@@ -9,21 +9,39 @@ export type DeploymentRegistrySnapshot = {
   network: string;
   chainId: number;
   deployedAt?: string;
+  timestamp?: string;
   contracts?: Record<string, string>;
 };
 
+export type DeploymentReadiness = "demo" | "ready" | "incomplete";
+
 export type DeploymentStatus = {
   mode: "demo" | "testnet" | "mainnet";
+  readiness: DeploymentReadiness;
   chainName: string;
   chainId: number;
   message: string;
   contracts: { name: string; address: string }[];
 };
 
+export const requiredProtocolContracts = [
+  "InventoryRegistry",
+  "ItemToken",
+  "CommitRevealRandomnessProvider",
+  "PackSale",
+  "Marketplace",
+  "BuybackVault",
+  "Forge",
+  "RedemptionRegistry"
+] as const;
+
+const evmAddressPattern = /^0x[a-fA-F0-9]{40}$/;
+
 export function resolveDeploymentStatus(snapshot: DeploymentRegistrySnapshot | null): DeploymentStatus {
   if (snapshot === null) {
     return {
       mode: "demo",
+      readiness: "demo",
       chainName: robinhoodChainTestnet.name,
       chainId: robinhoodChainTestnet.id,
       message: "Demo mode is using deterministic local app state until a deployment registry is present.",
@@ -32,13 +50,15 @@ export function resolveDeploymentStatus(snapshot: DeploymentRegistrySnapshot | n
   }
 
   const contracts = Object.entries(snapshot.contracts ?? {}).map(([name, address]) => ({ name, address }));
-  const deployedAt = snapshot.deployedAt === undefined ? "from the local registry" : `at ${snapshot.deployedAt}`;
+  const timestamp = snapshot.deployedAt ?? snapshot.timestamp;
+  const deployedAt = timestamp === undefined ? "from the local registry" : `at ${timestamp}`;
   const knownChain =
     snapshot.chainId === ROBINHOOD_CHAIN_MAINNET_ID || snapshot.chainId === ROBINHOOD_CHAIN_TESTNET_ID;
 
   if (!knownChain) {
     return {
       mode: "demo",
+      readiness: "demo",
       chainName: "Unsupported chain",
       chainId: snapshot.chainId,
       message: `${snapshot.network} registry loaded ${deployedAt}, but chain ${snapshot.chainId} is an unsupported chain for this app build.`,
@@ -48,9 +68,36 @@ export function resolveDeploymentStatus(snapshot: DeploymentRegistrySnapshot | n
 
   const chainName = snapshot.chainId === ROBINHOOD_CHAIN_MAINNET_ID ? robinhoodChain.name : robinhoodChainTestnet.name;
   const mode = snapshot.chainId === ROBINHOOD_CHAIN_MAINNET_ID ? "mainnet" : "testnet";
+  const missingContracts = requiredProtocolContracts.filter((name) => snapshot.contracts?.[name] === undefined);
+  const invalidContracts = contracts
+    .filter(({ address }) => !evmAddressPattern.test(address))
+    .map(({ name }) => name);
+
+  if (missingContracts.length > 0) {
+    return {
+      mode,
+      readiness: "incomplete",
+      chainName,
+      chainId: snapshot.chainId,
+      message: `${snapshot.network} registry loaded ${deployedAt}, but it is missing required contracts: ${missingContracts.join(", ")}.`,
+      contracts
+    };
+  }
+
+  if (invalidContracts.length > 0) {
+    return {
+      mode,
+      readiness: "incomplete",
+      chainName,
+      chainId: snapshot.chainId,
+      message: `${snapshot.network} registry loaded ${deployedAt}, but it has invalid contract addresses for: ${invalidContracts.join(", ")}.`,
+      contracts
+    };
+  }
 
   return {
     mode,
+    readiness: "ready",
     chainName,
     chainId: snapshot.chainId,
     message: `${snapshot.network} deployment registry loaded ${deployedAt}.`,

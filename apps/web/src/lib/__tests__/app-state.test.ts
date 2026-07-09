@@ -22,7 +22,29 @@ describe("Phase 3 app state", () => {
     const status = resolveDeploymentStatus({
       network: "robinhoodTestnet",
       chainId: 46630,
-      deployedAt: "2026-07-09T00:00:00.000Z",
+      timestamp: "2026-07-09T00:00:00.000Z",
+      contracts: {
+        InventoryRegistry: "0x0000000000000000000000000000000000000001",
+        ItemToken: "0x0000000000000000000000000000000000000002",
+        CommitRevealRandomnessProvider: "0x0000000000000000000000000000000000000003",
+        PackSale: "0x0000000000000000000000000000000000000004",
+        Marketplace: "0x0000000000000000000000000000000000000005",
+        BuybackVault: "0x0000000000000000000000000000000000000006",
+        Forge: "0x0000000000000000000000000000000000000007",
+        RedemptionRegistry: "0x0000000000000000000000000000000000000008"
+      }
+    });
+
+    expect(status.mode).toBe("testnet");
+    expect(status.readiness).toBe("ready");
+    expect(status.contracts).toHaveLength(8);
+    expect(status.message).toContain("2026-07-09T00:00:00.000Z");
+  });
+
+  it("downgrades supported-chain registries when required contracts are missing", () => {
+    const status = resolveDeploymentStatus({
+      network: "robinhoodTestnet",
+      chainId: 46630,
       contracts: {
         ItemToken: "0x0000000000000000000000000000000000000001",
         Marketplace: "0x0000000000000000000000000000000000000002"
@@ -30,7 +52,29 @@ describe("Phase 3 app state", () => {
     });
 
     expect(status.mode).toBe("testnet");
-    expect(status.contracts).toHaveLength(2);
+    expect(status.readiness).toBe("incomplete");
+    expect(status.message).toMatch(/missing required contracts/i);
+  });
+
+  it("downgrades supported-chain registries when contract addresses are malformed", () => {
+    const status = resolveDeploymentStatus({
+      network: "robinhoodTestnet",
+      chainId: 46630,
+      contracts: {
+        InventoryRegistry: "0x0000000000000000000000000000000000000001",
+        ItemToken: "not-an-address",
+        CommitRevealRandomnessProvider: "0x0000000000000000000000000000000000000003",
+        PackSale: "0x0000000000000000000000000000000000000004",
+        Marketplace: "0x0000000000000000000000000000000000000005",
+        BuybackVault: "0x0000000000000000000000000000000000000006",
+        Forge: "0x0000000000000000000000000000000000000007",
+        RedemptionRegistry: "0x0000000000000000000000000000000000000008"
+      }
+    });
+
+    expect(status.mode).toBe("testnet");
+    expect(status.readiness).toBe("incomplete");
+    expect(status.message).toMatch(/invalid contract addresses/i);
   });
 
   it("does not coerce unsupported deployment chain IDs to Robinhood testnet", () => {
