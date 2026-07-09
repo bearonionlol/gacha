@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
+import type { BaseContract, BigNumberish, ContractRunner, ContractTransactionResponse } from "ethers";
 import { deployProtocolFixture } from "./helpers/deploy";
 
 const buybackTokenId = 8001n;
@@ -8,6 +9,17 @@ const buybackAmount = 2n;
 const quotePrice = ethers.parseEther("0.2");
 
 type ProtocolFixture = Awaited<ReturnType<typeof deployProtocolFixture>>;
+
+type RejectingNativeParticipant = Omit<BaseContract, "connect"> & {
+  approveItemOperator(itemToken: string, operator: string): Promise<ContractTransactionResponse>;
+  acceptBuybackQuote(
+    buybackVault: string,
+    tokenId: BigNumberish,
+    amount: BigNumberish
+  ): Promise<ContractTransactionResponse>;
+  withdrawBuybackPayout(buybackVault: string): Promise<ContractTransactionResponse>;
+  connect(runner: ContractRunner | null): RejectingNativeParticipant;
+};
 
 async function mintSellerTokens(amount = buybackAmount): Promise<ProtocolFixture> {
   const fixture = await deployProtocolFixture();
@@ -33,6 +45,15 @@ async function mintApproveQuoteAndFund(
   });
 
   return fixture;
+}
+
+async function deployRejectingNativeParticipant(): Promise<RejectingNativeParticipant> {
+  const participant = (await ethers.deployContract(
+    "RejectingNativeParticipant"
+  )) as unknown as RejectingNativeParticipant;
+  await participant.waitForDeployment();
+
+  return participant;
 }
 
 describe("BuybackVault", function () {
@@ -81,6 +102,7 @@ describe("BuybackVault", function () {
 
     expect(await itemToken.balanceOf(owner.address, buybackTokenId)).to.equal(0n);
     expect(await itemToken.balanceOf(buybackVaultAddress, buybackTokenId)).to.equal(buybackAmount);
+    expect(await buybackVault.payoutCredit(owner.address)).to.equal(quotePrice * buybackAmount);
   });
 
   it("pays the quoted native amount from vault balance", async function () {
@@ -89,7 +111,16 @@ describe("BuybackVault", function () {
 
     await expect(
       buybackVault.connect(owner).acceptQuote(buybackTokenId, buybackAmount)
-    ).to.changeEtherBalances([buybackVault, owner], [-totalPayout, totalPayout]);
+    ).to.changeEtherBalances([buybackVault, owner], [0n, 0n]);
+
+    expect(await buybackVault.payoutCredit(owner.address)).to.equal(totalPayout);
+
+    const withdrawal = buybackVault.connect(owner).withdrawPayout();
+    await expect(withdrawal)
+      .to.emit(buybackVault, "PayoutWithdrawn")
+      .withArgs(owner.address, owner.address, totalPayout);
+    await expect(withdrawal).to.changeEtherBalances([buybackVault, owner], [-totalPayout, totalPayout]);
+    expect(await buybackVault.payoutCredit(owner.address)).to.equal(0n);
   });
 
   it("rejects buyback when the vault lacks funds", async function () {
@@ -119,6 +150,46 @@ describe("BuybackVault", function () {
 
     expect(await itemToken.balanceOf(recipient.address, buybackTokenId)).to.equal(buybackAmount);
     expect(await itemToken.balanceOf(await buybackVault.getAddress(), buybackTokenId)).to.equal(0n);
+  });
+
+  it("lets a rejecting-native seller accept a quote and preserves credit after failed withdraw", async function () {
+    const fixture = await deployProtocolFixture();
+    const { buybackVault, buybackAdmin, itemToken, minter, treasury } = fixture;
+    const rejectingSeller = await deployRejectingNativeParticipant();
+    const rejectingSellerAddress = await rejectingSeller.getAddress();
+    const buybackVaultAddress = await buybackVault.getAddress();
+    const totalPayout = quotePrice * buybackAmount;
+
+    await itemToken
+      .connect(minter)
+      .mintGameItem(rejectingSellerAddress, buybackTokenId, buybackAmount, buybackTokenUri);
+    await rejectingSeller.approveItemOperator(await itemToken.getAddress(), buybackVaultAddress);
+    await buybackVault.connect(buybackAdmin).setQuote(buybackTokenId, quotePrice, true);
+    await treasury.sendTransaction({ to: buybackVaultAddress, value: totalPayout });
+
+    await expect(rejectingSeller.acceptBuybackQuote(buybackVaultAddress, buybackTokenId, buybackAmount))
+      .to.emit(buybackVault, "BuybackAccepted")
+      .withArgs(rejectingSellerAddress, buybackTokenId, buybackAmount, totalPayout);
+
+    expect(await itemToken.balanceOf(rejectingSellerAddress, buybackTokenId)).to.equal(0n);
+    expect(await itemToken.balanceOf(buybackVaultAddress, buybackTokenId)).to.equal(buybackAmount);
+    expect(await buybackVault.payoutCredit(rejectingSellerAddress)).to.equal(totalPayout);
+
+    await expect(rejectingSeller.withdrawBuybackPayout(buybackVaultAddress))
+      .to.be.revertedWithCustomError(buybackVault, "TransferFailed")
+      .withArgs(rejectingSellerAddress, totalPayout);
+    expect(await buybackVault.payoutCredit(rejectingSellerAddress)).to.equal(totalPayout);
+  });
+
+  it("rejects zero-address payout withdrawal targets", async function () {
+    const { buybackVault, owner } = await mintApproveQuoteAndFund(1n);
+
+    await buybackVault.connect(owner).acceptQuote(buybackTokenId, 1n);
+
+    await expect(
+      buybackVault.connect(owner).withdrawPayoutTo(ethers.ZeroAddress)
+    ).to.be.revertedWithCustomError(buybackVault, "InvalidAddress");
+    expect(await buybackVault.payoutCredit(owner.address)).to.equal(quotePrice);
   });
 
   it("handles zero-price quotes as inactive quotes", async function () {
@@ -153,6 +224,45 @@ describe("BuybackVault", function () {
     await expect(
       buybackVault.connect(buybackAdmin).withdrawNative(recipient.address, withdrawalAmount)
     ).to.changeEtherBalances([buybackVault, recipient], [-withdrawalAmount, withdrawalAmount]);
+  });
+
+  it("rejects quote acceptance while paused", async function () {
+    const { buybackVault, buybackAdmin, owner } = await mintApproveQuoteAndFund(1n);
+
+    await buybackVault.connect(buybackAdmin).pause();
+
+    await expect(
+      buybackVault.connect(owner).acceptQuote(buybackTokenId, 1n)
+    ).to.be.revertedWithCustomError(buybackVault, "EnforcedPause");
+  });
+
+  it("restricts buyback controls to the buyback admin role", async function () {
+    const { buybackVault, buybackAdmin, other, recipient } = await deployProtocolFixture();
+    const role = await buybackVault.BUYBACK_ADMIN_ROLE();
+
+    await expect(buybackVault.connect(other).setQuote(buybackTokenId, quotePrice, true))
+      .to.be.revertedWithCustomError(buybackVault, "AccessControlUnauthorizedAccount")
+      .withArgs(other.address, role);
+
+    await expect(buybackVault.connect(other).withdrawToken(recipient.address, buybackTokenId, 1n))
+      .to.be.revertedWithCustomError(buybackVault, "AccessControlUnauthorizedAccount")
+      .withArgs(other.address, role);
+
+    await expect(buybackVault.connect(other).withdrawNative(recipient.address, 1n))
+      .to.be.revertedWithCustomError(buybackVault, "AccessControlUnauthorizedAccount")
+      .withArgs(other.address, role);
+
+    await expect(buybackVault.connect(other).pause())
+      .to.be.revertedWithCustomError(buybackVault, "AccessControlUnauthorizedAccount")
+      .withArgs(other.address, role);
+
+    await buybackVault.connect(buybackAdmin).pause();
+
+    await expect(buybackVault.connect(other).unpause())
+      .to.be.revertedWithCustomError(buybackVault, "AccessControlUnauthorizedAccount")
+      .withArgs(other.address, role);
+
+    await buybackVault.connect(buybackAdmin).unpause();
   });
 
   it("rejects zero-amount buybacks", async function () {

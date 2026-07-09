@@ -123,10 +123,13 @@ export type Marketplace = Omit<BaseContract, "connect"> & {
   MARKET_ADMIN_ROLE(): Promise<string>;
   feeBps(): Promise<bigint>;
   treasury(): Promise<string>;
+  proceedsCredit(account: string): Promise<bigint>;
   listings(listingId: BigNumberish): Promise<ListingRecord>;
   list(tokenId: BigNumberish, amount: BigNumberish, price: BigNumberish): Promise<ContractTransactionResponse>;
   cancel(listingId: BigNumberish): Promise<ContractTransactionResponse>;
   buy(listingId: BigNumberish, overrides?: { value?: BigNumberish }): Promise<ContractTransactionResponse>;
+  withdrawProceeds(): Promise<ContractTransactionResponse>;
+  withdrawProceedsTo(to: string): Promise<ContractTransactionResponse>;
   setFeeBps(feeBps: BigNumberish): Promise<ContractTransactionResponse>;
   setTreasury(treasury: string): Promise<ContractTransactionResponse>;
   pause(): Promise<ContractTransactionResponse>;
@@ -142,6 +145,7 @@ export interface QuoteRecord {
 
 export type BuybackVault = Omit<BaseContract, "connect"> & {
   BUYBACK_ADMIN_ROLE(): Promise<string>;
+  payoutCredit(account: string): Promise<bigint>;
   quotes(tokenId: BigNumberish): Promise<QuoteRecord>;
   setQuote(
     tokenId: BigNumberish,
@@ -155,6 +159,8 @@ export type BuybackVault = Omit<BaseContract, "connect"> & {
     amount: BigNumberish
   ): Promise<ContractTransactionResponse>;
   withdrawNative(to: string, amount: BigNumberish): Promise<ContractTransactionResponse>;
+  withdrawPayout(): Promise<ContractTransactionResponse>;
+  withdrawPayoutTo(to: string): Promise<ContractTransactionResponse>;
   pause(): Promise<ContractTransactionResponse>;
   unpause(): Promise<ContractTransactionResponse>;
   grantRole(role: string, account: string): Promise<ContractTransactionResponse>;

@@ -29,6 +29,7 @@ contract Marketplace is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder 
     error UnauthorizedListingCancel(uint256 listingId, address caller);
     error ExactPaymentRequired(uint256 expected, uint256 actual);
     error FeeTooHigh(uint96 feeBps);
+    error ProceedsUnavailable(address account);
     error TransferFailed(address to, uint256 amount);
 
     event ListingCreated(
@@ -40,6 +41,7 @@ contract Marketplace is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder 
     );
     event ListingCancelled(uint256 indexed listingId, address indexed seller);
     event ListingSold(uint256 indexed listingId, address indexed buyer, uint256 price, uint256 fee);
+    event ProceedsWithdrawn(address indexed account, address indexed to, uint256 amount);
     event FeeBpsUpdated(uint96 feeBps);
     event TreasuryUpdated(address indexed treasury);
 
@@ -49,6 +51,7 @@ contract Marketplace is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder 
     uint256 public nextListingId = 1;
 
     mapping(uint256 listingId => Listing listing) public listings;
+    mapping(address account => uint256 amount) public proceedsCredit;
 
     constructor(ItemToken itemToken_, address treasury_) {
         if (address(itemToken_) == address(0) || treasury_ == address(0)) {
@@ -117,11 +120,24 @@ contract Marketplace is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder 
         uint256 fee = (msg.value * feeBps) / FEE_DENOMINATOR;
         uint256 sellerProceeds = msg.value - fee;
 
+        proceedsCredit[listing.seller] += sellerProceeds;
+        proceedsCredit[treasury] += fee;
+
         itemToken.safeTransferFrom(address(this), msg.sender, listing.tokenId, listing.amount, "");
-        _sendNative(payable(listing.seller), sellerProceeds);
-        _sendNative(treasury, fee);
 
         emit ListingSold(listingId, msg.sender, msg.value, fee);
+    }
+
+    function withdrawProceeds() external nonReentrant {
+        _withdrawProceedsTo(payable(msg.sender));
+    }
+
+    function withdrawProceedsTo(address payable to) external nonReentrant {
+        if (to == address(0)) {
+            revert InvalidAddress();
+        }
+
+        _withdrawProceedsTo(to);
     }
 
     function setFeeBps(uint96 feeBps_) external onlyRole(MARKET_ADMIN_ROLE) {
@@ -170,11 +186,19 @@ contract Marketplace is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder 
         return listing;
     }
 
-    function _sendNative(address payable to, uint256 amount) private {
+    function _withdrawProceedsTo(address payable to) private {
+        uint256 amount = proceedsCredit[msg.sender];
         if (amount == 0) {
-            return;
+            revert ProceedsUnavailable(msg.sender);
         }
 
+        proceedsCredit[msg.sender] = 0;
+        _sendNative(to, amount);
+
+        emit ProceedsWithdrawn(msg.sender, to, amount);
+    }
+
+    function _sendNative(address payable to, uint256 amount) private {
         (bool success,) = to.call{value: amount}("");
         if (!success) {
             revert TransferFailed(to, amount);
