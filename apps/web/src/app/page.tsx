@@ -2,6 +2,7 @@ import { ActivityFeed } from "../components/activity-feed";
 import { AppShell } from "../components/app-shell";
 import { ArcadePanel } from "../components/arcade-panel";
 import { DropLobby } from "../components/drop-lobby";
+import { EconomyPanel } from "../components/economy-panel";
 import { LiveProtocolPanel } from "../components/live-protocol-panel";
 import { RevealPanel } from "../components/reveal-panel";
 import { StatusRail } from "../components/status-rail";
@@ -16,6 +17,7 @@ export default async function HomePage() {
       <main className="command-center">
         <StatusRail />
         {liveProtocolPanel}
+        <EconomyPanel />
         <div className="dashboard-grid">
           <DropLobby />
           <RevealPanel />

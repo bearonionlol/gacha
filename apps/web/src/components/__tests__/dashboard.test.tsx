@@ -76,4 +76,15 @@ describe("dashboard", () => {
     expect(screen.getByLabelText(/Purchase ID/i)).toBeInTheDocument();
     expect(screen.getAllByText(/PackSale\.reveal/i).length).toBeGreaterThan(0);
   });
+
+  it("shows transparent protocol economy controls", async () => {
+    render(await HomePage());
+
+    expect(screen.getByRole("heading", { name: /Protocol economy/i })).toBeInTheDocument();
+    expect(screen.getByText(/Drop margin/i)).toBeInTheDocument();
+    expect(screen.getByText(/Marketplace take/i)).toBeInTheDocument();
+    expect(screen.getByText(/Buyback spread/i)).toBeInTheDocument();
+    expect(screen.getByText(/Operator reserve/i)).toBeInTheDocument();
+    expect(screen.getByText(/Fee math is shown before wallet confirmation/i)).toBeInTheDocument();
+  });
 });
