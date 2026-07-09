@@ -2,15 +2,15 @@
   "network": "robinhoodTestnet",
   "chainId": 46630,
   "deployer": "0x9Ec1807165F0e887ffDaA044b2224f33Aa49a6dE",
-  "timestamp": "2026-07-09T15:03:54.201Z",
+  "timestamp": "2026-07-09T19:49:33.993Z",
   "contracts": {
-    "InventoryRegistry": "0x32657A9d0AFe229E132dA8610a23D6d32d22C4Ee",
-    "ItemToken": "0x78Cb0aE303a90719F41383E2040D06BBedB2d26d",
-    "CommitRevealRandomnessProvider": "0xBcD78FfB562cFAeae978Ba38496f042Da6eeB113",
-    "PackSale": "0x363074770a98a3f8c258148678aFd095c4E5C0Ba",
-    "Marketplace": "0x2d4Cfd663DDAef48ae4659c09068E842FC31423C",
-    "BuybackVault": "0x78d0d7C799A6D44085cb4372F1FF6BA49eD224b0",
-    "Forge": "0x26F77058552b9E69e7d1EE6AADeFeD4BbF555B4B",
-    "RedemptionRegistry": "0x36C37cb08c78E50a87BB705D6F06EBae11C07451"
+    "InventoryRegistry": "0x04B324CDEE6D1443f30134B777317b0a9F11B3Ea",
+    "ItemToken": "0xef65196dF201f3FA0156C166B745cAF4Aa7f36F1",
+    "CommitRevealRandomnessProvider": "0x84B5239049A8c749F19D04E29561cDE6EA0CD177",
+    "PackSale": "0xF892a8e349F03355eD50FDA6e62c6e512A90a087",
+    "Marketplace": "0xF16F3Fdf97FA8704f90233c959299C2DBa5576c1",
+    "BuybackVault": "0x435923268970757561eD3054a0Ad22d9C7B6F3eB",
+    "Forge": "0xbF35aF94B3863389c30625d9031aeEF86a539b44",
+    "RedemptionRegistry": "0x270821B69f6e640d2bE51Dbf79E39AE38BE3fB01"
   }
 }

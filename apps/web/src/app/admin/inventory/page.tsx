@@ -14,8 +14,8 @@ export default function AdminInventoryPage() {
             <span className="chain-pill">Read-only sample data</span>
           </div>
           <p>
-            Review required inventory fields, custody lifecycle states, and export affordances before persistence and
-            live admin actions are wired in a later pass.
+            Review required inventory fields and custody lifecycle states. Live fulfillment writes are available in the
+            operator panel below; sample intake records and exports remain read-only.
           </p>
         </section>
         <AdminInventoryConsole />

@@ -37,6 +37,8 @@ Complete these gates before running `deploy:mainnet`:
 - Deployment registry review: confirm the expected `deployments/robinhoodMainnet.json` path, chain ID, deployer address, and address review procedure.
 - Admin role review: approve the deployer and post-deploy role holders for default admin and operational roles.
 - Treasury review: approve treasury addresses used by `PackSale`, `Marketplace`, and `Forge`.
+- Forge economy review: approve every recipe input, retained catalyst, fee, wallet cap, global output cap, schedule, metadata hash, and reviewer allowance policy. Reconcile reserved output capacity before activating overlapping recipes.
+- Liquidity review: approve marketplace fee basis points, buyback quote methodology, maximum inventory exposure, and independently reserved native liquidity. Buyback liquidity is a balance-sheet commitment, not protocol revenue.
 - Launch plan review: define a private smoke window and a separate public launch decision.
 
 ## Verification Before Deployment
@@ -87,11 +89,11 @@ Before public launch, run a private smoke check against mainnet:
 pnpm --filter @gacha/contracts exec hardhat run scripts/smoke.ts --network robinhoodMainnet
 ```
 
-The smoke check verifies deployed bytecode, contract wiring, default admin ownership by the recorded deployer, and required operational roles. A successful private smoke run is required before any public announcement, public drop, marketplace activity, buyback operation, Forge activity, or redemption intake.
+The mainnet smoke check verifies deployed bytecode, contract wiring, default admin ownership by the recorded deployer, and required operational roles without expecting testnet sample data. A successful private smoke run is required before any public announcement, public drop, marketplace activity, buyback operation, Forge activity, or redemption intake.
 
 ## Production Seeding Policy
 
-Do not run the testnet seed command against mainnet. The `seed:testnet` script is for sample inventory and placeholder metadata only.
+Do not run the testnet seed command against mainnet. The seed script fails closed on `robinhoodMainnet`; it is for sample inventory, placeholder metadata, testnet fees, and testnet liquidity only. The automated collector rehearsal is also permanently blocked on mainnet.
 
 For local and testnet craft rehearsal, the seed script also mints the sample Forge input game items to the deployer if missing and approves Forge for those inputs. This sample convenience must not be used as a production inventory or role policy.
 
@@ -104,6 +106,8 @@ After private smoke passes:
 - Review and record admin role holders for every deployed contract.
 - Rotate roles away from the deployer where the approved operations model requires it.
 - Confirm treasury addresses and fee settings before enabling public flows.
+- Confirm physical inventory cannot appear in any Forge burn-input list and that physical catalysts remain in the collector wallet after a private craft simulation.
+- Confirm every active Forge recipe's immutable output cap and aggregate reserved emissions match the approved economy ledger.
 - Confirm public drop inventory IDs match the frozen production inventory list.
 - Confirm physical token IDs derived from production inventory IDs match the reviewed launch record.
 - Keep `deployments/robinhoodMainnet.json` under deployment registry review for any later operational scripts.

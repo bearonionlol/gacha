@@ -13,13 +13,14 @@ describe("dashboard", () => {
     }
   });
 
-  it("shows odds, randomness disclosure, and reveal next actions", async () => {
+  it("shows guaranteed contents, randomness disclosure, and reveal next actions", async () => {
     render(await HomePage());
 
-    expect(screen.getByText(/Physical grail/i)).toBeInTheDocument();
-    expect(screen.getByText(/operator-controlled testnet randomness/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Keep in vault/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /List on market/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/Vaulted physical card/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Fire shards/i)).toBeInTheDocument();
+    expect(screen.getByText(/randomness adapter is operator-controlled/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Keep in vault/i })).toHaveAttribute("href", "/vault");
+    expect(screen.getByRole("link", { name: /List on market/i })).toHaveAttribute("href", "/market");
   });
 
   it("shows Signal Run without promising better odds", async () => {
@@ -65,7 +66,7 @@ describe("dashboard", () => {
 
     expect(screen.getByText(/Reserve pack on testnet/i)).toBeInTheDocument();
     expect(screen.getAllByText(/PackSale\.purchase/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/0\.01 ETH/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/0\.01 ETH/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Wallet action/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText(/Phase 4B/i)).not.toBeInTheDocument();
   });

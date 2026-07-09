@@ -1,51 +1,149 @@
 export type BrowserSeededInventoryItem = {
   inventoryId: string;
+  brand: "pokemon" | "one_piece" | "other";
+  category: "raw_card" | "graded_card" | "sealed_product" | "promo" | "slab" | "box" | "accessory";
   cardName: string;
   setName: string;
   cardNumber: string;
+  language: string;
+  edition: string;
   variant: string;
   rawConditionEstimate: string;
+  conditionNotes: string;
   gradingCompany: string | null;
   grade: string | null;
+  certNumber: string | null;
+  certUrl: string | null;
+  photoUrls: string[];
+  photoHash: string;
+  vaultLocationLabel: string;
+  custodyStatus: string;
   redeemable: boolean;
+  marketEstimateCents: number;
+  buybackQuoteCents: number;
   grailTier: "none" | "minor" | "major" | "grail";
+  craftingTags: string[];
+  dropEligibility: boolean;
+  legalDisclaimer: string;
+  createdAt: string;
+  updatedAt: string;
 };
+
+export const browserInventoryStatuses = [
+  "draft",
+  "photographed",
+  "verified",
+  "vaulted",
+  "drop_ready",
+  "tokenized",
+  "user_owned",
+  "listed",
+  "buyback_held",
+  "redemption_pending",
+  "redeemed"
+] as const;
+
+const legalDisclaimer = "Authentic resale collectible descriptor only; no affiliation or endorsement is claimed.";
+const timestamp = "2026-07-08T00:00:00.000Z";
 
 export const browserSeededInventory: BrowserSeededInventoryItem[] = [
   {
     inventoryId: "inv-sample-pkm-raw-001",
+    brand: "pokemon",
+    category: "raw_card",
     cardName: "Pokemon TCG Charizard ex",
     setName: "Obsidian Flames",
     cardNumber: "125/197",
+    language: "English",
+    edition: "Modern",
     variant: "Double Rare",
     rawConditionEstimate: "Near Mint",
+    conditionNotes: "Raw card descriptor for resale inventory; verify surface under direct light.",
     gradingCompany: null,
     grade: null,
+    certNumber: null,
+    certUrl: null,
+    photoUrls: [
+      "https://assets.example.com/inventory/inv-sample-pkm-raw-001-front.jpg",
+      "https://assets.example.com/inventory/inv-sample-pkm-raw-001-back.jpg"
+    ],
+    photoHash: "sha256:6421abab82949a569022f5ba595407c5750deab1e42d807dd270d694bbfd36fa",
+    vaultLocationLabel: "Sample Vault / A1",
+    custodyStatus: "verified",
     redeemable: true,
-    grailTier: "major"
+    marketEstimateCents: 4500,
+    buybackQuoteCents: 3000,
+    grailTier: "major",
+    craftingTags: ["fire", "charizard", "pokemon_raw"],
+    dropEligibility: true,
+    legalDisclaimer,
+    createdAt: timestamp,
+    updatedAt: timestamp
   },
   {
     inventoryId: "inv-sample-op-raw-001",
+    brand: "one_piece",
+    category: "raw_card",
     cardName: "One Piece Card Game Monkey.D.Luffy",
     setName: "Romance Dawn",
     cardNumber: "OP01-024",
+    language: "English",
+    edition: "Modern",
     variant: "Parallel Art",
     rawConditionEstimate: "Lightly Played",
+    conditionNotes: "Raw card descriptor for resale inventory; front photo shows minor corner wear.",
     gradingCompany: null,
     grade: null,
+    certNumber: null,
+    certUrl: null,
+    photoUrls: [
+      "https://assets.example.com/inventory/inv-sample-op-raw-001-front.jpg",
+      "https://assets.example.com/inventory/inv-sample-op-raw-001-back.jpg"
+    ],
+    photoHash: "sha256:0a64dca3cabe54b537303c610deb8f76a419862933b831608f831f5388cab0a4",
+    vaultLocationLabel: "Sample Vault / B2",
+    custodyStatus: "vaulted",
     redeemable: true,
-    grailTier: "major"
+    marketEstimateCents: 15000,
+    buybackQuoteCents: 10000,
+    grailTier: "major",
+    craftingTags: ["straw_hat", "one_piece_raw", "parallel"],
+    dropEligibility: true,
+    legalDisclaimer,
+    createdAt: timestamp,
+    updatedAt: timestamp
   },
   {
     inventoryId: "inv-sample-graded-001",
+    brand: "pokemon",
+    category: "graded_card",
     cardName: "Pokemon TCG Lugia V Alternate Art",
     setName: "Silver Tempest",
     cardNumber: "186/195",
+    language: "English",
+    edition: "Modern",
     variant: "Alternate Art",
     rawConditionEstimate: "",
+    conditionNotes: "Graded slab descriptor for resale inventory; cert details are sample intake data.",
     gradingCompany: "PSA",
     grade: "10",
+    certNumber: "SAMPLE-CERT-001",
+    certUrl: "https://certs.example.com/SAMPLE-CERT-001",
+    photoUrls: [
+      "https://assets.example.com/inventory/inv-sample-graded-001-front.jpg",
+      "https://assets.example.com/inventory/inv-sample-graded-001-back.jpg"
+    ],
+    photoHash: "sha256:6c7437ddd7b3b2e60934389a350dd5b2239fc18e4b33e1c7d530ff00849ca37b",
+    vaultLocationLabel: "Sample Vault / Slab Case 1",
+    custodyStatus: "drop_ready",
     redeemable: true,
-    grailTier: "grail"
+    marketEstimateCents: 32500,
+    buybackQuoteCents: 24000,
+    grailTier: "grail",
+    craftingTags: ["lugia", "pokemon_graded", "alternate_art"],
+    dropEligibility: true,
+    legalDisclaimer,
+    createdAt: timestamp,
+    updatedAt: timestamp
   }
 ];

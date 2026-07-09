@@ -1,48 +1,71 @@
 "use client";
 
-import { type DragEvent, useMemo, useState } from "react";
+import { type DragEvent, useEffect, useMemo, useState } from "react";
+import { formatEther, type Address } from "viem";
 import {
   ArchiveRestore,
   Beaker,
   BookOpenCheck,
+  Check,
   Coins,
+  Fingerprint,
   FlaskConical,
+  Gem,
   Hammer,
   LockKeyhole,
   PackagePlus,
+  Palette,
+  RotateCcw,
   ShieldCheck,
-  Sparkles
+  Sparkles,
+  X
 } from "lucide-react";
+import {
+  buildForgeImprint,
+  evaluateForgePattern,
+  getForgeRevenueProjection,
+  placeForgeMaterial,
+  type ForgeFrame,
+  type ForgeSlot
+} from "../lib/forge-model";
+import { loadDeploymentRegistrySnapshotFromEnv } from "../lib/deployments";
+import { getForgeWalletSnapshot, type ForgeWalletSnapshot } from "../lib/contracts/forge-live";
+import { createRobinhoodPublicClient } from "../lib/contracts/public-client";
+import { getReadyContractRegistry } from "../lib/contracts/registry";
 import { ForgeCraftPanel } from "./testnet-write-panels";
-import { formatCents } from "../lib/format";
 
 export type ForgeRecipeView = {
   id: string;
+  chainRecipeId: string;
   title: string;
-  tier: "rare" | "elite" | "grail";
+  tier: "utility" | "rare" | "grail";
   status: "known" | "discovery" | "locked";
+  category: "recycle" | "craft" | "catalyst";
   description: string;
-  progressPercent: number;
-  ingredients: string[];
-  requiredMaterialIds: string[];
+  pattern: ForgeSlot[];
+  catalystCardIds: string[];
   output: string;
-  cap: number;
-  feeCents: number;
-  expectedProtocolRevenueCents: number;
-  warning: string;
+  outputTokenId: string;
+  outputSupplyCap: number;
+  totalCrafts: number;
+  maxCraftsPerWallet: number;
+  feeWei: string;
+  displayFee: string;
+  metadataHashLabel: string;
 };
 
 export type ForgeMaterialView = {
   id: string;
+  tokenId: string;
   label: string;
-  balance: number;
+  labBalance: number;
   source: string;
   tone: string;
-  recipeTags: string[];
 };
 
 export type ForgeIngredientView = {
   id: string;
+  tokenId: string;
   title: string;
   subtitle: string;
   tags: string[];
@@ -57,34 +80,118 @@ type ForgeWorkbenchClientProps = {
 };
 
 type ForgeMode = "lab" | "live";
+type LiveForgeState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; snapshot: ForgeWalletSnapshot }
+  | { status: "error" };
 
 const gridSlots = Array.from({ length: 9 }, (_, index) => index);
+const frameOptions: Array<{ id: ForgeFrame; label: string }> = [
+  { id: "signal", label: "Signal" },
+  { id: "prism", label: "Prism" },
+  { id: "mono", label: "Mono" }
+];
 
 export function ForgeWorkbenchClient({ ingredients, materials, recipes }: ForgeWorkbenchClientProps) {
-  const [selectedRecipeId, setSelectedRecipeId] = useState(recipes[0]?.id ?? "");
+  const initialRecipeId = recipes.find((recipe) => recipe.category === "craft")?.id ?? recipes[0]?.id ?? "";
+  const [selectedRecipeId, setSelectedRecipeId] = useState(initialRecipeId);
   const [mode, setMode] = useState<ForgeMode>("lab");
-  const [slotMaterialIds, setSlotMaterialIds] = useState<Array<string | null>>(Array(9).fill(null));
-  const [dustBalance, setDustBalance] = useState(materials.find((material) => material.id === "forge-dust")?.balance ?? 0);
+  const [slotMaterialIds, setSlotMaterialIds] = useState<ForgeSlot[]>(Array(9).fill(null));
+  const [frame, setFrame] = useState<ForgeFrame>("signal");
+  const [inscription, setInscription] = useState("FIRST LIGHT");
+  const [walletAccount, setWalletAccount] = useState<Address | null>(null);
+  const [liveForgeState, setLiveForgeState] = useState<LiveForgeState>({ status: "idle" });
+  const [liveRefresh, setLiveRefresh] = useState(0);
   const [eventLog, setEventLog] = useState<string[]>([
-    "Lab initialized",
-    "Protected grails never burn in lab",
-    "Recipe provenance will attach to crafted outputs"
+    "Forge v3 ready",
+    "Physical inventory locked from burns",
+    "Output capacity reserved on-chain"
   ]);
 
-  const selectedRecipe = recipes.find((recipe) => recipe.id === selectedRecipeId) ?? recipes[0];
+  const selectedRecipe = (recipes.find((recipe) => recipe.id === selectedRecipeId) ?? recipes[0])!;
   const materialById = useMemo(() => new Map(materials.map((material) => [material.id, material])), [materials]);
-  const lockedIngredients = ingredients.filter((ingredient) => ingredient.protected).slice(0, 3);
-  const placedMaterialIds = slotMaterialIds.filter((materialId): materialId is string => materialId !== null);
-  const matchedMaterials = selectedRecipe
-    ? selectedRecipe.requiredMaterialIds.filter((materialId) => placedMaterialIds.includes(materialId))
-    : [];
-  const missingMaterials = selectedRecipe
-    ? selectedRecipe.requiredMaterialIds.filter((materialId) => !placedMaterialIds.includes(materialId))
-    : [];
-  const nextOpenSlot = slotMaterialIds.findIndex((materialId, index) => materialId === null && index >= lockedIngredients.length);
+  const ingredientById = useMemo(
+    () => new Map(ingredients.map((ingredient) => [ingredient.id, ingredient])),
+    [ingredients]
+  );
+
+  const activeRecipe = selectedRecipe;
+
+  const patternResult = evaluateForgePattern(activeRecipe.pattern, slotMaterialIds);
+  const catalystIngredients = activeRecipe.catalystCardIds
+    .map((id) => ingredientById.get(id))
+    .filter((ingredient): ingredient is ForgeIngredientView => ingredient !== undefined);
+  const recipeId = BigInt(activeRecipe.chainRecipeId);
+  const configuredFeeWei = BigInt(activeRecipe.feeWei);
+  const readySnapshot = liveForgeState.status === "ready" ? liveForgeState.snapshot : null;
+  const feeWei = readySnapshot?.recipe.fee ?? configuredFeeWei;
+  const outputSupplyCap = Number(readySnapshot?.recipe.outputSupplyCap ?? BigInt(activeRecipe.outputSupplyCap));
+  const totalCrafts = Number(readySnapshot?.recipe.totalCrafts ?? BigInt(activeRecipe.totalCrafts));
+  const displayFee = feeWei === 0n ? "Free" : formatWei(feeWei);
+  const imprintHash = buildForgeImprint({ recipeId, frame, inscription, slots: slotMaterialIds });
+  const revenue = getForgeRevenueProjection({
+    feeWei,
+    maxTotalCrafts: outputSupplyCap,
+    totalCrafts
+  });
+  const requiredTokenIds = [
+    ...materials.map((material) => BigInt(material.tokenId)),
+    ...catalystIngredients.map((ingredient) => BigInt(ingredient.tokenId))
+  ];
+  const requiredTokenKey = requiredTokenIds.map(String).join(":");
+  const registry = useMemo(
+    () => getReadyContractRegistry(
+      loadDeploymentRegistrySnapshotFromEnv({
+        NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY: process.env.NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY
+      })
+    ),
+    []
+  );
+  const publicClient = useMemo(() => createRobinhoodPublicClient(), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (walletAccount === null || registry.contracts === null || recipeId === 0n) {
+      setLiveForgeState({ status: "idle" });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setLiveForgeState({ status: "loading" });
+    void getForgeWalletSnapshot({
+      account: walletAccount,
+      client: publicClient,
+      contracts: registry.contracts,
+      recipeId,
+      tokenIds: requiredTokenIds
+    }).then(
+      (snapshot) => {
+        if (!cancelled) setLiveForgeState({ status: "ready", snapshot });
+      },
+      () => {
+        if (!cancelled) setLiveForgeState({ status: "error" });
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [liveRefresh, publicClient, recipeId, registry.contracts, requiredTokenKey, walletAccount]);
+
+  const actionDisabledReason = getCraftDisabledReason({
+    mode,
+    patternComplete: patternResult.complete,
+    recipe: activeRecipe,
+    liveForgeState,
+    materials,
+    catalystIngredients,
+    walletAccount
+  });
 
   function appendLog(message: string) {
-    setEventLog((currentLog) => [message, ...currentLog].slice(0, 6));
+    setEventLog((currentLog) => [message, ...currentLog].slice(0, 7));
   }
 
   function loadRecipe(recipe: ForgeRecipeView) {
@@ -93,38 +200,53 @@ export function ForgeWorkbenchClient({ ingredients, materials, recipes }: ForgeW
     appendLog(`${recipe.title} loaded`);
   }
 
-  function placeMaterial(materialId: string, preferredSlot = nextOpenSlot) {
-    if (preferredSlot < lockedIngredients.length || preferredSlot < 0) {
+  function placeMaterial(materialId: string, preferredSlot?: number) {
+    const material = materialById.get(materialId);
+    if (!material) {
       return;
     }
 
-    const material = materialById.get(materialId);
-    setSlotMaterialIds((currentSlots) => {
-      const nextSlots = [...currentSlots];
-      nextSlots[preferredSlot] = materialId;
-      return nextSlots;
+    const result = placeForgeMaterial({
+      balance: material.labBalance,
+      materialId,
+      pattern: activeRecipe.pattern,
+      slots: slotMaterialIds,
+      preferredSlot
     });
+    if (result.placedAt === null) {
+      appendLog(result.reason === "balance-exhausted" ? `${material.label} lab stock exhausted` : "No open Forge slot");
+      return;
+    }
 
-    appendLog(`Placed ${material?.label ?? "material"}`);
+    setSlotMaterialIds(result.slots);
+    appendLog(`Placed ${material.label} in slot ${result.placedAt + 1}`);
   }
 
-  function recycleDuplicateStack() {
-    setDustBalance((currentBalance) => currentBalance + 5);
-    appendLog("Duplicate stack recycled");
+  function removeMaterial(slotIndex: number) {
+    const materialId = slotMaterialIds[slotIndex];
+    if (materialId === null || materialId === undefined) {
+      return;
+    }
+
+    const nextSlots = [...slotMaterialIds];
+    nextSlots[slotIndex] = null;
+    setSlotMaterialIds(nextSlots);
+    appendLog(`Removed ${materialById.get(materialId)?.label ?? "material"}`);
   }
 
   function handleDragStart(materialId: string, event: DragEvent<HTMLButtonElement>) {
     event.dataTransfer.setData("text/plain", materialId);
   }
 
-  function handleDrop(slotIndex: number, event: DragEvent<HTMLDivElement>) {
+  function handleDrop(slotIndex: number, event: DragEvent<HTMLButtonElement>) {
     event.preventDefault();
     const materialId = event.dataTransfer.getData("text/plain");
-
     if (materialId.length > 0) {
       placeMaterial(materialId, slotIndex);
     }
   }
+
+  const recyclerRecipe = recipes.find((recipe) => recipe.category === "recycle");
 
   return (
     <section className="forge-workbench phase-five-forge" aria-label="Forge workbench">
@@ -156,117 +278,132 @@ export function ForgeWorkbenchClient({ ingredients, materials, recipes }: ForgeW
             Live craft
           </button>
         </div>
-        <p>
-          The sandbox lets users test combinations first. On-chain crafting stays explicit, fee-aware, and protected
-          before the wallet path submits `Forge.craft`.
+        <dl className="forge-invariant-list">
+          <div>
+            <dt>Burn boundary</dt>
+            <dd>Game materials only</dd>
+          </div>
+          <div>
+            <dt>Inventory cards</dt>
+            <dd>Retained catalysts</dd>
+          </div>
+          <div>
+            <dt>Output cap</dt>
+            <dd>Reserved on-chain</dd>
+          </div>
+        </dl>
+        <p className="forge-live-status" role="status">
+          {walletAccount === null
+            ? "Lab inventory"
+            : liveForgeState.status === "ready"
+              ? "Wallet recipe state verified"
+              : liveForgeState.status === "error"
+                ? "Live recipe verification failed"
+                : "Checking wallet recipe state"}
         </p>
         {mode === "live" ? (
-          <p className="forge-warning">Protected grails stay locked. Lab mode first, then explicit wallet confirmation.</p>
+          <p className="forge-warning">Live craft uses the displayed fee, blueprint, and imprint.</p>
         ) : null}
       </div>
 
       <div className="panel recipe-book">
         <div className="panel-header compact">
           <div>
-            <span className="eyebrow">Recipes</span>
+            <span className="eyebrow">Blueprints</span>
             <h2>Recipe Book</h2>
           </div>
-          <span className="chain-pill">{recipes.length} paths</span>
+          <span className="chain-pill">{recipes.length} on-chain</span>
         </div>
-        <p>Discovery recipes turn the Forge into a puzzle instead of a burn form.</p>
+        <p>Discovery recipes reveal their pattern through valid lab matches.</p>
 
         <div className="recipe-list">
-          {recipes.map((recipe) => (
-            <article
-              className={recipe.id === selectedRecipe?.id ? "recipe-card selected" : "recipe-card"}
-              key={recipe.id}
-            >
-              <div className="card-title-row">
-                <div>
-                  <span className="eyebrow">
-                    {recipe.status === "discovery" ? "Discovery path" : recipe.status} / {recipe.tier}
+          {recipes.map((recipe) => {
+            const craftPercent = Math.min(100, Math.round((recipe.totalCrafts / recipe.outputSupplyCap) * 100));
+            return (
+              <article className={recipe.id === selectedRecipe.id ? "recipe-card selected" : "recipe-card"} key={recipe.id}>
+                <div className="card-title-row">
+                  <div>
+                    <span className="eyebrow">#{recipe.chainRecipeId} / {recipe.tier}</span>
+                    <h3>{recipe.title}</h3>
+                  </div>
+                  <span className="tier-pill">
+                    <Coins size={14} aria-hidden="true" />
+                    {recipe.displayFee}
                   </span>
-                  <h3>{recipe.title}</h3>
                 </div>
-                <span className="tier-pill">
-                  <Coins size={14} aria-hidden="true" />
-                  {formatCents(recipe.feeCents)}
-                </span>
-              </div>
-              <p>{recipe.description}</p>
-              <div className="tag-row" aria-label={`${recipe.title} ingredients`}>
-                {recipe.ingredients.map((ingredient) => (
-                  <span key={ingredient}>{ingredient}</span>
-                ))}
-              </div>
-              <div className="progress-row">
-                <span>{recipe.progressPercent}% solved by the community</span>
-                <strong>{recipe.output}</strong>
-              </div>
-              <div className="progress-track" aria-hidden="true">
-                <span style={{ width: `${recipe.progressPercent}%` }} />
-              </div>
-              <button className="secondary-action" onClick={() => loadRecipe(recipe)} type="button">
-                <BookOpenCheck size={15} aria-hidden="true" />
-                {recipe.status === "locked" ? `Inspect ${recipe.title}` : `Load ${recipe.title}`}
-              </button>
-            </article>
-          ))}
+                <p>{recipe.description}</p>
+                <div className="progress-row">
+                  <span>{recipe.outputSupplyCap - recipe.totalCrafts} output remaining</span>
+                  <strong>{recipe.output}</strong>
+                </div>
+                <div className="progress-track" aria-hidden="true">
+                  <span style={{ width: `${craftPercent}%` }} />
+                </div>
+                <button className="secondary-action" onClick={() => loadRecipe(recipe)} type="button">
+                  <BookOpenCheck size={15} aria-hidden="true" />
+                  Load {recipe.title}
+                </button>
+              </article>
+            );
+          })}
         </div>
       </div>
 
       <div className="panel forge-grid-panel">
         <div className="panel-header compact">
           <div>
-            <span className="eyebrow">Craft surface</span>
+            <span className="eyebrow">Blueprint #{selectedRecipe.chainRecipeId}</span>
             <h2>3 x 3 Forge Grid</h2>
           </div>
-          <span className="chain-pill">grail-protected</span>
+          <span className={patternResult.complete ? "chain-pill ready" : "chain-pill"}>
+            {patternResult.complete ? "matched" : `${patternResult.matchedSlots}/${patternResult.requiredSlots}`}
+          </span>
         </div>
-        <p>
-          Drag materials into open cells or use the material buttons. Locked cells reference grails without burning them.
-        </p>
 
         <div className="forge-grid" aria-label="3 x 3 Forge Grid slots" role="grid">
           {gridSlots.map((slotIndex) => {
-            const lockedIngredient = lockedIngredients[slotIndex];
-            const material = slotMaterialIds[slotIndex] ? materialById.get(slotMaterialIds[slotIndex] ?? "") : null;
+            const materialId = slotMaterialIds[slotIndex] ?? null;
+            const material = materialId ? materialById.get(materialId) : null;
+            const expectedMaterialId = selectedRecipe.pattern[slotIndex] ?? null;
+            const expectedMaterial = expectedMaterialId ? materialById.get(expectedMaterialId) : null;
+            const isMatched = materialId !== null && materialId === expectedMaterialId;
+            const className = material
+              ? `forge-slot filled${isMatched ? " matched" : " misplaced"}`
+              : expectedMaterial
+                ? "forge-slot hinted"
+                : "forge-slot";
 
             return (
-              <div
-                aria-label={
-                  lockedIngredient
-                    ? `Protected forge slot ${slotIndex + 1} ${lockedIngredient.title}`
-                    : material
-                      ? `Filled forge slot ${slotIndex + 1} ${material.label}`
-                      : `Open forge slot ${slotIndex + 1}`
-                }
-                className={lockedIngredient ? "forge-slot protected" : material ? "forge-slot filled" : "forge-slot"}
+              <button
+                aria-label={material ? `Remove ${material.label} from slot ${slotIndex + 1}` : `Open forge slot ${slotIndex + 1}`}
+                className={className}
                 key={slotIndex}
+                onClick={() => removeMaterial(slotIndex)}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={(event) => handleDrop(slotIndex, event)}
                 role="gridcell"
+                type="button"
               >
-                {lockedIngredient ? (
+                {material ? (
                   <>
-                    <LockKeyhole size={18} aria-hidden="true" />
-                    <strong>{lockedIngredient.title}</strong>
-                    <span>{lockedIngredient.grailTier} input locked</span>
-                  </>
-                ) : material ? (
-                  <>
-                    <Sparkles size={18} aria-hidden="true" />
+                    {isMatched ? <Check size={18} aria-hidden="true" /> : <X size={18} aria-hidden="true" />}
                     <strong>{material.label}</strong>
-                    <span>{material.label} placed</span>
+                    <span>{isMatched ? "Pattern match" : "Wrong position"}</span>
+                  </>
+                ) : expectedMaterial && selectedRecipe.status !== "discovery" ? (
+                  <>
+                    <PackagePlus size={18} aria-hidden="true" />
+                    <strong>{expectedMaterial.label}</strong>
+                    <span>Blueprint slot</span>
                   </>
                 ) : (
                   <>
                     <PackagePlus size={18} aria-hidden="true" />
                     <strong>Slot {slotIndex + 1}</strong>
-                    <span>Open cell</span>
+                    <span>{expectedMaterial ? "Unknown signal" : "Open"}</span>
                   </>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>
@@ -275,28 +412,31 @@ export function ForgeWorkbenchClient({ ingredients, materials, recipes }: ForgeW
       <div className="panel material-bank-panel">
         <div className="panel-header compact">
           <div>
-            <span className="eyebrow">Materials</span>
+            <span className="eyebrow">Sandbox inventory</span>
             <h2>Material bank</h2>
           </div>
           <ShieldCheck size={18} aria-hidden="true" />
         </div>
         <div className="material-bank-grid">
           {materials.map((material) => {
-            const balance = material.id === "forge-dust" ? dustBalance : material.balance;
-
+            const placed = slotMaterialIds.filter((materialId) => materialId === material.id).length;
+            const remaining = Math.max(0, material.labBalance - placed);
+            const walletBalance = readySnapshot?.balances.get(BigInt(material.tokenId));
             return (
               <article className="material-card" key={material.id}>
                 <div>
-                  <span className="eyebrow">{material.tone}</span>
+                  <span className="eyebrow">Token #{material.tokenId}</span>
                   <strong>{material.label}</strong>
                   <small>
-                    {material.id === "forge-dust" ? `Dust balance ${balance}` : `${balance} available`}
+                    {remaining} of {material.labBalance} lab stock
+                    {walletBalance !== undefined ? ` / wallet ${walletBalance}` : ""}
                   </small>
                 </div>
                 <p>{material.source}</p>
                 <button
                   className="secondary-action"
-                  draggable
+                  disabled={remaining === 0}
+                  draggable={remaining > 0}
                   onClick={() => placeMaterial(material.id)}
                   onDragStart={(event) => handleDragStart(material.id, event)}
                   type="button"
@@ -310,79 +450,182 @@ export function ForgeWorkbenchClient({ ingredients, materials, recipes }: ForgeW
         </div>
       </div>
 
+      <div className="panel catalyst-panel">
+        <div className="panel-header compact">
+          <div>
+            <span className="eyebrow">Ownership gates</span>
+            <h2>Card catalysts</h2>
+          </div>
+          <Gem size={18} aria-hidden="true" />
+        </div>
+        {catalystIngredients.length === 0 ? (
+          <p className="forge-empty-state">No card catalyst in this blueprint.</p>
+        ) : (
+          <div className="catalyst-list">
+            {catalystIngredients.map((ingredient) => (
+              <article className="catalyst-row" key={ingredient.id}>
+                <LockKeyhole size={18} aria-hidden="true" />
+                <div>
+                  <strong>{ingredient.title}</strong>
+                  <span>{ingredient.grailTier} / held, never burned</span>
+                </div>
+                <span className="chain-pill">
+                  {readySnapshot ? `${readySnapshot.balances.get(BigInt(ingredient.tokenId)) ?? 0n} held` : "wallet check"}
+                </span>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="panel recycler-panel">
         <div className="panel-header compact">
           <div>
-            <span className="eyebrow">Duplicates</span>
-            <h2>Duplicate recycler</h2>
+            <span className="eyebrow">Duplicate sink</span>
+            <h2>Duplicate Recycler</h2>
           </div>
           <ArchiveRestore size={18} aria-hidden="true" />
         </div>
-        <p>
-          Duplicate pulls become creative fuel. Recycling adds dust without touching protected grails or redemption items.
-        </p>
-        <button className="secondary-action" onClick={recycleDuplicateStack} type="button">
+        <dl className="forge-invariant-list">
+          <div>
+            <dt>Input</dt>
+            <dd>2 Fire shards</dd>
+          </div>
+          <div>
+            <dt>Output</dt>
+            <dd>1 Forge dust</dd>
+          </div>
+          <div>
+            <dt>Fee</dt>
+            <dd>Free</dd>
+          </div>
+        </dl>
+        <button
+          className="secondary-action"
+          disabled={!recyclerRecipe}
+          onClick={() => recyclerRecipe && loadRecipe(recyclerRecipe)}
+          type="button"
+        >
           <ArchiveRestore size={15} aria-hidden="true" />
-          Recycle duplicate stack
+          Load Duplicate Recycler
         </button>
+      </div>
+
+      <div className="panel imprint-panel">
+        <div className="panel-header compact">
+          <div>
+            <span className="eyebrow">Creative provenance</span>
+            <h2>Imprint Studio</h2>
+          </div>
+          <Fingerprint size={18} aria-hidden="true" />
+        </div>
+        <div className="imprint-frame-control" role="group" aria-label="Imprint frame">
+          {frameOptions.map((option) => (
+            <button
+              aria-pressed={frame === option.id}
+              className={frame === option.id ? `imprint-swatch ${option.id} active` : `imprint-swatch ${option.id}`}
+              key={option.id}
+              onClick={() => setFrame(option.id)}
+              title={`${option.label} imprint frame`}
+              type="button"
+            >
+              <Palette size={15} aria-hidden="true" />
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <label className="transaction-input-row" htmlFor="forge-inscription">
+          <span>Inscription</span>
+          <input
+            id="forge-inscription"
+            maxLength={24}
+            onChange={(event) => setInscription(event.target.value)}
+            type="text"
+            value={inscription}
+          />
+        </label>
+        <div className={`imprint-preview ${frame}`}>
+          <Sparkles size={20} aria-hidden="true" />
+          <strong>{inscription.trim() || "UNTITLED"}</strong>
+          <span>{selectedRecipe.output}</span>
+        </div>
+        <code className="forge-imprint-hash" title={imprintHash}>{imprintHash}</code>
       </div>
 
       <div className="panel output-preview">
         <div className="panel-header compact">
           <div>
-            <span className="eyebrow">Preview result</span>
+            <span className="eyebrow">Bounded output</span>
             <h2>Output Preview</h2>
           </div>
           <Sparkles size={18} aria-hidden="true" />
         </div>
         <dl className="detail-grid">
           <div>
-            <dt>Preview output</dt>
-            <dd>{selectedRecipe?.output ?? "No recipe selected"}</dd>
+            <dt>Output</dt>
+            <dd>{selectedRecipe.output}</dd>
           </div>
           <div>
-            <dt>Recipe cap</dt>
-            <dd>{selectedRecipe?.cap ?? 0} crafts</dd>
+            <dt>Supply remaining</dt>
+            <dd>{revenue.remainingCrafts} / {outputSupplyCap}</dd>
           </div>
           <div>
             <dt>Protocol fee preview</dt>
-            <dd>{formatCents(selectedRecipe?.expectedProtocolRevenueCents ?? 0)}</dd>
+            <dd>{displayFee}</dd>
           </div>
           <div>
-            <dt>Match state</dt>
-            <dd>
-              {matchedMaterials.length} of {selectedRecipe?.requiredMaterialIds.length ?? 0} ingredients matched
-            </dd>
+            <dt>Max remaining fees</dt>
+            <dd>{formatWei(revenue.remainingFeeWei)}</dd>
+          </div>
+          <div>
+            <dt>Wallet cap</dt>
+            <dd>{readySnapshot?.recipe.maxCraftsPerWallet.toString() ?? selectedRecipe.maxCraftsPerWallet}</dd>
+          </div>
+          <div>
+            <dt>Blueprint state</dt>
+            <dd>{patternResult.matchedSlots} of {patternResult.requiredSlots} matched</dd>
           </div>
         </dl>
-
-        {missingMaterials.length > 0 ? (
-          <div className="tag-row" aria-label="Missing Forge materials">
-            {missingMaterials.map((materialId) => (
-              <span key={materialId}>{materialById.get(materialId)?.label ?? materialId}</span>
-            ))}
-          </div>
-        ) : (
+        {patternResult.misplacedSlots > 0 ? (
+          <p className="transaction-error" role="status">{patternResult.misplacedSlots} material in the wrong position.</p>
+        ) : patternResult.complete ? (
           <p className="transaction-success" role="status">
-            <Sparkles size={15} aria-hidden="true" />
-            Lab recipe matched. Wallet crafting still requires confirmation.
+            <Check size={15} aria-hidden="true" />
+            Blueprint matched. Imprint locked for wallet review.
           </p>
-        )}
-
-        <p className="disclosure">
-          The sandbox does not submit burns, guarantee recipe outcomes, or imply resale value. The testnet write panel
-          below handles wallet submission.
-        </p>
-        <ForgeCraftPanel />
+        ) : null}
+        <div className="forge-output-actions">
+          <button
+            className="secondary-action"
+            onClick={() => {
+              setSlotMaterialIds(Array(9).fill(null));
+              appendLog("Forge grid cleared");
+            }}
+            type="button"
+          >
+            <RotateCcw size={15} aria-hidden="true" />
+            Clear grid
+          </button>
+        </div>
       </div>
+
+      <ForgeCraftPanel
+        actionDisabledReason={actionDisabledReason}
+        displayValue={displayFee}
+        imprintHash={imprintHash}
+        onAccountChange={setWalletAccount}
+        onConfirmed={() => setLiveRefresh((revision) => revision + 1)}
+        recipeId={recipeId}
+        value={feeWei}
+      />
 
       <div className="panel provenance-panel">
         <div className="panel-header compact">
           <div>
-            <span className="eyebrow">Craft trail</span>
+            <span className="eyebrow">Local session</span>
             <h2>Provenance log</h2>
           </div>
-          <Sparkles size={18} aria-hidden="true" />
+          <Fingerprint size={18} aria-hidden="true" />
         </div>
         <ol className="provenance-list" aria-label="Forge provenance log">
           {eventLog.map((event, index) => (
@@ -392,4 +635,79 @@ export function ForgeWorkbenchClient({ ingredients, materials, recipes }: ForgeW
       </div>
     </section>
   );
+}
+
+function getCraftDisabledReason(input: {
+  mode: ForgeMode;
+  patternComplete: boolean;
+  recipe: ForgeRecipeView;
+  liveForgeState: LiveForgeState;
+  materials: ForgeMaterialView[];
+  catalystIngredients: ForgeIngredientView[];
+  walletAccount: Address | null;
+}): string | null {
+  if (input.recipe.status === "locked") {
+    return "This blueprint is not active on-chain.";
+  }
+  if (!input.patternComplete) {
+    return "Match every blueprint slot before crafting.";
+  }
+  if (input.mode !== "live") {
+    return "Switch to Live craft after the lab match.";
+  }
+  if (input.walletAccount === null) {
+    return null;
+  }
+  if (input.liveForgeState.status === "loading" || input.liveForgeState.status === "idle") {
+    return "Checking live recipe and wallet balances.";
+  }
+  if (input.liveForgeState.status === "error") {
+    return "Live recipe verification failed. Retry after checking the testnet RPC.";
+  }
+
+  const snapshot = input.liveForgeState.snapshot;
+  if (snapshot.recipe.status !== 4) {
+    return "This recipe is not active on-chain.";
+  }
+  if (snapshot.recipe.outputTokenId !== BigInt(input.recipe.outputTokenId)) {
+    return "The live output token does not match this blueprint.";
+  }
+  if (snapshot.recipe.totalCrafts >= snapshot.recipe.maxTotalCrafts) {
+    return "This recipe has reached its global craft cap.";
+  }
+  if (snapshot.walletCrafts >= snapshot.recipe.maxCraftsPerWallet) {
+    return "This wallet has reached the recipe craft cap.";
+  }
+  if (!snapshot.approved) {
+    return "Approve Forge before submitting the craft.";
+  }
+
+  for (const material of input.materials) {
+    const required = input.recipe.pattern.filter((materialId) => materialId === material.id).length;
+    if (required === 0) continue;
+    const available = snapshot.balances.get(BigInt(material.tokenId)) ?? 0n;
+    if (available < BigInt(required)) {
+      return `Wallet needs ${required} ${material.label}; ${available} available.`;
+    }
+  }
+
+  for (const catalyst of input.catalystIngredients) {
+    const available = snapshot.balances.get(BigInt(catalyst.tokenId)) ?? 0n;
+    if (available < 1n) {
+      return `Wallet does not hold the required ${catalyst.title} catalyst.`;
+    }
+  }
+
+  return null;
+}
+
+function formatWei(value: bigint): string {
+  if (value === 0n) {
+    return "0 ETH";
+  }
+
+  const formatted = formatEther(value);
+  const [whole, fraction = ""] = formatted.split(".");
+  const trimmedFraction = fraction.slice(0, 4).replace(/0+$/, "");
+  return trimmedFraction.length > 0 ? `${whole}.${trimmedFraction} ETH` : `${whole} ETH`;
 }

@@ -17,6 +17,8 @@ const inventoryIds = [firstInventoryId, secondInventoryId, thirdInventoryId];
 const metadataUris = [firstMetadataUri, secondMetadataUri, thirdMetadataUri];
 const requesterRole = ethers.id("REQUESTER_ROLE");
 const refundTimeoutSeconds = 24 * 60 * 60;
+const fireShardTokenId = 7_001n;
+const vaultSealTokenId = 7_002n;
 
 type RejectingPackBuyer = Omit<BaseContract, "connect"> & {
   purchasePack(
@@ -73,6 +75,9 @@ async function activeDropParams(overrides: Partial<CreateDropParams> = {}): Prom
     maxSupply: 2n,
     inventoryIds,
     metadataUris,
+    bonusTokenIds: [],
+    bonusAmounts: [],
+    bonusUris: [],
     ...overrides
   };
 }
@@ -188,6 +193,66 @@ describe("PackSale", function () {
       .withArgs(1n, dropName, packPrice, anyValue, anyValue, 2n, 3n);
 
     expect(await packSale.remainingInventory(1n)).to.equal(3n);
+  });
+
+  it("delivers a transparent game-material starter bundle with every revealed physical card", async function () {
+    const {
+      fixture: { packSale, randomnessProvider, revealer, buyer, itemToken },
+      dropId
+    } = await createActiveDrop({
+      maxSupply: 1n,
+      bonusTokenIds: [fireShardTokenId, vaultSealTokenId],
+      bonusAmounts: [3n, 1n],
+      bonusUris: ["ipfs://items/fire-shard.json", "ipfs://items/vault-seal.json"]
+    });
+    const packSaleAddress = await packSale.getAddress();
+    const chainId = (await ethers.provider.getNetwork()).chainId;
+    const requestId = requestIdFor(packSaleAddress, 1n, buyer.address, chainId);
+    const seed = ethers.id("starter-bundle-seed");
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    await makeRandomnessReady(randomnessProvider, revealer, requestId, seed);
+
+    await expect(packSale.connect(buyer).reveal(1n))
+      .to.emit(packSale, "PackBonusMinted")
+      .withArgs(1n, fireShardTokenId, 3n)
+      .and.to.emit(packSale, "PackBonusMinted")
+      .withArgs(1n, vaultSealTokenId, 1n);
+
+    expect(await itemToken.balanceOf(buyer.address, fireShardTokenId)).to.equal(3n);
+    expect(await itemToken.balanceOf(buyer.address, vaultSealTokenId)).to.equal(1n);
+    expect(await itemToken.tokenKind(fireShardTokenId)).to.equal(2n);
+
+    const [bonusTokenIds, bonusAmounts] = await packSale.getDropBonus(dropId);
+    expect(bonusTokenIds).to.deep.equal([fireShardTokenId, vaultSealTokenId]);
+    expect(bonusAmounts).to.deep.equal([3n, 1n]);
+  });
+
+  it("rejects malformed or physical-token starter bundles", async function () {
+    const { registry, inventoryAdmin, packSale, dropAdmin } = await deployProtocolFixture();
+    await anchorInventories(registry, inventoryAdmin);
+
+    await expect(
+      packSale.connect(dropAdmin).createDrop(
+        await activeDropParams({
+          bonusTokenIds: [fireShardTokenId],
+          bonusAmounts: [],
+          bonusUris: ["ipfs://items/fire-shard.json"]
+        })
+      )
+    ).to.be.revertedWithCustomError(packSale, "InvalidBonusBundle");
+
+    await expect(
+      packSale.connect(dropAdmin).createDrop(
+        await activeDropParams({
+          bonusTokenIds: [physicalTokenIdFor(firstInventoryId)],
+          bonusAmounts: [1n],
+          bonusUris: [firstMetadataUri]
+        })
+      )
+    )
+      .to.be.revertedWithCustomError(packSale, "InvalidBonusToken")
+      .withArgs(physicalTokenIdFor(firstInventoryId));
   });
 
   it("rejects drop creation with unanchored inventory", async function () {

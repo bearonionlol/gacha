@@ -14,6 +14,7 @@ import {IRandomnessProvider} from "./randomness/IRandomnessProvider.sol";
 contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     bytes32 public constant DROP_ADMIN_ROLE = keccak256("DROP_ADMIN_ROLE");
     uint256 public constant REFUND_TIMEOUT = 1 days;
+    uint256 public constant MAX_BONUS_ITEMS = 4;
 
     struct CreateDropParams {
         string name;
@@ -23,6 +24,9 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         uint256 maxSupply;
         string[] inventoryIds;
         string[] metadataUris;
+        uint256[] bonusTokenIds;
+        uint256[] bonusAmounts;
+        string[] bonusUris;
     }
 
     struct Drop {
@@ -37,6 +41,9 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         uint256 pendingPurchases;
         string[] inventoryIds;
         string[] metadataUris;
+        uint256[] bonusTokenIds;
+        uint256[] bonusAmounts;
+        string[] bonusUris;
         bool exists;
     }
 
@@ -56,6 +63,10 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
 
     error InvalidAddress();
     error InvalidDropParams();
+    error InvalidBonusBundle();
+    error InvalidBonusToken(uint256 tokenId);
+    error DuplicateBonusToken(uint256 tokenId);
+    error BonusUriMismatch(uint256 tokenId, string expectedUri, string actualUri);
     error UnanchoredInventory(string inventoryId);
     error InventoryAlreadyTokenized(string inventoryId);
     error DuplicateInventory(string inventoryId);
@@ -104,6 +115,7 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         string inventoryId,
         uint256 tokenId
     );
+    event PackBonusMinted(uint256 indexed purchaseId, uint256 indexed tokenId, uint256 amount);
     event PackRefunded(uint256 indexed purchaseId, uint256 indexed dropId, address indexed buyer, uint256 price);
     event RevealedTokenClaimed(uint256 indexed purchaseId, address indexed buyer, address indexed to, uint256 tokenId);
     event RefundWithdrawn(address indexed account, uint256 amount);
@@ -124,6 +136,7 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     mapping(uint256 purchaseId => Purchase purchase) private _purchases;
     mapping(uint256 dropId => mapping(uint256 position => uint256 purchaseId)) private _purchaseIdByDropPosition;
     mapping(bytes32 inventoryKey => bool reserved) private _reservedInventory;
+    mapping(uint256 tokenId => string tokenUri) private _bonusTokenUris;
     mapping(address account => uint256 amount) public refundCredit;
 
     constructor(
@@ -156,6 +169,8 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         ) {
             revert InvalidDropParams();
         }
+
+        _validateBonusBundle(params);
 
         for (uint256 index = 0; index < inventoryCount; index++) {
             string calldata inventoryId = params.inventoryIds[index];
@@ -197,6 +212,16 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
             _reservedInventory[_inventoryKey(params.inventoryIds[index])] = true;
             drop.inventoryIds.push(params.inventoryIds[index]);
             drop.metadataUris.push(params.metadataUris[index]);
+        }
+
+        for (uint256 index = 0; index < params.bonusTokenIds.length; index++) {
+            uint256 tokenId = params.bonusTokenIds[index];
+            drop.bonusTokenIds.push(tokenId);
+            drop.bonusAmounts.push(params.bonusAmounts[index]);
+            drop.bonusUris.push(params.bonusUris[index]);
+            if (bytes(_bonusTokenUris[tokenId]).length == 0) {
+                _bonusTokenUris[tokenId] = params.bonusUris[index];
+            }
         }
 
         emit DropCreated(
@@ -307,6 +332,7 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         inventoryRegistry.markTokenized(inventoryId, purchaseRecord.buyer);
         delete _reservedInventory[_inventoryKey(inventoryId)];
         itemToken.mintInventoryItem(address(this), tokenId, inventoryId, metadataUri);
+        _mintBonusBundle(purchaseId, drop);
         drop.pendingPurchases -= 1;
         _advanceRevealCursor(drop, purchaseRecord.dropId);
         treasuryCredit += purchaseRecord.price;
@@ -410,6 +436,15 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         return _dropFor(dropId).inventoryIds.length;
     }
 
+    function getDropBonus(uint256 dropId)
+        external
+        view
+        returns (uint256[] memory tokenIds, uint256[] memory amounts, string[] memory tokenUris)
+    {
+        Drop storage drop = _dropFor(dropId);
+        return (drop.bonusTokenIds, drop.bonusAmounts, drop.bonusUris);
+    }
+
     function pause() external onlyRole(DROP_ADMIN_ROLE) {
         _pause();
     }
@@ -467,7 +502,10 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
             return;
         }
 
-        try itemToken.safeTransferFrom(address(this), purchaseRecord.buyer, purchaseRecord.revealedTokenId, 1, "") {
+        Drop storage drop = _dropFor(purchaseRecord.dropId);
+        (uint256[] memory tokenIds, uint256[] memory amounts) = _revealedBundle(purchaseRecord, drop);
+
+        try itemToken.safeBatchTransferFrom(address(this), purchaseRecord.buyer, tokenIds, amounts, "") {
             purchaseRecord.tokenClaimed = true;
             emit RevealedTokenClaimed(
                 purchaseId,
@@ -488,8 +526,10 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         }
 
         uint256 tokenId = purchaseRecord.revealedTokenId;
+        Drop storage drop = _dropFor(purchaseRecord.dropId);
+        (uint256[] memory tokenIds, uint256[] memory amounts) = _revealedBundle(purchaseRecord, drop);
         purchaseRecord.tokenClaimed = true;
-        itemToken.safeTransferFrom(address(this), to, tokenId, 1, "");
+        itemToken.safeBatchTransferFrom(address(this), to, tokenIds, amounts, "");
 
         emit RevealedTokenClaimed(purchaseId, purchaseRecord.buyer, to, tokenId);
     }
@@ -497,6 +537,70 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     function _canReceiveERC1155(address account) private view returns (bool) {
         return account.code.length == 0
             || ERC165Checker.supportsInterface(account, type(IERC1155Receiver).interfaceId);
+    }
+
+    function _validateBonusBundle(CreateDropParams calldata params) private view {
+        uint256 bonusCount = params.bonusTokenIds.length;
+        if (
+            bonusCount != params.bonusAmounts.length || bonusCount != params.bonusUris.length
+                || bonusCount > MAX_BONUS_ITEMS
+        ) {
+            revert InvalidBonusBundle();
+        }
+
+        for (uint256 index = 0; index < bonusCount; index++) {
+            uint256 tokenId = params.bonusTokenIds[index];
+            string calldata tokenUri = params.bonusUris[index];
+            if (
+                tokenId == 0 || tokenId > itemToken.GAME_TOKEN_ID_MAX() || params.bonusAmounts[index] == 0
+                    || bytes(tokenUri).length == 0
+            ) {
+                revert InvalidBonusToken(tokenId);
+            }
+
+            for (uint256 previous = 0; previous < index; previous++) {
+                if (params.bonusTokenIds[previous] == tokenId) {
+                    revert DuplicateBonusToken(tokenId);
+                }
+            }
+
+            string storage configuredUri = _bonusTokenUris[tokenId];
+            if (bytes(configuredUri).length != 0 && !_sameString(configuredUri, tokenUri)) {
+                revert BonusUriMismatch(tokenId, configuredUri, tokenUri);
+            }
+            if (itemToken.hasCustomURI(tokenId)) {
+                string memory existingUri = itemToken.uri(tokenId);
+                if (!_sameString(existingUri, tokenUri)) {
+                    revert BonusUriMismatch(tokenId, existingUri, tokenUri);
+                }
+            }
+        }
+    }
+
+    function _mintBonusBundle(uint256 purchaseId, Drop storage drop) private {
+        for (uint256 index = 0; index < drop.bonusTokenIds.length; index++) {
+            uint256 tokenId = drop.bonusTokenIds[index];
+            uint256 amount = drop.bonusAmounts[index];
+            itemToken.mintGameItem(address(this), tokenId, amount, drop.bonusUris[index]);
+            emit PackBonusMinted(purchaseId, tokenId, amount);
+        }
+    }
+
+    function _revealedBundle(Purchase storage purchaseRecord, Drop storage drop)
+        private
+        view
+        returns (uint256[] memory tokenIds, uint256[] memory amounts)
+    {
+        uint256 bonusCount = drop.bonusTokenIds.length;
+        tokenIds = new uint256[](bonusCount + 1);
+        amounts = new uint256[](bonusCount + 1);
+        tokenIds[0] = purchaseRecord.revealedTokenId;
+        amounts[0] = 1;
+
+        for (uint256 index = 0; index < bonusCount; index++) {
+            tokenIds[index + 1] = drop.bonusTokenIds[index];
+            amounts[index + 1] = drop.bonusAmounts[index];
+        }
     }
 
     function _withdrawTreasuryCreditTo(address payable to) private {
@@ -516,5 +620,9 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         if (!success) {
             revert TransferFailed(to, amount);
         }
+    }
+
+    function _sameString(string memory left, string memory right) private pure returns (bool) {
+        return keccak256(bytes(left)) == keccak256(bytes(right));
     }
 }

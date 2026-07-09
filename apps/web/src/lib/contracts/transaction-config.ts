@@ -1,5 +1,7 @@
+import { decodeEventLog, type Hex } from "viem";
 import type { ProtocolContracts } from "./registry";
 import type { WriteRequest } from "./transactions";
+import { packSaleAbi } from "./abis";
 
 export type RedemptionAdminMode = "approve" | "markPacked" | "markShipped" | "complete" | "cancel";
 
@@ -22,7 +24,7 @@ export const testnetWriteConfig = {
     displayPrice: "0.015 ETH"
   },
   forge: {
-    recipeId: 1n,
+    recipeId: 2n,
     value: 1_000_000_000_000_000n,
     displayValue: "0.001 ETH"
   }
@@ -60,6 +62,26 @@ export function createPackRevealRequestForPurchase(
     contracts,
     purchaseId
   };
+}
+
+export function extractPackPurchaseId(receipt: {
+  logs: readonly { data: Hex; topics: readonly Hex[] }[];
+}): bigint | null {
+  for (const log of receipt.logs) {
+    try {
+      if (log.topics.length === 0) continue;
+      const topics = [...log.topics] as [Hex, ...Hex[]];
+      const decoded = decodeEventLog({ abi: packSaleAbi, data: log.data, topics, strict: false });
+      if (decoded.eventName === "PackPurchased" && "purchaseId" in decoded.args) {
+        const purchaseId = decoded.args.purchaseId;
+        return typeof purchaseId === "bigint" && purchaseId > 0n ? purchaseId : null;
+      }
+    } catch {
+      // Ignore unrelated receipt logs.
+    }
+  }
+
+  return null;
 }
 
 export function createMarketListRequestForToken(

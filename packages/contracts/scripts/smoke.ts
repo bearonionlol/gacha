@@ -17,6 +17,7 @@ type RoleReadableContract = BaseContract & {
 type InventoryRegistryContract = RoleReadableContract & {
   INVENTORY_ADMIN_ROLE(): Promise<string>;
   TOKENIZER_ROLE(): Promise<string>;
+  derivePhysicalTokenId(inventoryId: string): Promise<bigint>;
 };
 
 type ItemTokenContract = RoleReadableContract & {
@@ -40,6 +41,7 @@ type PackSaleContract = RoleReadableContract & {
   randomnessProvider(): Promise<string>;
   treasury(): Promise<string>;
   nextDropId(): Promise<bigint>;
+  getDropBonus(dropId: bigint): Promise<[bigint[], bigint[], string[]]>;
 };
 
 type MarketplaceContract = RoleReadableContract & {
@@ -54,15 +56,26 @@ type BuybackVaultContract = RoleReadableContract & {
   BUYBACK_ADMIN_ROLE(): Promise<string>;
   itemToken(): Promise<string>;
   totalPayoutCredit(): Promise<bigint>;
+  quotes(tokenId: bigint): Promise<readonly [bigint, boolean] & { price: bigint; active: boolean }>;
+};
+
+type ForgeRecipeView = {
+  status: bigint;
+  outputTokenId: bigint;
+  outputSupplyCap: bigint;
+  exists: boolean;
 };
 
 type ForgeContract = RoleReadableContract & {
   RECIPE_ADMIN_ROLE(): Promise<string>;
+  CRAFT_REVIEWER_ROLE(): Promise<string>;
   itemToken(): Promise<string>;
   inventoryRegistry(): Promise<string>;
   treasury(): Promise<string>;
   paused(): Promise<boolean>;
   nextRecipeId(): Promise<bigint>;
+  recipes(recipeId: bigint): Promise<ForgeRecipeView>;
+  getRecipeCatalysts(recipeId: bigint): Promise<[bigint[], bigint[]]>;
 };
 
 type RedemptionRegistryContract = RoleReadableContract & {
@@ -82,6 +95,12 @@ const contractNames = [
   "Forge",
   "RedemptionRegistry"
 ] as const;
+
+const sampleDropInventoryId = "inv-sample-graded-001";
+const expectedMarketplaceFeeBps = 250n;
+const expectedBuybackQuote = ethers.parseEther("0.004");
+const expectedStarterTokenIds = [7_001n, 7_002n] as const;
+const expectedStarterAmounts = [3n, 1n] as const;
 
 function deploymentsPath(networkName: string): string {
   return path.resolve(__dirname, "../../../deployments", `${networkName}.json`);
@@ -219,6 +238,58 @@ async function main(): Promise<void> {
   await forge.nextRecipeId();
   await redemptionRegistry.nextRequestId();
 
+  const expectsSampleSeed = network.name === "localhost" || network.name === "robinhoodTestnet";
+  if (expectsSampleSeed) {
+    const nextDropId = await packSale.nextDropId();
+    if (nextDropId <= 1n) {
+      throw new Error("PackSale seed drop is missing");
+    }
+
+    const [bonusTokenIds, bonusAmounts, bonusUris] = await packSale.getDropBonus(1n);
+    if (bonusTokenIds.length !== bonusAmounts.length || bonusTokenIds.length !== bonusUris.length) {
+      throw new Error("PackSale drop 1 bonus bundle arrays are inconsistent");
+    }
+    if (
+      bonusTokenIds.length !== expectedStarterTokenIds.length
+        || bonusTokenIds.some((tokenId, index) => tokenId !== expectedStarterTokenIds[index])
+        || bonusAmounts.some((amount, index) => amount !== expectedStarterAmounts[index])
+    ) {
+      throw new Error("PackSale drop 1 does not contain the reviewed starter-material bundle");
+    }
+    if ((await marketplace.feeBps()) !== expectedMarketplaceFeeBps) {
+      throw new Error(`Marketplace fee must be ${expectedMarketplaceFeeBps} bps after seed`);
+    }
+
+    const physicalTokenId = await inventoryRegistry.derivePhysicalTokenId(sampleDropInventoryId);
+    const quote = await buybackVault.quotes(physicalTokenId);
+    if (!quote.active || quote.price !== expectedBuybackQuote) {
+      throw new Error("BuybackVault sample quote is missing or mismatched");
+    }
+    const payoutCredit = await buybackVault.totalPayoutCredit();
+    const buybackBalance = await ethers.provider.getBalance(addresses.BuybackVault);
+    if (buybackBalance < payoutCredit || buybackBalance - payoutCredit < expectedBuybackQuote) {
+      throw new Error("BuybackVault does not have one unreserved sample-quote payout available");
+    }
+
+    const nextRecipeId = await forge.nextRecipeId();
+    if (nextRecipeId < 4n) {
+      throw new Error("Forge seed recipes are missing");
+    }
+    for (const recipeId of [1n, 2n, 3n]) {
+      const recipe = await forge.recipes(recipeId);
+      if (!recipe.exists || recipe.status !== 4n || recipe.outputSupplyCap === 0n) {
+        throw new Error(`Forge recipe ${recipeId} is not active and supply-capped`);
+      }
+    }
+    const [catalystTokenIds, catalystAmounts] = await forge.getRecipeCatalysts(3n);
+    if (
+      catalystTokenIds.length !== 1 || catalystTokenIds[0] !== physicalTokenId
+        || catalystAmounts.length !== 1 || catalystAmounts[0] !== 1n
+    ) {
+      throw new Error("Forge resonance recipe does not retain the seeded physical catalyst");
+    }
+  }
+
   await assertAddressEq("PackSale.inventoryRegistry", packSale.inventoryRegistry(), addresses.InventoryRegistry);
   await assertAddressEq("PackSale.itemToken", packSale.itemToken(), addresses.ItemToken);
   await assertAddressEq(
@@ -314,6 +385,12 @@ async function main(): Promise<void> {
     "BuybackVault.BUYBACK_ADMIN_ROLE for deployer"
   );
   await assertRole(forge, await forge.RECIPE_ADMIN_ROLE(), deployer, "Forge.RECIPE_ADMIN_ROLE for deployer");
+  await assertRole(
+    forge,
+    await forge.CRAFT_REVIEWER_ROLE(),
+    deployer,
+    "Forge.CRAFT_REVIEWER_ROLE for deployer"
+  );
   await assertRole(
     redemptionRegistry,
     await redemptionRegistry.REDEMPTION_ADMIN_ROLE(),

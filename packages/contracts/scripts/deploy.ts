@@ -38,6 +38,7 @@ type BuybackVaultContract = RoleContract & {
 
 type ForgeContract = RoleContract & {
   RECIPE_ADMIN_ROLE(): Promise<string>;
+  CRAFT_REVIEWER_ROLE(): Promise<string>;
 };
 
 type RedemptionRegistryContract = RoleContract & {
@@ -222,6 +223,12 @@ async function main(): Promise<void> {
     await forge.RECIPE_ADMIN_ROLE(),
     deployerAddress,
     "Forge.RECIPE_ADMIN_ROLE for deployer"
+  );
+  await grantRole(
+    forge,
+    await forge.CRAFT_REVIEWER_ROLE(),
+    deployerAddress,
+    "Forge.CRAFT_REVIEWER_ROLE for deployer"
   );
   await grantRole(
     redemptionRegistry,

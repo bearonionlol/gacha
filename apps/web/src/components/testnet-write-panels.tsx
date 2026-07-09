@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { formatEther, type Address, type Hex, type TransactionReceipt } from "viem";
 import { loadDeploymentRegistrySnapshotFromEnv } from "../lib/deployments";
 import { getReadyContractRegistry, type ProtocolContracts } from "../lib/contracts/registry";
 import {
@@ -8,12 +9,16 @@ import {
   createMarketListRequestForToken,
   createRedemptionAdminRequest,
   createRedemptionRequestForToken,
+  extractPackPurchaseId,
   parsePositiveActionId,
   parsePositiveTokenId,
   type RedemptionAdminMode,
   testnetWriteConfig
 } from "../lib/contracts/transaction-config";
 import { robinhoodTestnetChainId } from "../lib/contracts/wallet";
+import { createRobinhoodPublicClient } from "../lib/contracts/public-client";
+import { readMarketplaceListing, type LiveMarketplaceListing } from "../lib/contracts/marketplace-live";
+import { readBuybackQuote, type LiveBuybackQuote } from "../lib/contracts/buyback-live";
 import { KnownInventoryTokenPicker } from "./known-inventory-token-picker";
 import { TransactionActionPanel } from "./transaction-action-panel";
 
@@ -45,7 +50,7 @@ function useClientRegistry(): RegistryPanelState {
   }, []);
 }
 
-export function PackPurchasePanel() {
+export function PackPurchasePanel({ onPurchaseConfirmed }: { onPurchaseConfirmed?: (purchaseId: bigint) => void }) {
   const registry = useClientRegistry();
 
   return (
@@ -53,6 +58,10 @@ export function PackPurchasePanel() {
       contracts={registry.contracts}
       ctaLabel="Reserve pack"
       description="Calls PackSale.purchase with the exact seeded testnet ETH value."
+      onConfirmed={(receipt) => {
+        const purchaseId = extractPackPurchaseId(receipt);
+        if (purchaseId !== null) onPurchaseConfirmed?.(purchaseId);
+      }}
       registryMessage={registry.message}
       summary={[
         { label: "Function", value: "PackSale.purchase" },
@@ -70,10 +79,14 @@ export function PackPurchasePanel() {
   );
 }
 
-export function PackRevealPanel() {
+export function PackRevealPanel({ initialPurchaseId = null }: { initialPurchaseId?: bigint | null }) {
   const registry = useClientRegistry();
-  const [purchaseIdInput, setPurchaseIdInput] = useState("");
+  const [purchaseIdInput, setPurchaseIdInput] = useState(initialPurchaseId?.toString() ?? "");
   const purchaseId = parsePositiveActionId(purchaseIdInput);
+
+  useEffect(() => {
+    if (initialPurchaseId !== null) setPurchaseIdInput(initialPurchaseId.toString());
+  }, [initialPurchaseId]);
 
   return (
     <div className="transaction-panel-stack">
@@ -160,7 +173,282 @@ export function MarketplaceListPanel({ inputId }: TokenInputPanelProps) {
   );
 }
 
-export function ForgeCraftPanel() {
+type ListingReadState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; listing: LiveMarketplaceListing }
+  | { status: "missing" }
+  | { status: "error" };
+
+export function MarketplaceTradePanel() {
+  const registry = useClientRegistry();
+  const client = useMemo(() => createRobinhoodPublicClient(), []);
+  const [listingIdInput, setListingIdInput] = useState("");
+  const [listingState, setListingState] = useState<ListingReadState>({ status: "idle" });
+  const [refresh, setRefresh] = useState(0);
+  const listingId = parsePositiveActionId(listingIdInput);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (listingId === null || registry.contracts === null) {
+      setListingState({ status: "idle" });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setListingState({ status: "loading" });
+    void readMarketplaceListing(client, registry.contracts.Marketplace, listingId).then(
+      (listing) => {
+        if (!cancelled) setListingState(listing ? { status: "ready", listing } : { status: "missing" });
+      },
+      () => {
+        if (!cancelled) setListingState({ status: "error" });
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, listingId, refresh, registry.contracts]);
+
+  const listing = listingState.status === "ready" ? listingState.listing : null;
+  const activeListing = listing?.active ? listing : null;
+  const disabledReason = getListingDisabledReason(listingId, listingState);
+  const handleConfirmed = () => setRefresh((revision) => revision + 1);
+
+  return (
+    <div className="transaction-panel-stack market-trade-stack">
+      <label className="transaction-input-row" htmlFor="market-listing-id">
+        <span>On-chain listing ID</span>
+        <input
+          id="market-listing-id"
+          inputMode="numeric"
+          onChange={(event) => setListingIdInput(event.target.value)}
+          placeholder="Enter listing ID"
+          type="text"
+          value={listingIdInput}
+        />
+      </label>
+      <p className="market-listing-read-state" role="status">
+        {formatListingReadState(listingState)}
+      </p>
+      <TransactionActionPanel
+        actionDisabledReason={disabledReason}
+        contracts={registry.contracts}
+        ctaLabel="Buy listing"
+        description="Reads the escrowed listing first, then submits Marketplace.buy with its exact on-chain price."
+        onConfirmed={handleConfirmed}
+        registryMessage={registry.message}
+        summary={[
+          { label: "Function", value: "Marketplace.buy" },
+          { label: "Listing ID", value: listingId?.toString() ?? "required" },
+          { label: "Token ID", value: activeListing?.tokenId.toString() ?? "pending" },
+          { label: "Exact value", value: activeListing ? `${formatEther(activeListing.price)} ETH` : "pending" }
+        ]}
+        title="Buy escrowed listing"
+        writeRequest={(contracts) => activeListing === null ? null : ({
+          kind: "marketBuy",
+          contracts,
+          listingId: activeListing.id,
+          value: activeListing.price
+        })}
+      />
+      <TransactionActionPanel
+        actionDisabledReason={disabledReason}
+        contracts={registry.contracts}
+        ctaLabel="Cancel listing"
+        description="Returns escrowed inventory to the connected seller. The contract rejects non-sellers."
+        onConfirmed={handleConfirmed}
+        registryMessage={registry.message}
+        summary={[
+          { label: "Function", value: "Marketplace.cancel" },
+          { label: "Listing ID", value: listingId?.toString() ?? "required" },
+          { label: "Seller", value: activeListing?.seller ?? "pending" }
+        ]}
+        title="Cancel seller listing"
+        writeRequest={(contracts) => activeListing === null ? null : ({
+          kind: "marketCancel",
+          contracts,
+          listingId: activeListing.id
+        })}
+      />
+      <TransactionActionPanel
+        contracts={registry.contracts}
+        ctaLabel="Withdraw proceeds"
+        description="Withdraws the connected wallet's credited marketplace proceeds."
+        onConfirmed={handleConfirmed}
+        registryMessage={registry.message}
+        summary={[{ label: "Function", value: "Marketplace.withdrawProceeds" }]}
+        title="Withdraw market proceeds"
+        writeRequest={(contracts) => ({ kind: "marketWithdraw", contracts })}
+      />
+    </div>
+  );
+}
+
+function getListingDisabledReason(listingId: bigint | null, state: ListingReadState): string | null {
+  if (listingId === null) return "Enter a listing ID first.";
+  if (state.status === "loading" || state.status === "idle") return "Checking the on-chain listing.";
+  if (state.status === "error") return "Listing read failed. Check the testnet RPC and retry.";
+  if (state.status === "missing") return "This listing ID does not exist.";
+  if (!state.listing.active) return state.listing.sold ? "This listing is already sold." : "This listing is not active.";
+  return null;
+}
+
+function formatListingReadState(state: ListingReadState): string {
+  if (state.status === "loading") return "Loading escrow state";
+  if (state.status === "error") return "Could not read escrow state";
+  if (state.status === "missing") return "Listing not found";
+  if (state.status === "ready") {
+    const stateLabel = state.listing.active ? "Active" : state.listing.sold ? "Sold" : "Cancelled";
+    return `${stateLabel} / ${formatEther(state.listing.price)} ETH / token ${state.listing.tokenId}`;
+  }
+  return "Enter a listing ID to load its exact price and escrow state";
+}
+
+type BuybackReadState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; quote: LiveBuybackQuote }
+  | { status: "error" };
+
+export function BuybackPanel() {
+  const registry = useClientRegistry();
+  const client = useMemo(() => createRobinhoodPublicClient(), []);
+  const [tokenIdInput, setTokenIdInput] = useState("");
+  const [quoteState, setQuoteState] = useState<BuybackReadState>({ status: "idle" });
+  const [refresh, setRefresh] = useState(0);
+  const tokenId = parsePositiveTokenId(tokenIdInput);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (tokenId === null || registry.contracts === null) {
+      setQuoteState({ status: "idle" });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setQuoteState({ status: "loading" });
+    void readBuybackQuote(client, registry.contracts.BuybackVault, tokenId).then(
+      (quote) => {
+        if (!cancelled) setQuoteState({ status: "ready", quote });
+      },
+      () => {
+        if (!cancelled) setQuoteState({ status: "error" });
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, refresh, registry.contracts, tokenId]);
+
+  const quote = quoteState.status === "ready" && quoteState.quote.active ? quoteState.quote : null;
+  const disabledReason = getBuybackDisabledReason(tokenId, quoteState);
+  const handleConfirmed = () => setRefresh((revision) => revision + 1);
+
+  return (
+    <div className="transaction-panel-stack buyback-stack">
+      <KnownInventoryTokenPicker
+        contracts={registry.contracts}
+        onSelectTokenId={(selectedTokenId) => setTokenIdInput(selectedTokenId.toString())}
+        registryMessage={registry.message}
+      />
+      <label className="transaction-input-row" htmlFor="buyback-token-id">
+        <span>Quoted inventory token ID</span>
+        <input
+          id="buyback-token-id"
+          inputMode="numeric"
+          onChange={(event) => setTokenIdInput(event.target.value)}
+          placeholder="Select or enter token ID"
+          type="text"
+          value={tokenIdInput}
+        />
+      </label>
+      <p className="market-listing-read-state" role="status">
+        {formatBuybackReadState(quoteState)}
+      </p>
+      <TransactionActionPanel
+        actionDisabledReason={disabledReason}
+        approval={{
+          ctaLabel: "Approve BuybackVault",
+          description: "Approves BuybackVault to transfer the quoted ERC-1155 item.",
+          writeRequest: (contracts) => ({
+            kind: "approval",
+            contracts,
+            operator: "BuybackVault",
+            approved: true
+          })
+        }}
+        contracts={registry.contracts}
+        ctaLabel="Accept buyback"
+        description="Transfers one quoted item into BuybackVault and credits the exact published payout."
+        onConfirmed={handleConfirmed}
+        registryMessage={registry.message}
+        summary={[
+          { label: "Function", value: "BuybackVault.acceptQuote" },
+          { label: "Token ID", value: tokenId?.toString() ?? "required" },
+          { label: "Payout", value: quote ? `${formatEther(quote.price)} ETH` : "no active quote" }
+        ]}
+        title="Accept protocol buyback"
+        writeRequest={(contracts) => quote === null ? null : ({
+          kind: "buybackAccept",
+          contracts,
+          tokenId: quote.tokenId,
+          amount: 1n
+        })}
+      />
+      <TransactionActionPanel
+        contracts={registry.contracts}
+        ctaLabel="Withdraw payout"
+        description="Withdraws the connected wallet's credited BuybackVault payout."
+        onConfirmed={handleConfirmed}
+        registryMessage={registry.message}
+        summary={[{ label: "Function", value: "BuybackVault.withdrawPayout" }]}
+        title="Withdraw buyback payout"
+        writeRequest={(contracts) => ({ kind: "buybackWithdraw", contracts })}
+      />
+    </div>
+  );
+}
+
+function getBuybackDisabledReason(tokenId: bigint | null, state: BuybackReadState): string | null {
+  if (tokenId === null) return "Select an owned inventory token first.";
+  if (state.status === "loading" || state.status === "idle") return "Checking the on-chain quote.";
+  if (state.status === "error") return "Quote read failed. Check the testnet RPC and retry.";
+  if (!state.quote.active || state.quote.price === 0n) return "No active buyback quote exists for this token.";
+  return null;
+}
+
+function formatBuybackReadState(state: BuybackReadState): string {
+  if (state.status === "loading") return "Loading buyback quote";
+  if (state.status === "error") return "Could not read buyback quote";
+  if (state.status === "ready" && state.quote.active) return `Active quote / ${formatEther(state.quote.price)} ETH`;
+  if (state.status === "ready") return "No active quote for this token";
+  return "Select a token to load its exact protocol quote";
+}
+
+type ForgeCraftPanelProps = {
+  actionDisabledReason: string | null;
+  displayValue: string;
+  imprintHash: Hex;
+  recipeId: bigint;
+  value: bigint;
+  onAccountChange?: (account: Address) => void;
+  onConfirmed?: (receipt: TransactionReceipt) => void;
+};
+
+export function ForgeCraftPanel({
+  actionDisabledReason,
+  displayValue,
+  imprintHash,
+  onAccountChange,
+  onConfirmed,
+  recipeId,
+  value
+}: ForgeCraftPanelProps) {
   const registry = useClientRegistry();
 
   return (
@@ -175,21 +463,26 @@ export function ForgeCraftPanel() {
           approved: true
         })
       }}
+      actionDisabledReason={actionDisabledReason}
       contracts={registry.contracts}
       ctaLabel="Craft recipe"
-      description="Calls Forge.craft with the exact seeded recipe fee."
+      description="Submits the matched blueprint and its provenance imprint with the exact recipe fee."
       registryMessage={registry.message}
+      onAccountChange={onAccountChange}
+      onConfirmed={onConfirmed}
       summary={[
-        { label: "Function", value: "Forge.craft" },
-        { label: "Recipe ID", value: testnetWriteConfig.forge.recipeId.toString() },
-        { label: "Fee", value: testnetWriteConfig.forge.displayValue }
+        { label: "Function", value: "Forge.craftWithImprint" },
+        { label: "Recipe ID", value: recipeId.toString() },
+        { label: "Fee", value: displayValue },
+        { label: "Imprint", value: imprintHash }
       ]}
       title="Craft recipe on testnet"
       writeRequest={(contracts) => ({
         kind: "forgeCraft",
         contracts,
-        recipeId: testnetWriteConfig.forge.recipeId,
-        value: testnetWriteConfig.forge.value
+        recipeId,
+        imprintHash,
+        value
       })}
     />
   );

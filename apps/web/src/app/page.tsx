@@ -1,10 +1,9 @@
 import { ActivityFeed } from "../components/activity-feed";
 import { AppShell } from "../components/app-shell";
 import { ArcadePanel } from "../components/arcade-panel";
-import { DropLobby } from "../components/drop-lobby";
+import { DropJourney } from "../components/drop-journey";
 import { EconomyPanel } from "../components/economy-panel";
 import { LiveProtocolPanel } from "../components/live-protocol-panel";
-import { RevealPanel } from "../components/reveal-panel";
 import { StatusRail } from "../components/status-rail";
 
 export const dynamic = "force-dynamic";
@@ -19,8 +18,7 @@ export default async function HomePage() {
         {liveProtocolPanel}
         <EconomyPanel />
         <div className="dashboard-grid">
-          <DropLobby />
-          <RevealPanel />
+          <DropJourney />
           <ArcadePanel />
           <ActivityFeed />
         </div>

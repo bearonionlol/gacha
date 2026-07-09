@@ -12,6 +12,8 @@ const outputTokenUri = "ipfs://items/forge-output.json";
 const alternateOutputTokenUri = "ipfs://items/forge-output-alt.json";
 const recipeFee = ethers.parseEther("0.05");
 const farFuture = 4_102_444_800n;
+const recipeMetadataHash = ethers.id("forge-recipe-metadata-v3");
+const outputSupplyCap = 100n;
 
 const RecipeStatus = {
   Draft: 0n,
@@ -53,6 +55,10 @@ function recipeParams(overrides: Partial<CreateRecipeParams> = {}): CreateRecipe
     maxCraftsPerWallet: 2n,
     requiresManualReview: false,
     excludeGrailProtectedInputs: false,
+    catalystTokenIds: [],
+    catalystAmounts: [],
+    outputSupplyCap,
+    metadataHash: recipeMetadataHash,
     ...overrides
   };
 }
@@ -179,8 +185,134 @@ describe("Forge", function () {
     expect(recipe.requiresManualReview).to.equal(false);
     expect(recipe.excludeGrailProtectedInputs).to.equal(false);
     expect(recipe.exists).to.equal(true);
+    expect(recipe.outputSupplyCap).to.equal(outputSupplyCap);
+    expect(recipe.metadataHash).to.equal(recipeMetadataHash);
+    expect(recipe.blueprintHash).to.not.equal(ethers.ZeroHash);
+    expect(recipe.reservationReleased).to.equal(false);
+    expect(await forge.outputSupplyCaps(params.outputTokenId)).to.equal(outputSupplyCap);
+    expect(await forge.outputReserved(params.outputTokenId)).to.equal(params.maxTotalCrafts);
     expect(inputTokenIds).to.deep.equal(params.inputTokenIds);
     expect(inputAmounts).to.deep.equal(params.inputAmounts);
+  });
+
+  it("rejects physical inventory as a consumable even when it is not grail protected", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, itemToken, registry, inventoryAdmin, minter, owner, recipeAdmin } = fixture;
+    const inventoryId = "physical-forge-input-001";
+    const physicalTokenId = physicalTokenIdFor(inventoryId);
+
+    await registry
+      .connect(inventoryAdmin)
+      .anchorInventory(inventoryId, ethers.id(inventoryId), "ipfs://items/physical-forge-input-001.json", true, false);
+    await itemToken
+      .connect(minter)
+      .mintInventoryItem(owner.address, physicalTokenId, inventoryId, "ipfs://items/physical-forge-input-001.json");
+
+    await expect(
+      forge.connect(recipeAdmin).createRecipe(
+        recipeParams({ inputTokenIds: [physicalTokenId], inputAmounts: [1n] })
+      )
+    )
+      .to.be.revertedWithCustomError(forge, "InvalidBurnInputToken")
+      .withArgs(physicalTokenId);
+  });
+
+  it("uses physical inventory as a non-consumable ownership catalyst", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, itemToken, registry, inventoryAdmin, minter, owner } = fixture;
+    const inventoryId = "physical-forge-catalyst-001";
+    const catalystTokenId = physicalTokenIdFor(inventoryId);
+    const params = recipeParams({ catalystTokenIds: [catalystTokenId], catalystAmounts: [1n] });
+
+    await registry
+      .connect(inventoryAdmin)
+      .anchorInventory(inventoryId, ethers.id(inventoryId), "ipfs://items/physical-forge-catalyst-001.json", true, true);
+    await itemToken
+      .connect(minter)
+      .mintInventoryItem(owner.address, catalystTokenId, inventoryId, "ipfs://items/physical-forge-catalyst-001.json");
+    const recipeId = await createActiveRecipe(fixture, params);
+    await mintInputsTo(fixture, owner, params);
+    await approveForge(fixture, owner);
+
+    await forge.connect(owner).craft(recipeId, { value: recipeFee });
+
+    expect(await itemToken.balanceOf(owner.address, catalystTokenId)).to.equal(1n);
+    expect(await itemToken.balanceOf(owner.address, outputTokenId)).to.equal(1n);
+  });
+
+  it("requires ownership of every catalyst", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, registry, inventoryAdmin, owner } = fixture;
+    const inventoryId = "missing-forge-catalyst-001";
+    const catalystTokenId = physicalTokenIdFor(inventoryId);
+    const params = recipeParams({ catalystTokenIds: [catalystTokenId], catalystAmounts: [1n] });
+
+    await registry
+      .connect(inventoryAdmin)
+      .anchorInventory(inventoryId, ethers.id(inventoryId), "ipfs://items/missing-forge-catalyst-001.json", true, true);
+    const recipeId = await createActiveRecipe(fixture, params);
+    await mintInputsTo(fixture, owner, params);
+    await approveForge(fixture, owner);
+
+    await expect(forge.connect(owner).craft(recipeId, { value: recipeFee }))
+      .to.be.revertedWithCustomError(forge, "MissingCatalyst")
+      .withArgs(recipeId, catalystTokenId, 1n, 0n);
+  });
+
+  it("rejects duplicate and oversized burn input definitions", async function () {
+    const { forge, recipeAdmin } = await deployProtocolFixture();
+
+    await expect(
+      forge.connect(recipeAdmin).createRecipe(
+        recipeParams({ inputTokenIds: [inputTokenA, inputTokenA], inputAmounts: [1n, 1n] })
+      )
+    )
+      .to.be.revertedWithCustomError(forge, "DuplicateRecipeToken")
+      .withArgs(inputTokenA);
+
+    const tooManyInputs = Array.from({ length: 10 }, (_, index) => 20_000n + BigInt(index));
+    await expect(
+      forge.connect(recipeAdmin).createRecipe(
+        recipeParams({ inputTokenIds: tooManyInputs, inputAmounts: tooManyInputs.map(() => 1n) })
+      )
+    )
+      .to.be.revertedWithCustomError(forge, "TooManyBurnInputs")
+      .withArgs(10n, 9n);
+  });
+
+  it("reserves immutable output capacity across recipes", async function () {
+    const { forge, recipeAdmin } = await deployProtocolFixture();
+
+    await forge.connect(recipeAdmin).createRecipe(
+      recipeParams({ maxTotalCrafts: 60n, maxCraftsPerWallet: 2n })
+    );
+
+    await expect(
+      forge.connect(recipeAdmin).createRecipe(
+        recipeParams({ maxTotalCrafts: 41n, maxCraftsPerWallet: 2n })
+      )
+    )
+      .to.be.revertedWithCustomError(forge, "OutputCapacityExceeded")
+      .withArgs(outputTokenId, outputSupplyCap, 60n, 41n);
+
+    await expect(
+      forge.connect(recipeAdmin).createRecipe(
+        recipeParams({ outputSupplyCap: outputSupplyCap + 1n })
+      )
+    )
+      .to.be.revertedWithCustomError(forge, "OutputSupplyCapMismatch")
+      .withArgs(outputTokenId, outputSupplyCap, outputSupplyCap + 1n);
+  });
+
+  it("releases unminted output reservation only when a recipe is retired", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, recipeAdmin } = fixture;
+    const recipeId = await createRecipe(fixture, recipeParams({ maxTotalCrafts: 10n }));
+
+    expect(await forge.outputReserved(outputTokenId)).to.equal(10n);
+    await forge.connect(recipeAdmin).setRecipeStatus(recipeId, RecipeStatus.Retired);
+    expect(await forge.outputReserved(outputTokenId)).to.equal(0n);
+    expect((await forge.recipes(recipeId)).reservationReleased).to.equal(true);
   });
 
   it("rejects physical inventory output token ids at recipe creation", async function () {
@@ -517,31 +649,6 @@ describe("Forge", function () {
       .withArgs(recipeId, owner.address, 1n);
   });
 
-  it("blocks grail-protected inputs when the recipe excludes grails", async function () {
-    const fixture = await deployProtocolFixture();
-    const { forge, itemToken, registry, inventoryAdmin, minter, owner } = fixture;
-    const inventoryId = "grail-forge-input-001";
-    const grailTokenId = physicalTokenIdFor(inventoryId);
-    const params = recipeParams({
-      inputTokenIds: [grailTokenId],
-      inputAmounts: [1n],
-      excludeGrailProtectedInputs: true
-    });
-    const recipeId = await createActiveRecipe(fixture, params);
-
-    await registry
-      .connect(inventoryAdmin)
-      .anchorInventory(inventoryId, ethers.id(inventoryId), "ipfs://items/grail-forge-input-001.json", true, true);
-    await itemToken
-      .connect(minter)
-      .mintInventoryItem(owner.address, grailTokenId, inventoryId, "ipfs://items/grail-forge-input-001.json");
-    await approveForge(fixture, owner);
-
-    await expect(forge.connect(owner).craft(recipeId, { value: recipeFee }))
-      .to.be.revertedWithCustomError(forge, "GrailProtectedInputExcluded")
-      .withArgs(recipeId, grailTokenId);
-  });
-
   it("rejects input token id and amount array length mismatches", async function () {
     const { forge, recipeAdmin } = await deployProtocolFixture();
 
@@ -585,6 +692,32 @@ describe("Forge", function () {
     await expect(forge.connect(owner).craft(recipeId, { value: recipeFee }))
       .to.emit(forge, "Crafted")
       .withArgs(recipeId, owner.address, outputTokenId, 1n, recipeFee);
+  });
+
+  it("records unique user-selected craft imprints and rejects replay", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, owner } = fixture;
+    const params = recipeParams({ maxTotalCrafts: 2n, maxCraftsPerWallet: 2n });
+    const recipeId = await createActiveRecipe(fixture, params);
+    const imprintHash = ethers.id("owner-signal-frame-alpha");
+
+    await mintInputsTo(fixture, owner, params, 2n);
+    await approveForge(fixture, owner);
+
+    await expect(forge.connect(owner).craftWithImprint(recipeId, imprintHash, { value: recipeFee }))
+      .to.emit(forge, "CraftProvenance")
+      .withArgs(1n, recipeId, owner.address, imprintHash, (await forge.recipes(recipeId)).blueprintHash);
+
+    expect(await forge.usedImprints(recipeId, owner.address, imprintHash)).to.equal(true);
+    const record = await forge.crafts(1n);
+    expect(record.recipeId).to.equal(recipeId);
+    expect(record.crafter).to.equal(owner.address);
+    expect(record.outputTokenId).to.equal(outputTokenId);
+    expect(record.imprintHash).to.equal(imprintHash);
+
+    await expect(forge.connect(owner).craftWithImprint(recipeId, imprintHash, { value: recipeFee }))
+      .to.be.revertedWithCustomError(forge, "ImprintAlreadyUsed")
+      .withArgs(recipeId, owner.address, imprintHash);
   });
 
   it("craft requires user approval to Forge for input burns", async function () {
@@ -747,9 +880,9 @@ describe("Forge", function () {
       .withArgs(other.address, role);
   });
 
-  it("manual-review recipes can be created and activated but craft reverts", async function () {
+  it("lets a separate reviewer grant a bounded manual-review craft allowance", async function () {
     const fixture = await deployProtocolFixture();
-    const { forge, owner } = fixture;
+    const { forge, owner, recipeAdmin, other } = fixture;
     const params = recipeParams({ requiresManualReview: true });
     const recipeId = await createActiveRecipe(fixture, params);
     const recipe = await forge.recipes(recipeId);
@@ -763,6 +896,18 @@ describe("Forge", function () {
     await expect(forge.connect(owner).craft(recipeId, { value: recipeFee }))
       .to.be.revertedWithCustomError(forge, "ManualReviewRequired")
       .withArgs(recipeId);
+
+    const reviewerRole = await forge.CRAFT_REVIEWER_ROLE();
+    await expect(forge.connect(other).setCraftAllowance(recipeId, owner.address, 1n))
+      .to.be.revertedWithCustomError(forge, "AccessControlUnauthorizedAccount")
+      .withArgs(other.address, reviewerRole);
+
+    await forge.connect(recipeAdmin).setCraftAllowance(recipeId, owner.address, 1n);
+    expect(await forge.reviewAllowances(recipeId, owner.address)).to.equal(1n);
+
+    await forge.connect(owner).craft(recipeId, { value: recipeFee });
+    expect(await forge.reviewAllowances(recipeId, owner.address)).to.equal(0n);
+    expect(await forge.walletCrafts(recipeId, owner.address)).to.equal(1n);
   });
 
   it("rejects zero constructor addresses", async function () {

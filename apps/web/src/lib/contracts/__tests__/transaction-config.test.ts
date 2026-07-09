@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { Address } from "viem";
+import { encodeAbiParameters, encodeEventTopics, type Address, type Hex } from "viem";
 import {
   createPackRevealRequestForPurchase,
   createMarketListRequestForToken,
   createRedemptionAdminRequest,
   createRedemptionRequestForToken,
+  extractPackPurchaseId,
   parsePositiveActionId,
   parsePositiveTokenId,
   testnetWriteConfig
 } from "../transaction-config";
+import { packSaleAbi } from "../abis";
 
 const contracts = {
   InventoryRegistry: "0x32657A9d0AFe229E132dA8610a23D6d32d22C4Ee" as Address,
@@ -27,6 +29,7 @@ describe("transaction config", () => {
     expect(testnetWriteConfig.pack.displayValue).toBe("0.01 ETH");
     expect(testnetWriteConfig.forge.value).toBe(1_000_000_000_000_000n);
     expect(testnetWriteConfig.forge.displayValue).toBe("0.001 ETH");
+    expect(testnetWriteConfig.forge.recipeId).toBe(2n);
   });
 
   it("parses only positive numeric token IDs", () => {
@@ -43,6 +46,23 @@ describe("transaction config", () => {
     expect(parsePositiveActionId("0")).toBeNull();
     expect(parsePositiveActionId("")).toBeNull();
     expect(parsePositiveActionId("abc")).toBeNull();
+  });
+
+  it("extracts the purchased pack ID from a confirmed receipt", () => {
+    const buyer = "0x1234567890abcdef1234567890abcdef12345678" as Address;
+    const requestId = `0x${"ab".repeat(32)}` as const;
+    const topics = encodeEventTopics({
+      abi: packSaleAbi,
+      eventName: "PackPurchased",
+      args: { purchaseId: 7n, dropId: 1n, buyer }
+    });
+    const data = encodeAbiParameters(
+      [{ type: "bytes32" }, { type: "uint256" }],
+      [requestId, 10_000_000_000_000_000n]
+    );
+
+    expect(extractPackPurchaseId({ logs: [{ data, topics: topics as readonly Hex[] }] })).toBe(7n);
+    expect(extractPackPurchaseId({ logs: [] })).toBeNull();
   });
 
   it("does not build market or redemption writes without an owned token ID", () => {

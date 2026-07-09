@@ -1,4 +1,4 @@
-import { sampleInventory, type InventoryItem } from "@gacha/inventory";
+import { browserSeededInventory, type BrowserSeededInventoryItem } from "./browser-seeded-inventory";
 
 export type CollectibleCard = {
   id: string;
@@ -15,13 +15,13 @@ export type CollectibleCard = {
   photoHash: string;
 };
 
-const brandLabels: Record<InventoryItem["brand"], string> = {
+const brandLabels: Record<BrowserSeededInventoryItem["brand"], string> = {
   one_piece: "One Piece Card Game",
   other: "Other Collectible",
   pokemon: "Pokemon TCG"
 };
 
-const categoryLabels: Record<InventoryItem["category"], string> = {
+const categoryLabels: Record<BrowserSeededInventoryItem["category"], string> = {
   accessory: "Accessory",
   box: "Box",
   graded_card: "Graded Card",
@@ -31,13 +31,13 @@ const categoryLabels: Record<InventoryItem["category"], string> = {
   slab: "Slab"
 };
 
-const buildSubtitle = (item: InventoryItem): string => {
+const buildSubtitle = (item: BrowserSeededInventoryItem): string => {
   const condition = item.gradingCompany && item.grade ? `${item.gradingCompany} ${item.grade}` : item.rawConditionEstimate;
 
   return [item.setName, item.cardNumber, item.variant, condition].filter(Boolean).join(" / ");
 };
 
-export const collectibleCards: CollectibleCard[] = sampleInventory.map((item) => ({
+export const collectibleCards: CollectibleCard[] = browserSeededInventory.map((item) => ({
   id: item.inventoryId,
   title: item.cardName,
   brandLabel: brandLabels[item.brand],

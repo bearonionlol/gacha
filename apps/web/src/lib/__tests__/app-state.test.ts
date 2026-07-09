@@ -99,6 +99,7 @@ describe("Phase 3 app state", () => {
 
   it("creates market listings from inventory-backed cards", () => {
     expect(marketListings[0]?.seller).toMatch(/vault/i);
-    expect(activeDrop.odds.some((row) => row.label === "Physical grail")).toBe(true);
+    expect(activeDrop.guarantees.some((row) => row.label === "Vaulted physical card")).toBe(true);
+    expect(activeDrop.guarantees.some((row) => row.label === "Fire shards" && row.amount === "3")).toBe(true);
   });
 });

@@ -10,15 +10,15 @@ export const activeDrop = {
   title: "Vault Signal Drop",
   chainMode: "Robinhood Chain Testnet",
   packPriceCents: 900,
-  totalSupply: 2500,
-  remainingSupply: 1840,
-  inventoryBackedCount: vaultStats.totalItems,
-  randomnessDisclosure: "Operator-controlled testnet randomness preview; odds are fixed before purchase.",
-  odds: [
-    { label: "Physical grail", chancePercent: 1.2 },
-    { label: "Major hit", chancePercent: 8.8 },
-    { label: "Crafting material", chancePercent: 30 },
-    { label: "Base collectible", chancePercent: 60 }
+  testnetPriceLabel: "0.01 ETH",
+  totalSupply: 1,
+  remainingSupply: 1,
+  inventoryBackedCount: 1,
+  randomnessDisclosure: "Every seeded testnet pack contains one vaulted physical card plus the published starter-material bundle. The current randomness adapter is operator-controlled and testnet-only.",
+  guarantees: [
+    { label: "Vaulted physical card", amount: "1" },
+    { label: "Fire shards", amount: "3" },
+    { label: "Vault seal", amount: "1" }
   ]
 };
 
