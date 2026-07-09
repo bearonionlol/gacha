@@ -978,11 +978,13 @@ h1 {
   letter-spacing: 0;
 }
 
-.live-protocol-panel {
+.live-protocol-panel,
+.economy-panel {
   margin-bottom: 18px;
 }
 
-.live-protocol-grid {
+.live-protocol-grid,
+.economy-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
@@ -990,6 +992,7 @@ h1 {
 }
 
 .live-protocol-grid div,
+.economy-grid div,
 .action-guard-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -999,6 +1002,8 @@ h1 {
 
 .live-protocol-grid dt,
 .live-protocol-grid small,
+.economy-grid dt,
+.economy-grid small,
 .action-guard-panel small,
 .wallet-card span[role="status"] {
   color: var(--faint);
@@ -1006,7 +1011,14 @@ h1 {
   font-size: 0.72rem;
 }
 
-.live-protocol-grid dd {
+.economy-panel p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.live-protocol-grid dd,
+.economy-grid dd {
   margin: 6px 0 0;
   color: var(--text);
   font-size: 1rem;
@@ -1320,6 +1332,7 @@ h1 {
   .phase-five-forge,
   .admin-console,
   .live-protocol-grid,
+  .economy-grid,
   .transaction-summary {
     grid-template-columns: 1fr;
   }

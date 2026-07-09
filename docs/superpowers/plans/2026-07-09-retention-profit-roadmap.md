@@ -94,6 +94,8 @@ git commit -m "feat: add forge 2 creative workbench"
 - Modify: `packages/contracts/test/Forge.test.ts`
 - Modify: `packages/contracts/test/Marketplace.test.ts`
 
+**Execution note:** The current contracts already enforce exact Forge fees, marketplace treasury fees, fee caps, seller proceeds, and pack treasury credit in Hardhat tests. Phase 6 should change Solidity only if those existing tests expose a missing protocol invariant; otherwise add app-level economy controls and rerun the existing contract suite as the enforcement gate.
+
 - [ ] **Step 1: Write failing economy tests**
 
 ```ts
