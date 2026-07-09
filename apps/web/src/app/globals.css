@@ -545,6 +545,68 @@ h1 {
   font-size: 1.35rem;
 }
 
+.collection-progress-panel {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(13, 17, 16, 0.72);
+  padding: 16px;
+}
+
+.collection-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.collection-set-card,
+.next-chase-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 14px;
+}
+
+.collection-set-card {
+  display: grid;
+  gap: 10px;
+}
+
+.collection-set-card h3,
+.collection-set-card p,
+.next-chase-panel p {
+  margin: 0;
+}
+
+.collection-set-card h3 {
+  margin-top: 4px;
+}
+
+.collection-set-card .card-title-row strong {
+  color: var(--green);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.collection-set-card p,
+.next-chase-panel p {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.next-chase-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.next-chase-panel strong {
+  display: block;
+  margin: 4px 0 6px;
+  color: var(--text);
+}
+
 .section-heading-row {
   display: flex;
   align-items: flex-end;
@@ -1375,6 +1437,8 @@ h1 {
   .dashboard-grid,
   .vault-grid,
   .market-listings,
+  .collection-progress-grid,
+  .next-chase-panel,
   .forge-workbench,
   .phase-five-forge,
   .admin-console,
