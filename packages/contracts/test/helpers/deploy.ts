@@ -28,6 +28,7 @@ export type InventoryRegistry = Omit<BaseContract, "connect"> & {
   ): Promise<ContractTransactionResponse>;
   markTokenized(inventoryId: string, owner: string): Promise<ContractTransactionResponse>;
   getInventory(inventoryId: string): Promise<InventoryRecord>;
+  getInventoryByTokenId(tokenId: BigNumberish): Promise<InventoryRecord>;
   isGrailProtectedToken(tokenId: BigNumberish): Promise<boolean>;
   grantRole(role: string, account: string): Promise<ContractTransactionResponse>;
   connect(runner: ContractRunner | null): InventoryRegistry;
@@ -224,6 +225,32 @@ export type Forge = Omit<BaseContract, "connect"> & {
   connect(runner: ContractRunner | null): Forge;
 };
 
+export interface RedemptionRequest {
+  requester: string;
+  tokenId: bigint;
+  status: bigint;
+  trackingRef: string;
+  reason: string;
+}
+
+export type RedemptionRegistry = Omit<BaseContract, "connect"> & {
+  REDEMPTION_ADMIN_ROLE(): Promise<string>;
+  nextRequestId(): Promise<bigint>;
+  requestRedemption(tokenId: BigNumberish): Promise<ContractTransactionResponse>;
+  approve(requestId: BigNumberish): Promise<ContractTransactionResponse>;
+  markPacked(requestId: BigNumberish): Promise<ContractTransactionResponse>;
+  markShipped(
+    requestId: BigNumberish,
+    trackingRef: string
+  ): Promise<ContractTransactionResponse>;
+  complete(requestId: BigNumberish): Promise<ContractTransactionResponse>;
+  cancel(requestId: BigNumberish, reason: string): Promise<ContractTransactionResponse>;
+  requests(requestId: BigNumberish): Promise<RedemptionRequest>;
+  grantRole(role: string, account: string): Promise<ContractTransactionResponse>;
+  supportsInterface(interfaceId: string): Promise<boolean>;
+  connect(runner: ContractRunner | null): RedemptionRegistry;
+};
+
 function requireSigner(
   signers: HardhatEthersSigner[],
   index: number,
@@ -302,6 +329,7 @@ export async function deployProtocolFixture() {
   const marketAdmin = requireSigner(signers, 14, "market admin");
   const buybackAdmin = requireSigner(signers, 15, "buyback admin");
   const recipeAdmin = requireSigner(signers, 16, "recipe admin");
+  const redemptionAdmin = requireSigner(signers, 17, "redemption admin");
   const registry = (await ethers.deployContract("InventoryRegistry")) as unknown as InventoryRegistry;
   const itemToken = (await ethers.deployContract("ItemToken")) as unknown as ItemToken;
   const randomnessProvider = (await ethers.deployContract(
@@ -332,10 +360,15 @@ export async function deployProtocolFixture() {
     await registry.getAddress(),
     treasury.address
   ])) as unknown as Forge;
+  const redemptionRegistry = (await ethers.deployContract("RedemptionRegistry", [
+    await itemToken.getAddress(),
+    await registry.getAddress()
+  ])) as unknown as RedemptionRegistry;
 
   await marketplace.waitForDeployment();
   await buybackVault.waitForDeployment();
   await forge.waitForDeployment();
+  await redemptionRegistry.waitForDeployment();
 
   await registry.grantRole(await registry.INVENTORY_ADMIN_ROLE(), inventoryAdmin.address);
   await registry.grantRole(await registry.TOKENIZER_ROLE(), tokenizer.address);
@@ -345,6 +378,7 @@ export async function deployProtocolFixture() {
   await itemToken.grantRole(await itemToken.MINTER_ROLE(), await forge.getAddress());
   await itemToken.grantRole(await itemToken.BURNER_ROLE(), burner.address);
   await itemToken.grantRole(await itemToken.BURNER_ROLE(), await forge.getAddress());
+  await itemToken.grantRole(await itemToken.BURNER_ROLE(), await redemptionRegistry.getAddress());
   await itemToken.grantRole(await itemToken.URI_SETTER_ROLE(), uriSetter.address);
   await itemToken.grantRole(await itemToken.PAUSER_ROLE(), pauser.address);
   await randomnessProvider.grantRole(REQUESTER_ROLE, await packSale.getAddress());
@@ -353,6 +387,10 @@ export async function deployProtocolFixture() {
   await marketplace.grantRole(await marketplace.MARKET_ADMIN_ROLE(), marketAdmin.address);
   await buybackVault.grantRole(await buybackVault.BUYBACK_ADMIN_ROLE(), buybackAdmin.address);
   await forge.grantRole(await forge.RECIPE_ADMIN_ROLE(), recipeAdmin.address);
+  await redemptionRegistry.grantRole(
+    await redemptionRegistry.REDEMPTION_ADMIN_ROLE(),
+    redemptionAdmin.address
+  );
 
   return {
     registry,
@@ -362,6 +400,7 @@ export async function deployProtocolFixture() {
     marketplace,
     buybackVault,
     forge,
+    redemptionRegistry,
     deployer,
     inventoryAdmin,
     tokenizer,
@@ -378,6 +417,7 @@ export async function deployProtocolFixture() {
     treasury,
     marketAdmin,
     buybackAdmin,
-    recipeAdmin
+    recipeAdmin,
+    redemptionAdmin
   };
 }

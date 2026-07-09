@@ -44,6 +44,25 @@ describe("InventoryRegistry", function () {
     expect(record.owner).to.equal(ethers.ZeroAddress);
   });
 
+  it("looks up anchored inventory by physical token id", async function () {
+    const { registry, inventoryAdmin } = await deployInventoryRegistryFixture();
+    const tokenId = physicalTokenIdFor(inventoryId);
+
+    await registry
+      .connect(inventoryAdmin)
+      .anchorInventory(inventoryId, inventoryHash, metadataUri, true, false);
+
+    const record = await registry.getInventoryByTokenId(tokenId);
+    expect(record.inventoryId).to.equal(inventoryId);
+    expect(record.inventoryHash).to.equal(inventoryHash);
+    expect(record.tokenId).to.equal(tokenId);
+    expect(record.redeemable).to.equal(true);
+
+    await expect(registry.getInventoryByTokenId(12_001n))
+      .to.be.revertedWithCustomError(registry, "InventoryTokenNotAnchored")
+      .withArgs(12_001n);
+  });
+
   it("rejects duplicate inventory anchors", async function () {
     const { registry, inventoryAdmin } = await deployInventoryRegistryFixture();
 

@@ -22,6 +22,7 @@ contract InventoryRegistry is AccessControl {
     error ZeroInventoryHash();
     error InventoryAlreadyAnchored(string inventoryId);
     error InventoryNotAnchored(string inventoryId);
+    error InventoryTokenNotAnchored(uint256 tokenId);
     error InventoryAlreadyTokenized(string inventoryId);
     error ZeroOwner();
 
@@ -36,6 +37,7 @@ contract InventoryRegistry is AccessControl {
     event InventoryTokenized(string inventoryId, uint256 tokenId, address owner);
 
     mapping(bytes32 inventoryKey => InventoryRecord record) private _inventoryRecords;
+    mapping(uint256 tokenId => bytes32 inventoryKey) private _inventoryKeysByTokenId;
     mapping(uint256 tokenId => bool grailProtected) private _grailProtectedTokens;
 
     constructor() {
@@ -77,6 +79,7 @@ contract InventoryRegistry is AccessControl {
             tokenized: false,
             owner: address(0)
         });
+        _inventoryKeysByTokenId[tokenId] = key;
         _grailProtectedTokens[tokenId] = grailProtected;
 
         emit InventoryAnchored(inventoryId, inventoryHash, tokenId, metadataUri, redeemable, grailProtected);
@@ -104,6 +107,15 @@ contract InventoryRegistry is AccessControl {
         _requireInventoryId(inventoryId);
 
         return _recordFor(inventoryId);
+    }
+
+    function getInventoryByTokenId(uint256 tokenId) external view returns (InventoryRecord memory) {
+        bytes32 key = _inventoryKeysByTokenId[tokenId];
+        if (key == bytes32(0)) {
+            revert InventoryTokenNotAnchored(tokenId);
+        }
+
+        return _inventoryRecords[key];
     }
 
     function isGrailProtectedToken(uint256 tokenId) external view returns (bool) {
