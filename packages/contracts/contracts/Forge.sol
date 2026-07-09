@@ -247,7 +247,7 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
             revert OutputUriMismatch(params.outputTokenId, configuredOutputUri, params.outputUri);
         }
 
-        if (outputKind == ItemToken.TokenKind.Game && itemToken.hasCustomURI(params.outputTokenId)) {
+        if (itemToken.hasCustomURI(params.outputTokenId)) {
             string memory existingOutputUri = itemToken.uri(params.outputTokenId);
             if (!_sameString(existingOutputUri, params.outputUri)) {
                 revert OutputUriMismatch(params.outputTokenId, existingOutputUri, params.outputUri);

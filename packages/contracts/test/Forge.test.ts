@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import type { BigNumberish } from "ethers";
+import type { BaseContract, BigNumberish, ContractRunner, ContractTransactionResponse } from "ethers";
 import { deployProtocolFixture, type CreateRecipeParams } from "./helpers/deploy";
 
 const inputTokenA = 6101n;
@@ -24,6 +24,16 @@ const RecipeStatus = {
 } as const;
 
 type ProtocolFixture = Awaited<ReturnType<typeof deployProtocolFixture>>;
+
+type NonERC1155ForgeCrafter = Omit<BaseContract, "connect"> & {
+  approveItemOperator(itemToken: string, operator: string): Promise<ContractTransactionResponse>;
+  craft(
+    forge: string,
+    recipeId: BigNumberish,
+    overrides?: { value?: BigNumberish }
+  ): Promise<ContractTransactionResponse>;
+  connect(runner: ContractRunner | null): NonERC1155ForgeCrafter;
+};
 
 function physicalTokenIdFor(inventoryId: string): bigint {
   return BigInt(ethers.keccak256(ethers.solidityPacked(["string", "string"], ["inventory:", inventoryId])));
@@ -95,6 +105,15 @@ async function mintInputsTo(
   params: CreateRecipeParams = recipeParams(),
   multiplier = 1n
 ): Promise<void> {
+  await mintInputsToAddress(fixture, owner.address, params, multiplier);
+}
+
+async function mintInputsToAddress(
+  fixture: ProtocolFixture,
+  ownerAddress: string,
+  params: CreateRecipeParams = recipeParams(),
+  multiplier = 1n
+): Promise<void> {
   const { itemToken, minter } = fixture;
 
   for (let index = 0; index < params.inputTokenIds.length; index++) {
@@ -106,12 +125,32 @@ async function mintInputsTo(
 
     const amount = BigInt(inputAmount.toString()) * multiplier;
 
-    await itemToken.connect(minter).mintGameItem(owner.address, tokenId, amount, inputTokenUri);
+    await itemToken.connect(minter).mintGameItem(ownerAddress, tokenId, amount, inputTokenUri);
   }
 }
 
 async function approveForge(fixture: ProtocolFixture, owner: HardhatEthersSigner): Promise<void> {
   await fixture.itemToken.connect(owner).setApprovalForAll(await fixture.forge.getAddress(), true);
+}
+
+async function deployNonERC1155ForgeCrafterWithInputs(
+  fixture: ProtocolFixture,
+  params: CreateRecipeParams = recipeParams()
+): Promise<NonERC1155ForgeCrafter> {
+  const futureCrafterAddress = ethers.getCreateAddress({
+    from: fixture.deployer.address,
+    nonce: await fixture.deployer.getNonce()
+  });
+
+  await mintInputsToAddress(fixture, futureCrafterAddress, params);
+
+  const crafter = (await ethers.deployContract(
+    "NonERC1155ForgeCrafter"
+  )) as unknown as NonERC1155ForgeCrafter;
+  await crafter.waitForDeployment();
+  expect(await crafter.getAddress()).to.equal(futureCrafterAddress);
+
+  return crafter;
 }
 
 describe("Forge", function () {
@@ -245,6 +284,51 @@ describe("Forge", function () {
 
     const recipe = await forge.recipes(1n);
     expect(recipe.outputTokenId).to.equal(existingGameOutputId);
+    expect(recipe.outputUri).to.equal(outputTokenUri);
+  });
+
+  it("rejects unknown output token ids with a mismatched custom URI", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, itemToken, recipeAdmin, uriSetter } = fixture;
+    const unknownOutputId = outputTokenId + 202n;
+
+    expect(await itemToken.tokenKind(unknownOutputId)).to.equal(0n);
+    await itemToken.connect(uriSetter).setTokenURI(unknownOutputId, outputTokenUri);
+
+    await expect(
+      forge.connect(recipeAdmin).createRecipe(
+        recipeParams({
+          outputTokenId: unknownOutputId,
+          outputUri: alternateOutputTokenUri
+        })
+      )
+    )
+      .to.be.revertedWithCustomError(forge, "OutputUriMismatch")
+      .withArgs(unknownOutputId, outputTokenUri, alternateOutputTokenUri);
+    expect(await forge.nextRecipeId()).to.equal(1n);
+  });
+
+  it("allows unknown output token ids with the matching custom URI", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, itemToken, recipeAdmin, uriSetter } = fixture;
+    const unknownOutputId = outputTokenId + 203n;
+
+    expect(await itemToken.tokenKind(unknownOutputId)).to.equal(0n);
+    await itemToken.connect(uriSetter).setTokenURI(unknownOutputId, outputTokenUri);
+
+    await expect(
+      forge.connect(recipeAdmin).createRecipe(
+        recipeParams({
+          outputTokenId: unknownOutputId,
+          outputUri: outputTokenUri
+        })
+      )
+    )
+      .to.emit(forge, "RecipeCreated")
+      .withArgs(1n, recipeAdmin.address);
+
+    const recipe = await forge.recipes(1n);
+    expect(recipe.outputTokenId).to.equal(unknownOutputId);
     expect(recipe.outputUri).to.equal(outputTokenUri);
   });
 
@@ -559,6 +643,38 @@ describe("Forge", function () {
     expect(await itemToken.balanceOf(owner.address, inputTokenA)).to.equal(beforeInputABalance);
     expect(await itemToken.balanceOf(owner.address, inputTokenB)).to.equal(beforeInputBBalance);
     expect(await itemToken.balanceOf(owner.address, outputTokenId)).to.equal(beforeOutputBalance);
+  });
+
+  it("rolls back input burns when output minting to a non-receiver crafter fails", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, itemToken, treasury } = fixture;
+    const recipeId = await createActiveRecipe(fixture);
+    const forgeAddress = await forge.getAddress();
+    const crafter = await deployNonERC1155ForgeCrafterWithInputs(fixture);
+    const crafterAddress = await crafter.getAddress();
+
+    await crafter.approveItemOperator(await itemToken.getAddress(), forgeAddress);
+
+    const beforeRecipe = await forge.recipes(recipeId);
+    const beforeWalletCrafts = await forge.walletCrafts(recipeId, crafterAddress);
+    const beforeTreasuryCredit = await forge.treasuryFeesCredit(treasury.address);
+    const beforeForgeBalance = await ethers.provider.getBalance(forgeAddress);
+    const beforeInputABalance = await itemToken.balanceOf(crafterAddress, inputTokenA);
+    const beforeInputBBalance = await itemToken.balanceOf(crafterAddress, inputTokenB);
+    const beforeOutputBalance = await itemToken.balanceOf(crafterAddress, outputTokenId);
+
+    await expect(crafter.craft(forgeAddress, recipeId, { value: recipeFee }))
+      .to.be.revertedWithCustomError(itemToken, "ERC1155InvalidReceiver")
+      .withArgs(crafterAddress);
+
+    const afterRecipe = await forge.recipes(recipeId);
+    expect(afterRecipe.totalCrafts).to.equal(beforeRecipe.totalCrafts);
+    expect(await forge.walletCrafts(recipeId, crafterAddress)).to.equal(beforeWalletCrafts);
+    expect(await forge.treasuryFeesCredit(treasury.address)).to.equal(beforeTreasuryCredit);
+    expect(await ethers.provider.getBalance(forgeAddress)).to.equal(beforeForgeBalance);
+    expect(await itemToken.balanceOf(crafterAddress, inputTokenA)).to.equal(beforeInputABalance);
+    expect(await itemToken.balanceOf(crafterAddress, inputTokenB)).to.equal(beforeInputBBalance);
+    expect(await itemToken.balanceOf(crafterAddress, outputTokenId)).to.equal(beforeOutputBalance);
   });
 
   it("enforces schedule window start and end", async function () {
