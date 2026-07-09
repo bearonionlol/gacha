@@ -1,14 +1,22 @@
+import { ActivityFeed } from "../components/activity-feed";
+import { AppShell } from "../components/app-shell";
+import { ArcadePanel } from "../components/arcade-panel";
+import { DropLobby } from "../components/drop-lobby";
+import { RevealPanel } from "../components/reveal-panel";
+import { StatusRail } from "../components/status-rail";
+
 export default function HomePage() {
   return (
-    <main className="command-center">
-      <section className="command-panel" aria-labelledby="drop-command-title">
-        <span className="chain-pill">Robinhood Chain Testnet</span>
-        <h1 id="drop-command-title">Drop Command</h1>
-        <p>
-          Testnet control surface for collectible drops, reveal decisions, vault
-          inventory, and operator readiness.
-        </p>
-      </section>
-    </main>
+    <AppShell>
+      <main className="command-center">
+        <StatusRail />
+        <div className="dashboard-grid">
+          <DropLobby />
+          <RevealPanel />
+          <ArcadePanel />
+          <ActivityFeed />
+        </div>
+      </main>
+    </AppShell>
   );
 }
