@@ -25,5 +25,9 @@ describe("forge and admin routes", () => {
     expect(screen.getByRole("table", { name: /Inventory intake records/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Export JSON/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Export CSV/i })).toBeInTheDocument();
+    expect(screen.getByText(/Redemption operations/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Request ID/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Operation mode/i)).toBeInTheDocument();
+    expect(screen.getByText(/REDEMPTION_ADMIN_ROLE/i)).toBeInTheDocument();
   });
 });

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Address } from "viem";
 import {
+  createPackRevealRequestForPurchase,
   createMarketListRequestForToken,
+  createRedemptionAdminRequest,
   createRedemptionRequestForToken,
+  parsePositiveActionId,
   parsePositiveTokenId,
   testnetWriteConfig
 } from "../transaction-config";
@@ -34,6 +37,14 @@ describe("transaction config", () => {
     expect(parsePositiveTokenId("abc")).toBeNull();
   });
 
+  it("parses positive action IDs for purchase and redemption operations", () => {
+    expect(parsePositiveActionId("12")).toBe(12n);
+    expect(parsePositiveActionId(" 12 ")).toBe(12n);
+    expect(parsePositiveActionId("0")).toBeNull();
+    expect(parsePositiveActionId("")).toBeNull();
+    expect(parsePositiveActionId("abc")).toBeNull();
+  });
+
   it("does not build market or redemption writes without an owned token ID", () => {
     expect(createMarketListRequestForToken(contracts, null)).toBeNull();
     expect(createRedemptionRequestForToken(contracts, null)).toBeNull();
@@ -51,6 +62,43 @@ describe("transaction config", () => {
       kind: "redemptionRequest",
       contracts,
       tokenId: 2002n
+    });
+  });
+
+  it("builds null-safe pack reveal and redemption admin requests", () => {
+    expect(createPackRevealRequestForPurchase(contracts, null)).toBeNull();
+    expect(createPackRevealRequestForPurchase(contracts, 7n)).toEqual({
+      kind: "packReveal",
+      contracts,
+      purchaseId: 7n
+    });
+
+    expect(
+      createRedemptionAdminRequest(contracts, {
+        mode: "markShipped",
+        requestId: 3n,
+        trackingRef: "UPS-TEST-1",
+        reason: ""
+      })
+    ).toEqual({
+      kind: "redemptionMarkShipped",
+      contracts,
+      requestId: 3n,
+      trackingRef: "UPS-TEST-1"
+    });
+
+    expect(
+      createRedemptionAdminRequest(contracts, {
+        mode: "cancel",
+        requestId: 4n,
+        trackingRef: "",
+        reason: "testnet operator cancellation"
+      })
+    ).toEqual({
+      kind: "redemptionCancel",
+      contracts,
+      requestId: 4n,
+      reason: "testnet operator cancellation"
     });
   });
 });

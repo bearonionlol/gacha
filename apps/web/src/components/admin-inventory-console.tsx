@@ -1,6 +1,7 @@
 import { Download, FileJson, ShieldCheck } from "lucide-react";
 import { inventoryStatuses, sampleInventory } from "@gacha/inventory";
 import { formatCents } from "../lib/format";
+import { RedemptionOpsPanel } from "./testnet-write-panels";
 
 const requiredFields = [
   "inventoryId",
@@ -113,6 +114,23 @@ export function AdminInventoryConsole() {
           </button>
         </div>
       </div>
+
+      <div className="panel operator-checklist-panel">
+        <div className="panel-header compact">
+          <div>
+            <span className="eyebrow">Fulfillment ops</span>
+            <h2>Operator Checklist</h2>
+          </div>
+          <span className="chain-pill">testnet</span>
+        </div>
+        <ul className="operator-checklist" aria-label="Redemption operator requirements">
+          <li>Confirm the item is escrowed before approval.</li>
+          <li>Use the assigned redemption administrator wallet.</li>
+          <li>Record packed, shipped, completed, or cancelled status as separate transactions.</li>
+        </ul>
+      </div>
+
+      <RedemptionOpsPanel />
     </section>
   );
 }

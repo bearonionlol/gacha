@@ -68,4 +68,12 @@ describe("dashboard", () => {
     expect(screen.getByText(/0\.01 ETH/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Phase 4B testnet write/i).length).toBeGreaterThanOrEqual(1);
   });
+
+  it("shows Phase 4C pack reveal operations on the dashboard", async () => {
+    render(await HomePage());
+
+    expect(screen.getByText(/Reveal purchase on testnet/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Purchase ID/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/PackSale\.reveal/i).length).toBeGreaterThan(0);
+  });
 });
