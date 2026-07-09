@@ -15,4 +15,18 @@ describe("app navigation", () => {
       expect(within(routeNav).getByRole("link", { name: new RegExp(label, "i") })).toBeInTheDocument();
     }
   });
+
+  it("frames the app like a premium vault market", () => {
+    render(
+      <AppShell>
+        <main>content</main>
+      </AppShell>
+    );
+
+    expect(screen.getByRole("link", { name: /Gacha Markets home/i })).toBeInTheDocument();
+    expect(screen.getByText("Gacha Markets")).toBeInTheDocument();
+    expect(screen.getByText("Vault Arcade")).toBeInTheDocument();
+    expect(screen.getByText(/Robinhood Chain testnet build/i)).toBeInTheDocument();
+    expect(screen.getByText(/resale descriptors/i)).toBeInTheDocument();
+  });
 });

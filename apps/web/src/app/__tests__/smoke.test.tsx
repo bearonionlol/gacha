@@ -6,6 +6,6 @@ describe("Phase 3 app smoke", () => {
     render(await HomePage());
 
     expect(screen.getByRole("heading", { name: /Drop Command/i })).toBeInTheDocument();
-    expect(screen.getByText(/Robinhood Chain Testnet/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Robinhood Chain Testnet/i })).toBeInTheDocument();
   });
 });

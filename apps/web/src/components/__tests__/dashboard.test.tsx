@@ -60,13 +60,14 @@ describe("dashboard", () => {
     expect(screen.getByRole("heading", { name: /Live protocol offline/i })).toBeInTheDocument();
   });
 
-  it("shows Phase 4B testnet write panels on dashboard actions", async () => {
+  it("shows testnet write panels on dashboard actions without roadmap labels", async () => {
     render(await HomePage());
 
     expect(screen.getByText(/Reserve pack on testnet/i)).toBeInTheDocument();
     expect(screen.getAllByText(/PackSale\.purchase/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/0\.01 ETH/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Phase 4B testnet write/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Wallet action/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/Phase 4B/i)).not.toBeInTheDocument();
   });
 
   it("shows Phase 4C pack reveal operations on the dashboard", async () => {
