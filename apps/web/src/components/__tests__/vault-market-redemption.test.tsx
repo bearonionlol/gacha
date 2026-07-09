@@ -19,10 +19,9 @@ describe("vault, market, and redemption routes", () => {
     expect(screen.getByText(/escrowed until sale or cancellation/i)).toBeInTheDocument();
     expect(screen.getByText(/protocol fee/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Open listing for Pokemon TCG Charizard ex/i })).toBeDisabled();
-    expect(screen.getAllByText(/Phase 4A guard/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Connect wallet before this action can send a testnet transaction/i).length).toBeGreaterThan(
-      0
-    );
+    expect(screen.getAllByText(/Approve Marketplace/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Marketplace\.list/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText(/Owned inventory token ID/i).length).toBeGreaterThan(0);
   });
 
   it("renders redemption lifecycle states", () => {
@@ -32,8 +31,9 @@ describe("vault, market, and redemption routes", () => {
     expect(screen.getByText(/requested/i)).toBeInTheDocument();
     expect(screen.getByText(/fulfilled/i)).toBeInTheDocument();
     expect(screen.getByText(/Opened on Jul 9/i)).toBeInTheDocument();
-    expect(screen.getByText(/Approval target: RedemptionRegistry/i)).toBeInTheDocument();
-    expect(screen.getByText(/Transaction submission lands in Phase 4B/i)).toBeInTheDocument();
+    expect(screen.getByText(/Approve RedemptionRegistry/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/RedemptionRegistry\.requestRedemption/i).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/Redeemable inventory token ID/i)).toBeInTheDocument();
   });
 
   it("renders item-specific disabled vault actions", () => {

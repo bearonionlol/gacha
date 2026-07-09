@@ -28,11 +28,11 @@ Phase 4B includes:
 
 - Reserve a pack by calling `PackSale.purchase(dropId)` with the configured native testnet ETH value.
 - Approve the marketplace by calling `ItemToken.setApprovalForAll(Marketplace, true)`.
-- List a selected sample item by calling `Marketplace.list(tokenId, amount, price)`.
+- List a user-entered owned inventory token by calling `Marketplace.list(tokenId, amount, price)`.
 - Approve Forge by calling `ItemToken.setApprovalForAll(Forge, true)`.
 - Craft a selected recipe by calling `Forge.craft(recipeId)` with the configured recipe fee.
 - Approve redemption by calling `ItemToken.setApprovalForAll(RedemptionRegistry, true)`.
-- Request redemption by calling `RedemptionRegistry.requestRedemption(tokenId)`.
+- Request redemption for a user-entered owned redeemable inventory token by calling `RedemptionRegistry.requestRedemption(tokenId)`.
 - Show idle, ready, confirming, submitted, confirmed, rejected, and failed states.
 - Show transaction hash, block number when available, and Robinhood testnet explorer link.
 - Keep browsing and read-only views usable when wallet, registry, or RPC state is unavailable.
@@ -52,6 +52,7 @@ Phase 4B excludes:
 - Never auto-open a wallet prompt on page load.
 - Never imply expected profit, odds improvement, or guaranteed resale value.
 - Display the contract target and action before the wallet prompt opens.
+- Require an owned inventory token ID before marketplace listing or redemption request submission.
 - Keep transaction panels compact and professional; no casino language or pressure copy.
 - Make wallet errors actionable without exposing stack traces, private env values, RPC URLs, or raw provider payloads.
 - Keep Phase 4B visibly testnet-only so mainnet migration is intentional later.
@@ -62,7 +63,7 @@ Extend the existing `apps/web/src/lib/contracts` boundary:
 
 - `abis.ts`: add write functions for `purchase`, `setApprovalForAll`, `list`, `craft`, and `requestRedemption`.
 - `transactions.ts`: browser-safe helpers for creating a viem wallet client from the injected provider, encoding/sending writes, waiting for receipts through the existing public client, formatting hashes, and sanitizing errors.
-- `transaction-config.ts`: small testnet action descriptors for drop ID, sample token ID, amounts, prices, recipe ID, and redemption token ID used by the public UI.
+- `transaction-config.ts`: small testnet action descriptors for seeded drop ID, exact pack value, seeded recipe ID, exact recipe fee, marketplace amount, and marketplace ask price used by the public UI.
 
 Add focused UI components:
 
@@ -82,10 +83,11 @@ The current route structure remains unchanged. Dashboard uses pack purchase firs
 4. If the user is disconnected, the panel offers a connect button and makes no provider request until clicked.
 5. If the user is on the wrong chain, the panel offers the existing switch flow.
 6. Once connected on Robinhood Chain Testnet, the panel shows the exact action summary.
-7. On submit click, the panel creates a wallet client, sends the transaction, and stores the hash.
-8. The panel waits for a public-client receipt using the existing Robinhood testnet RPC.
-9. Confirmed receipts show the hash, block number, and explorer link.
-10. Rejected or failed requests show sanitized copy and allow retry.
+7. Marketplace and redemption panels require a positive user-entered token ID before enabling the final write.
+8. On submit click, the panel creates a wallet client, sends the transaction, and stores the hash.
+9. The panel waits for a public-client receipt using the existing Robinhood testnet RPC.
+10. Confirmed receipts show the hash, block number, and explorer link.
+11. Rejected or failed requests show sanitized copy and allow retry.
 
 ## Error Handling
 
@@ -94,9 +96,12 @@ The current route structure remains unchanged. Dashboard uses pack purchase firs
 - Missing wallet: "Open an EVM wallet such as Phantom or MetaMask to send testnet transactions."
 - Disconnected wallet: show a connect action only.
 - Wrong wallet chain: show a switch action only.
+- Missing token ID for listing or redemption: keep the final action disabled and ask for an owned inventory token ID.
 - User rejection: "Transaction rejected in wallet."
 - Insufficient funds: "Wallet does not have enough testnet ETH for this action."
 - Contract revert or RPC failure: "Transaction failed or could not be confirmed. Review wallet details and retry."
+
+The seeded testnet drop price is `0.01 ETH`; `PackSale.purchase` requires exact payment. The seeded Forge recipe fee is `0.001 ETH`; `Forge.craft` requires exact payment. Marketplace and redemption token IDs are not hard-coded because physical inventory token IDs are derived from inventory IDs and the caller must own the token.
 
 The UI must not display private keys, raw env values, stack traces, or full RPC provider objects.
 
@@ -111,6 +116,7 @@ Use TDD for the transaction layer and component behavior:
 - Submitted and confirmed states render hash, receipt block, and explorer link.
 - Rejected and failed states render retryable sanitized messages.
 - Market, Forge, and redemption panels render both approval and final action controls.
+- Marketplace and redemption panels render owned-token inputs instead of hard-coded token IDs.
 
 Verification commands:
 

@@ -1,5 +1,5 @@
 import { BadgeDollarSign, PackageCheck, PercentCircle } from "lucide-react";
-import { ActionGuardPanel } from "./action-guard-panel";
+import { PackPurchasePanel } from "./testnet-write-panels";
 import { activeDrop } from "../lib/game-state";
 import { formatCents, formatCompactNumber } from "../lib/format";
 
@@ -24,7 +24,7 @@ export function DropLobby() {
           Reserve pack
         </button>
       </div>
-      <ActionGuardPanel action="Reserve pack" operator="PackSale" />
+      <PackPurchasePanel />
 
       <dl className="drop-stats">
         <div>

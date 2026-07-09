@@ -282,9 +282,9 @@ git commit -m "feat: add reusable testnet transaction panel"
 Update dashboard, market/redemption, and Forge tests to expect Phase 4B write panel copy instead of Phase 4A guard copy:
 
 - Dashboard: "Reserve pack on testnet" and "PackSale.purchase".
-- Market: "Approve Marketplace" and "Marketplace.list".
+- Market: "Approve Marketplace", "Marketplace.list", and an "Owned inventory token ID" input.
 - Forge: "Approve Forge" and "Forge.craft".
-- Redemption: "Approve RedemptionRegistry" and "RedemptionRegistry.requestRedemption".
+- Redemption: "Approve RedemptionRegistry", "RedemptionRegistry.requestRedemption", and a "Redeemable inventory token ID" input.
 
 Run:
 
@@ -296,18 +296,31 @@ Expected: FAIL because routes still render Phase 4A guards.
 
 - [ ] **Step 2: Implement feature panels**
 
-Create `apps/web/src/lib/contracts/transaction-config.ts` with conservative sample testnet values:
+Create `apps/web/src/lib/contracts/transaction-config.ts` with exact seeded testnet values and no fake inventory token IDs:
 
 ```ts
 export const testnetWriteConfig = {
-  pack: { dropId: 1n, value: 9_000_000_000_000_000n },
-  market: { tokenId: 1n, amount: 1n, price: 15_000_000_000_000_000n },
-  forge: { recipeId: 1n, value: 1_500_000_000_000_000n },
-  redemption: { tokenId: 1n }
+  pack: { dropId: 1n, value: 10_000_000_000_000_000n, displayValue: "0.01 ETH" },
+  market: { amount: 1n, price: 15_000_000_000_000_000n, displayPrice: "0.015 ETH" },
+  forge: { recipeId: 1n, value: 1_000_000_000_000_000n, displayValue: "0.001 ETH" }
 } as const;
+
+export function parsePositiveTokenId(value: string): bigint | null {
+  const trimmedValue = value.trim();
+  if (!/^\d+$/.test(trimmedValue)) return null;
+  const tokenId = BigInt(trimmedValue);
+  return tokenId > 0n ? tokenId : null;
+}
 ```
 
 Create `apps/web/src/components/testnet-write-panels.tsx` with four wrappers around `TransactionActionPanel`.
+
+Marketplace and redemption wrappers must render token ID inputs. The final `Marketplace.list` and `RedemptionRegistry.requestRedemption` buttons stay disabled until the user enters a positive token ID. Do not use `1n` as a placeholder token ID because physical inventory token IDs are derived from inventory IDs and `1n` is not a valid assumption.
+
+Pack and Forge values must match the seeded contract values exactly:
+
+- `PackSale.purchase(1)` sends `0.01 ETH`.
+- `Forge.craft(1)` sends `0.001 ETH`.
 
 Replace `ActionGuardPanel` imports/usages in drop, market, Forge, and redemption components with the relevant write panel.
 

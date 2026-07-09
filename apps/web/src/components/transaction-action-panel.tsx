@@ -39,6 +39,7 @@ type TransactionPanelAction = {
 };
 
 type TransactionActionPanelProps = TransactionPanelAction & {
+  actionDisabledReason?: string | null;
   contracts: ProtocolContracts | null;
   registryMessage?: string;
   summary?: TransactionSummaryRow[];
@@ -56,6 +57,7 @@ type TransactionState =
   | { status: "failed"; label: string; message: string };
 
 export function TransactionActionPanel({
+  actionDisabledReason = null,
   approval,
   contracts,
   ctaLabel,
@@ -177,6 +179,8 @@ export function TransactionActionPanel({
       );
     }
 
+    const primaryDisabled = isBusy || actionDisabledReason !== null;
+
     return (
       <div className="transaction-actions">
         {approval ? (
@@ -189,7 +193,12 @@ export function TransactionActionPanel({
             {buttonLabel(approval.ctaLabel, transactionState)}
           </button>
         ) : null}
-        <button className="primary-action" disabled={isBusy} onClick={() => void handleSubmit(primaryAction)} type="button">
+        <button
+          className="primary-action"
+          disabled={primaryDisabled}
+          onClick={() => void handleSubmit(primaryAction)}
+          type="button"
+        >
           {isBusy && transactionState.label === ctaLabel ? (
             <Loader2 size={15} aria-hidden="true" />
           ) : (
@@ -197,6 +206,7 @@ export function TransactionActionPanel({
           )}
           {buttonLabel(ctaLabel, transactionState)}
         </button>
+        {actionDisabledReason !== null ? <small>{actionDisabledReason}</small> : null}
       </div>
     );
   };
@@ -226,6 +236,10 @@ export function TransactionActionPanel({
 
       <p>{description}</p>
       {approval ? <p>{approval.description}</p> : null}
+      <ul className="transaction-call-list" aria-label={`${title} transaction calls`}>
+        {approval ? <li>{approval.ctaLabel}</li> : null}
+        <li>{ctaLabel}</li>
+      </ul>
 
       {summary.length > 0 ? (
         <dl className="transaction-summary">
