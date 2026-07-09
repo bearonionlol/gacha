@@ -8,14 +8,14 @@ export default function ForgePage() {
         <section className="panel route-hero" aria-labelledby="forge-title">
           <div className="panel-header">
             <div>
-              <span className="eyebrow">Crafting preview</span>
+              <span className="eyebrow">On-chain crafting</span>
               <h1 id="forge-title">Forge</h1>
             </div>
-            <span className="chain-pill">Demo workbench</span>
+            <span className="chain-pill">Forge v3</span>
           </div>
           <p>
-            Build sample recipes from verified inventory tags, inspect caps and preview fees, and keep grail inputs
-            protected until a later protocol confirmation flow exists.
+            Recycle duplicates, solve bounded blueprints, and sign each output with a personal imprint. Physical cards
+            can unlock catalyst paths but are never burned by Forge.
           </p>
         </section>
         <ForgeWorkbench />

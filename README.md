@@ -1,16 +1,16 @@
 # Gacha Super App
 
-This repository contains the Gacha Super App protocol package and the Phase 3 web app. It does not include the indexer, metadata service, fantasy stock arena, or a production mainnet deployment.
+This repository contains the Gacha Super App protocol package and its Robinhood Chain testnet web app. It includes deterministic app-side activity and progression models, but it does not include a hosted indexer, production metadata service, fantasy stock arena, or a production mainnet deployment.
 
 The protocol package lives in `packages/contracts` and includes:
 
 - `InventoryRegistry`: anchors offchain inventory hashes, metadata URIs, redeemable flags, grail protection, and tokenization records.
 - `ItemToken`: ERC-1155 tokens for one-of-one physical inventory items and fungible game items.
 - `CommitRevealRandomnessProvider`: testnet commit/reveal randomness adapter for drops.
-- `PackSale`: native-token pack purchase and reveal flow for anchored inventory.
+- `PackSale`: native-token pack purchase and reveal flow for anchored inventory with an atomically delivered, disclosed starter-material bundle.
 - `Marketplace`: fixed-price ERC-1155 escrow marketplace.
 - `BuybackVault`: quote-based native-token buyback vault.
-- `Forge`: recipe-based burn/mint crafting with review and protection controls.
+- `Forge`: capped recipe-based crafting with immutable blueprint commitments, unique user imprints, retained catalysts, bounded reviewer allowances, and hard physical-inventory burn protection.
 - `RedemptionRegistry`: redemption request and fulfillment lifecycle.
 
 Physical token IDs are deterministic from inventory IDs. Preserve inventory IDs across environments so testnet and mainnet token IDs remain stable for the same physical items.
@@ -99,6 +99,14 @@ Smoke-check Robinhood testnet:
 pnpm --filter @gacha/contracts smoke:testnet
 ```
 
+Run the one-shot collector journey on a fresh seeded testnet deployment:
+
+```bash
+pnpm --filter @gacha/contracts rehearse:testnet
+```
+
+The rehearsal purchases and reveals the sample pack, validates its physical card and starter materials, completes all three Forge recipes, settles a marketplace listing, cancels a custody-safe redemption rehearsal, accepts and withdraws a buyback quote, returns the collectible, and restores buyback liquidity. It records every transaction hash and refuses to run against mainnet or a previously used sample drop.
+
 Deploy to Robinhood mainnet:
 
 ```bash
@@ -111,7 +119,7 @@ Deployment scripts write registries to `deployments/<network>.json`.
 
 ## Web App
 
-The web app lives in `apps/web`. It is a demo/testnet command surface for drops, reveal actions, vault portfolio, fixed-price market, Forge, redemption, admin inventory intake, and public testnet readiness checks.
+The web app lives in `apps/web`. It is a testnet command surface for drops, reveal actions, vault portfolio, fixed-price market settlement, a funded buyback desk, Forge v3, redemption, admin inventory intake, and public testnet readiness checks.
 
 Run the web app locally:
 
@@ -134,4 +142,6 @@ The app runs in deterministic demo mode when no deployment registry is present. 
 - Testnet operations: `docs/testnet-runbook.md`
 - Mainnet migration controls: `docs/mainnet-migration-runbook.md`
 
-Testnet seeding uses sample inventory and placeholder metadata URIs. It also mints the sample Forge input game items to the deployer and approves Forge so the sample recipe can be crafted immediately on local and testnet deployments. Production mainnet requires frozen, legally reviewed inventory metadata, approved fair/verifiable randomness, custody verification, deployment registry review, admin role review, explicit mainnet RPC override, and a private smoke run before any public launch.
+Testnet seeding uses sample inventory and placeholder metadata URIs. It creates one guaranteed physical-card drop with three Fire shards and one Vault seal, configures a disclosed 2.5% marketplace fee, installs three capped Forge blueprints, and funds one 0.004 ETH sample buyback quote. Sample seeding and automated rehearsal are blocked on mainnet.
+
+Protocol revenue accrues through pack revenue, explicit paid Forge recipes, and the disclosed marketplace fee. Buyback funding is protocol liquidity, not revenue; its economics depend on disciplined quotes and later resale or inventory reuse. Production mainnet still requires frozen and legally reviewed inventory metadata, approved fair/verifiable randomness, verified custody and fulfillment operations, audited contracts, multisig role ownership, deployment-registry review, monitored indexing and support services, and a private launch rehearsal.

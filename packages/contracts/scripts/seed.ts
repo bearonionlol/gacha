@@ -2,7 +2,12 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { ethers, network } from "hardhat";
-import type { BaseContract, BigNumberish, ContractTransactionResponse } from "ethers";
+import type {
+  BaseContract,
+  BigNumberish,
+  ContractTransactionResponse,
+  TransactionResponse
+} from "ethers";
 import ts from "typescript";
 
 type CommonJsExports = Record<string, unknown>;
@@ -43,6 +48,8 @@ type DeploymentFile = {
     InventoryRegistry: string;
     ItemToken: string;
     PackSale: string;
+    Marketplace: string;
+    BuybackVault: string;
     Forge: string;
   };
 };
@@ -56,6 +63,7 @@ type InventoryRegistryContract = BaseContract & {
     grailProtected: boolean
   ): Promise<ContractTransactionResponse>;
   getInventory(inventoryId: string): Promise<unknown>;
+  derivePhysicalTokenId(inventoryId: string): Promise<bigint>;
 };
 
 type PackSaleContract = BaseContract & {
@@ -68,6 +76,9 @@ type PackSaleContract = BaseContract & {
     maxSupply: BigNumberish;
     inventoryIds: string[];
     metadataUris: string[];
+    bonusTokenIds: BigNumberish[];
+    bonusAmounts: BigNumberish[];
+    bonusUris: string[];
   }): Promise<ContractTransactionResponse>;
 };
 
@@ -102,10 +113,42 @@ type ForgeContract = BaseContract & {
     maxCraftsPerWallet: BigNumberish;
     requiresManualReview: boolean;
     excludeGrailProtectedInputs: boolean;
+    catalystTokenIds: BigNumberish[];
+    catalystAmounts: BigNumberish[];
+    outputSupplyCap: BigNumberish;
+    metadataHash: string;
   }): Promise<ContractTransactionResponse>;
   setRecipeStatus(recipeId: BigNumberish, status: BigNumberish): Promise<ContractTransactionResponse>;
   getRecipeInputs(recipeId: BigNumberish): Promise<[bigint[], bigint[]]>;
+  getRecipeCatalysts(recipeId: BigNumberish): Promise<[bigint[], bigint[]]>;
   recipes(recipeId: BigNumberish): Promise<ForgeRecipe>;
+};
+
+type MarketplaceContract = BaseContract & {
+  feeBps(): Promise<bigint>;
+  setFeeBps(feeBps: BigNumberish): Promise<ContractTransactionResponse>;
+};
+
+type BuybackQuote = readonly [bigint, boolean] & {
+  price: bigint;
+  active: boolean;
+};
+
+type BuybackVaultContract = BaseContract & {
+  quotes(tokenId: BigNumberish): Promise<BuybackQuote>;
+  totalPayoutCredit(): Promise<bigint>;
+  setQuote(
+    tokenId: BigNumberish,
+    price: BigNumberish,
+    active: boolean
+  ): Promise<ContractTransactionResponse>;
+};
+
+type NativeTransactionSender = {
+  sendTransaction(transaction: {
+    to: string;
+    value: BigNumberish;
+  }): Promise<TransactionResponse>;
 };
 
 type ForgeRecipe = {
@@ -122,6 +165,10 @@ type ForgeRecipe = {
   requiresManualReview: boolean;
   excludeGrailProtectedInputs: boolean;
   exists: boolean;
+  outputSupplyCap: bigint;
+  metadataHash: string;
+  blueprintHash: string;
+  reservationReleased: boolean;
 };
 
 const recipeStatus = {
@@ -133,19 +180,96 @@ const recipeStatus = {
   Paused: 5
 } as const;
 
-const sampleRecipeId = 1n;
-const sampleForgeRecipe = {
-  inputTokenIds: [7_001n, 7_002n],
-  inputAmounts: [1n, 1n],
-  outputTokenId: 9_001n,
-  outputAmount: 1n,
-  outputUri: "ipfs://metadata/game/sample-forge-output.json",
-  fee: ethers.parseEther("0.001"),
-  maxTotalCrafts: 100n,
-  maxCraftsPerWallet: 5n,
-  requiresManualReview: false,
-  excludeGrailProtectedInputs: true
-} as const;
+const fireShardTokenId = 7_001n;
+const vaultSealTokenId = 7_002n;
+const forgeDustTokenId = 7_003n;
+const signalBadgeTokenId = 9_001n;
+const resonanceAuraTokenId = 9_002n;
+const marketplaceFeeBps = 250n;
+const sampleBuybackQuote = ethers.parseEther("0.004");
+
+const sampleStarterMaterials = [
+  {
+    tokenId: fireShardTokenId,
+    amount: 3n,
+    tokenUri: "ipfs://metadata/game/fire-shard.json"
+  },
+  {
+    tokenId: vaultSealTokenId,
+    amount: 1n,
+    tokenUri: "ipfs://metadata/game/vault-seal.json"
+  }
+] as const;
+
+type SeedForgeRecipe = {
+  inputTokenIds: readonly bigint[];
+  inputAmounts: readonly bigint[];
+  outputTokenId: bigint;
+  outputAmount: bigint;
+  outputUri: string;
+  fee: bigint;
+  maxTotalCrafts: bigint;
+  maxCraftsPerWallet: bigint;
+  requiresManualReview: boolean;
+  excludeGrailProtectedInputs: boolean;
+  catalystTokenIds: readonly bigint[];
+  catalystAmounts: readonly bigint[];
+  outputSupplyCap: bigint;
+  metadataHash: string;
+};
+
+function sampleForgeRecipes(catalystTokenId: bigint): readonly SeedForgeRecipe[] {
+  return [
+    {
+      inputTokenIds: [fireShardTokenId],
+      inputAmounts: [2n],
+      outputTokenId: forgeDustTokenId,
+      outputAmount: 1n,
+      outputUri: "ipfs://metadata/game/forge-dust.json",
+      fee: 0n,
+      maxTotalCrafts: 1_000n,
+      maxCraftsPerWallet: 100n,
+      requiresManualReview: false,
+      excludeGrailProtectedInputs: true,
+      catalystTokenIds: [],
+      catalystAmounts: [],
+      outputSupplyCap: 1_000n,
+      metadataHash: ethers.id("forge-blueprint:duplicate-recycler:v3")
+    },
+    {
+      inputTokenIds: [fireShardTokenId, vaultSealTokenId, forgeDustTokenId],
+      inputAmounts: [1n, 1n, 1n],
+      outputTokenId: signalBadgeTokenId,
+      outputAmount: 1n,
+      outputUri: "ipfs://metadata/game/signal-badge.json",
+      fee: ethers.parseEther("0.001"),
+      maxTotalCrafts: 100n,
+      maxCraftsPerWallet: 5n,
+      requiresManualReview: false,
+      excludeGrailProtectedInputs: true,
+      catalystTokenIds: [],
+      catalystAmounts: [],
+      outputSupplyCap: 100n,
+      metadataHash: ethers.id("forge-blueprint:fire-signal:v3")
+    },
+    {
+      inputTokenIds: [signalBadgeTokenId],
+      inputAmounts: [1n],
+      outputTokenId: resonanceAuraTokenId,
+      outputAmount: 1n,
+      outputUri: "ipfs://metadata/game/resonance-aura.json",
+      fee: ethers.parseEther("0.002"),
+      maxTotalCrafts: 25n,
+      maxCraftsPerWallet: 1n,
+      requiresManualReview: false,
+      excludeGrailProtectedInputs: true,
+      catalystTokenIds: [catalystTokenId],
+      catalystAmounts: [1n],
+      outputSupplyCap: 25n,
+      metadataHash: ethers.id("forge-blueprint:vault-resonance:v3")
+    }
+  ];
+}
 
 const inventoryRegistryErrors = new ethers.Interface([
   "error InventoryNotAnchored(string inventoryId)"
@@ -281,9 +405,17 @@ function metadataUriFor(inventoryId: string): string {
   return `ipfs://metadata/${inventoryId}.json`;
 }
 
-async function waitFor(tx: Promise<ContractTransactionResponse>): Promise<void> {
+async function waitFor(tx: Promise<TransactionResponse>): Promise<void> {
   const response = await tx;
   await response.wait();
+}
+
+function assertSampleSeedAllowed(): void {
+  if (network.name === "robinhoodMainnet") {
+    throw new Error(
+      "Sample seed blocked on Robinhood mainnet. Mainnet inventory, pricing, metadata, and liquidity must use a reviewed operator migration."
+    );
+  }
 }
 
 async function anchorInventory(
@@ -385,10 +517,61 @@ async function seedDrop(packSale: PackSaleContract, item: InventoryItem): Promis
       endTime: latestBlock.timestamp + 30 * 24 * 60 * 60,
       maxSupply: 1,
       inventoryIds: [item.inventoryId],
-      metadataUris: [metadataUriFor(item.inventoryId)]
+      metadataUris: [metadataUriFor(item.inventoryId)],
+      bonusTokenIds: sampleStarterMaterials.map((material) => material.tokenId),
+      bonusAmounts: sampleStarterMaterials.map((material) => material.amount),
+      bonusUris: sampleStarterMaterials.map((material) => material.tokenUri)
     })
   );
   console.log(`created sample drop for ${item.inventoryId}`);
+}
+
+async function configureMarketplace(marketplace: MarketplaceContract): Promise<void> {
+  const currentFeeBps = await marketplace.feeBps();
+  if (currentFeeBps === marketplaceFeeBps) {
+    console.log(`Marketplace fee already configured at ${marketplaceFeeBps} bps`);
+    return;
+  }
+
+  await waitFor(marketplace.setFeeBps(marketplaceFeeBps));
+  console.log(`configured Marketplace fee at ${marketplaceFeeBps} bps`);
+}
+
+async function seedBuybackLiquidity(
+  buybackVault: BuybackVaultContract,
+  physicalTokenId: bigint,
+  deployer: NativeTransactionSender
+): Promise<void> {
+  const quote = await buybackVault.quotes(physicalTokenId);
+  if (quote.price !== sampleBuybackQuote || !quote.active) {
+    await waitFor(buybackVault.setQuote(physicalTokenId, sampleBuybackQuote, true));
+    console.log(
+      `configured BuybackVault quote for ${physicalTokenId} at ${ethers.formatEther(sampleBuybackQuote)} ETH`
+    );
+  } else {
+    console.log(`BuybackVault quote already configured for ${physicalTokenId}`);
+  }
+
+  const vaultAddress = await buybackVault.getAddress();
+  const vaultBalance = await ethers.provider.getBalance(vaultAddress);
+  const payoutCredit = await buybackVault.totalPayoutCredit();
+  if (vaultBalance < payoutCredit) {
+    throw new Error(
+      `BuybackVault balance ${vaultBalance} is below reserved payout credit ${payoutCredit}`
+    );
+  }
+
+  const availableLiquidity = vaultBalance - payoutCredit;
+  if (availableLiquidity >= sampleBuybackQuote) {
+    console.log(
+      `BuybackVault already has ${ethers.formatEther(availableLiquidity)} ETH available liquidity`
+    );
+    return;
+  }
+
+  const topUp = sampleBuybackQuote - availableLiquidity;
+  await waitFor(deployer.sendTransaction({ to: vaultAddress, value: topUp }));
+  console.log(`funded BuybackVault with ${ethers.formatEther(topUp)} ETH`);
 }
 
 async function activateRecipe(forge: ForgeContract, recipeId: bigint): Promise<void> {
@@ -415,37 +598,48 @@ async function activateRecipe(forge: ForgeContract, recipeId: bigint): Promise<v
   }
 }
 
-async function seedForgeRecipe(forge: ForgeContract): Promise<void> {
-  const nextRecipeId = await forge.nextRecipeId();
-  if (nextRecipeId > sampleRecipeId) {
-    await validateSampleForgeRecipe(forge);
-    await activateRecipe(forge, sampleRecipeId);
-    return;
-  }
-
+async function seedForgeRecipes(forge: ForgeContract, recipes: readonly SeedForgeRecipe[]): Promise<void> {
   const latestBlock = await ethers.provider.getBlock("latest");
   if (!latestBlock) {
     throw new Error("Could not read latest block");
   }
 
-  await waitFor(
-    forge.createRecipe({
-      inputTokenIds: [...sampleForgeRecipe.inputTokenIds],
-      inputAmounts: [...sampleForgeRecipe.inputAmounts],
-      outputTokenId: sampleForgeRecipe.outputTokenId,
-      outputAmount: sampleForgeRecipe.outputAmount,
-      outputUri: sampleForgeRecipe.outputUri,
-      fee: sampleForgeRecipe.fee,
-      startTime: latestBlock.timestamp - 60,
-      endTime: latestBlock.timestamp + 30 * 24 * 60 * 60,
-      maxTotalCrafts: sampleForgeRecipe.maxTotalCrafts,
-      maxCraftsPerWallet: sampleForgeRecipe.maxCraftsPerWallet,
-      requiresManualReview: sampleForgeRecipe.requiresManualReview,
-      excludeGrailProtectedInputs: sampleForgeRecipe.excludeGrailProtectedInputs
-    })
-  );
-  await activateRecipe(forge, sampleRecipeId);
-  console.log(`created and activated sample Forge recipe ${sampleRecipeId}`);
+  for (const [index, recipe] of recipes.entries()) {
+    const recipeId = BigInt(index + 1);
+    const nextRecipeId = await forge.nextRecipeId();
+    if (nextRecipeId > recipeId) {
+      await validateSampleForgeRecipe(forge, recipeId, recipe);
+      await activateRecipe(forge, recipeId);
+      continue;
+    }
+
+    if (nextRecipeId < recipeId) {
+      throw new Error(`Forge nextRecipeId ${nextRecipeId} is behind expected recipe ${recipeId}`);
+    }
+
+    await waitFor(
+      forge.createRecipe({
+        inputTokenIds: [...recipe.inputTokenIds],
+        inputAmounts: [...recipe.inputAmounts],
+        outputTokenId: recipe.outputTokenId,
+        outputAmount: recipe.outputAmount,
+        outputUri: recipe.outputUri,
+        fee: recipe.fee,
+        startTime: latestBlock.timestamp - 60,
+        endTime: latestBlock.timestamp + 30 * 24 * 60 * 60,
+        maxTotalCrafts: recipe.maxTotalCrafts,
+        maxCraftsPerWallet: recipe.maxCraftsPerWallet,
+        requiresManualReview: recipe.requiresManualReview,
+        excludeGrailProtectedInputs: recipe.excludeGrailProtectedInputs,
+        catalystTokenIds: [...recipe.catalystTokenIds],
+        catalystAmounts: [...recipe.catalystAmounts],
+        outputSupplyCap: recipe.outputSupplyCap,
+        metadataHash: recipe.metadataHash
+      })
+    );
+    await activateRecipe(forge, recipeId);
+    console.log(`created and activated sample Forge recipe ${recipeId}`);
+  }
 }
 
 async function ensureSampleForgeInputs(
@@ -454,16 +648,10 @@ async function ensureSampleForgeInputs(
   deployerAddress: string
 ): Promise<void> {
   const mintPlan: Array<{ tokenId: bigint; amount: bigint }> = [];
-  for (let index = 0; index < sampleForgeRecipe.inputTokenIds.length; index++) {
-    const tokenId = sampleForgeRecipe.inputTokenIds[index];
-    const requiredAmount = sampleForgeRecipe.inputAmounts[index];
-    if (tokenId === undefined || requiredAmount === undefined) {
-      throw new Error(`Missing sample Forge recipe input at index ${index}`);
-    }
-
-    const balance = await itemToken.balanceOf(deployerAddress, tokenId);
-    if (balance < requiredAmount) {
-      mintPlan.push({ tokenId, amount: requiredAmount - balance });
+  for (const material of sampleStarterMaterials) {
+    const balance = await itemToken.balanceOf(deployerAddress, material.tokenId);
+    if (balance < material.amount) {
+      mintPlan.push({ tokenId: material.tokenId, amount: material.amount - balance });
     }
   }
 
@@ -480,13 +668,12 @@ async function ensureSampleForgeInputs(
 
     try {
       for (const { tokenId, amount } of mintPlan) {
+        const material = sampleStarterMaterials.find((entry) => entry.tokenId === tokenId);
+        if (!material) {
+          throw new Error(`Missing starter material metadata for ${tokenId}`);
+        }
         await waitFor(
-          itemToken.mintGameItem(
-            deployerAddress,
-            tokenId,
-            amount,
-            `ipfs://metadata/game/sample-forge-input-${tokenId}.json`
-          )
+          itemToken.mintGameItem(deployerAddress, tokenId, amount, material.tokenUri)
         );
         console.log(`minted ${amount} sample Forge input ${tokenId} to ${deployerAddress}`);
       }
@@ -510,33 +697,42 @@ async function ensureSampleForgeInputs(
   console.log(`approved Forge ${forgeAddress} for deployer sample inputs`);
 }
 
-async function validateSampleForgeRecipe(forge: ForgeContract): Promise<void> {
-  const recipe = await forge.recipes(sampleRecipeId);
+async function validateSampleForgeRecipe(
+  forge: ForgeContract,
+  recipeId: bigint,
+  expectedRecipe: SeedForgeRecipe
+): Promise<void> {
+  const recipe = await forge.recipes(recipeId);
   if (!recipe.exists) {
-    throw new Error(`Forge recipe ${sampleRecipeId} is missing even though nextRecipeId advanced`);
+    throw new Error(`Forge recipe ${recipeId} is missing even though nextRecipeId advanced`);
   }
 
-  const [inputTokenIds, inputAmounts] = await forge.getRecipeInputs(sampleRecipeId);
+  const [inputTokenIds, inputAmounts] = await forge.getRecipeInputs(recipeId);
+  const [catalystTokenIds, catalystAmounts] = await forge.getRecipeCatalysts(recipeId);
   const mismatches = [
-    ...compareBigintArrays("inputTokenIds", inputTokenIds, sampleForgeRecipe.inputTokenIds),
-    ...compareBigintArrays("inputAmounts", inputAmounts, sampleForgeRecipe.inputAmounts),
-    ...compareBigint("outputTokenId", recipe.outputTokenId, sampleForgeRecipe.outputTokenId),
-    ...compareBigint("outputAmount", recipe.outputAmount, sampleForgeRecipe.outputAmount),
-    ...compareString("outputUri", recipe.outputUri, sampleForgeRecipe.outputUri),
-    ...compareBigint("fee", recipe.fee, sampleForgeRecipe.fee),
-    ...compareBigint("maxTotalCrafts", recipe.maxTotalCrafts, sampleForgeRecipe.maxTotalCrafts),
-    ...compareBigint("maxCraftsPerWallet", recipe.maxCraftsPerWallet, sampleForgeRecipe.maxCraftsPerWallet),
-    ...compareBoolean("requiresManualReview", recipe.requiresManualReview, sampleForgeRecipe.requiresManualReview),
+    ...compareBigintArrays("inputTokenIds", inputTokenIds, expectedRecipe.inputTokenIds),
+    ...compareBigintArrays("inputAmounts", inputAmounts, expectedRecipe.inputAmounts),
+    ...compareBigintArrays("catalystTokenIds", catalystTokenIds, expectedRecipe.catalystTokenIds),
+    ...compareBigintArrays("catalystAmounts", catalystAmounts, expectedRecipe.catalystAmounts),
+    ...compareBigint("outputTokenId", recipe.outputTokenId, expectedRecipe.outputTokenId),
+    ...compareBigint("outputAmount", recipe.outputAmount, expectedRecipe.outputAmount),
+    ...compareString("outputUri", recipe.outputUri, expectedRecipe.outputUri),
+    ...compareBigint("fee", recipe.fee, expectedRecipe.fee),
+    ...compareBigint("maxTotalCrafts", recipe.maxTotalCrafts, expectedRecipe.maxTotalCrafts),
+    ...compareBigint("maxCraftsPerWallet", recipe.maxCraftsPerWallet, expectedRecipe.maxCraftsPerWallet),
+    ...compareBigint("outputSupplyCap", recipe.outputSupplyCap, expectedRecipe.outputSupplyCap),
+    ...compareString("metadataHash", recipe.metadataHash, expectedRecipe.metadataHash),
+    ...compareBoolean("requiresManualReview", recipe.requiresManualReview, expectedRecipe.requiresManualReview),
     ...compareBoolean(
       "excludeGrailProtectedInputs",
       recipe.excludeGrailProtectedInputs,
-      sampleForgeRecipe.excludeGrailProtectedInputs
+      expectedRecipe.excludeGrailProtectedInputs
     )
   ];
 
   if (mismatches.length > 0) {
     throw new Error(
-      `Forge recipe ${sampleRecipeId} exists but does not match the sample seed recipe: ${mismatches.join("; ")}`
+      `Forge recipe ${recipeId} exists but does not match the sample seed recipe: ${mismatches.join("; ")}`
     );
   }
 }
@@ -574,6 +770,8 @@ function compareBigintArrays(
 }
 
 async function main(): Promise<void> {
+  assertSampleSeedAllowed();
+
   const [deployer] = await ethers.getSigners();
   if (!deployer) {
     throw new Error("No deployer signer is configured");
@@ -602,6 +800,14 @@ async function main(): Promise<void> {
     "PackSale",
     deployment.contracts.PackSale
   )) as unknown as PackSaleContract;
+  const marketplace = (await ethers.getContractAt(
+    "Marketplace",
+    deployment.contracts.Marketplace
+  )) as unknown as MarketplaceContract;
+  const buybackVault = (await ethers.getContractAt(
+    "BuybackVault",
+    deployment.contracts.BuybackVault
+  )) as unknown as BuybackVaultContract;
   const forge = (await ethers.getContractAt(
     "Forge",
     deployment.contracts.Forge
@@ -612,8 +818,11 @@ async function main(): Promise<void> {
   }
 
   await seedDrop(packSale, dropItem);
-  await seedForgeRecipe(forge);
+  await configureMarketplace(marketplace);
   await ensureSampleForgeInputs(itemToken, forge, deployerAddress);
+  const catalystTokenId = await inventoryRegistry.derivePhysicalTokenId(dropItem.inventoryId);
+  await seedForgeRecipes(forge, sampleForgeRecipes(catalystTokenId));
+  await seedBuybackLiquidity(buybackVault, catalystTokenId, deployer);
 }
 
 main().catch((error: unknown) => {

@@ -18,7 +18,26 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         Retired
     }
 
+    enum CraftReadiness {
+        Ready,
+        ForgePaused,
+        RecipeInactive,
+        ScheduleInactive,
+        ManualReviewMissing,
+        TotalCapReached,
+        WalletCapReached,
+        ApprovalMissing,
+        MissingBurnInput,
+        MissingCatalyst,
+        OutputCapReached,
+        EmptyImprint,
+        ImprintUsed
+    }
+
     bytes32 public constant RECIPE_ADMIN_ROLE = keccak256("RECIPE_ADMIN_ROLE");
+    bytes32 public constant CRAFT_REVIEWER_ROLE = keccak256("CRAFT_REVIEWER_ROLE");
+    uint256 public constant MAX_BURN_INPUTS = 9;
+    uint256 public constant MAX_CATALYSTS = 3;
 
     struct CreateRecipeParams {
         uint256[] inputTokenIds;
@@ -33,11 +52,17 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         uint256 maxCraftsPerWallet;
         bool requiresManualReview;
         bool excludeGrailProtectedInputs;
+        uint256[] catalystTokenIds;
+        uint256[] catalystAmounts;
+        uint256 outputSupplyCap;
+        bytes32 metadataHash;
     }
 
     struct Recipe {
         uint256[] inputTokenIds;
         uint256[] inputAmounts;
+        uint256[] catalystTokenIds;
+        uint256[] catalystAmounts;
         uint256 outputTokenId;
         uint256 outputAmount;
         string outputUri;
@@ -51,6 +76,10 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         bool requiresManualReview;
         bool excludeGrailProtectedInputs;
         bool exists;
+        uint256 outputSupplyCap;
+        bytes32 metadataHash;
+        bytes32 blueprintHash;
+        bool reservationReleased;
     }
 
     struct RecipeView {
@@ -67,33 +96,74 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         bool requiresManualReview;
         bool excludeGrailProtectedInputs;
         bool exists;
+        uint256 outputSupplyCap;
+        bytes32 metadataHash;
+        bytes32 blueprintHash;
+        bool reservationReleased;
+    }
+
+    struct CraftRecord {
+        uint256 recipeId;
+        address crafter;
+        uint256 outputTokenId;
+        uint256 outputAmount;
+        bytes32 imprintHash;
+        uint256 craftedAt;
     }
 
     error InvalidAddress();
     error InvalidRecipeParams();
+    error TooManyBurnInputs(uint256 count, uint256 maximum);
+    error TooManyCatalysts(uint256 count, uint256 maximum);
+    error DuplicateRecipeToken(uint256 tokenId);
+    error InvalidBurnInputToken(uint256 tokenId);
+    error InvalidCatalystToken(uint256 tokenId);
+    error OutputTokenUsedAsInput(uint256 tokenId);
     error InvalidOutputTokenId(uint256 tokenId);
     error InvalidOutputTokenKind(uint256 tokenId, uint8 tokenKind);
     error OutputUriMismatch(uint256 tokenId, string expectedUri, string actualUri);
+    error OutputSupplyCapMismatch(uint256 tokenId, uint256 expectedCap, uint256 actualCap);
+    error OutputCapacityExceeded(uint256 tokenId, uint256 cap, uint256 committedOutput, uint256 requestedOutput);
     error RecipeNotFound(uint256 recipeId);
     error InvalidRecipeStatusTransition(uint256 recipeId, RecipeStatus currentStatus, RecipeStatus nextStatus);
     error RecipeNotActive(uint256 recipeId, RecipeStatus status);
     error InactiveSchedule(uint256 recipeId, uint256 startTime, uint256 endTime);
     error ExactPaymentRequired(uint256 expected, uint256 actual);
     error ManualReviewRequired(uint256 recipeId);
+    error ManualReviewNotEnabled(uint256 recipeId);
     error MaxTotalCraftsReached(uint256 recipeId, uint256 maxTotalCrafts);
     error MaxWalletCraftsReached(uint256 recipeId, address wallet, uint256 maxCraftsPerWallet);
-    error GrailProtectedInputExcluded(uint256 recipeId, uint256 tokenId);
+    error MissingCatalyst(uint256 recipeId, uint256 tokenId, uint256 required, uint256 available);
+    error EmptyImprint();
+    error ImprintAlreadyUsed(uint256 recipeId, address crafter, bytes32 imprintHash);
     error TreasuryFeesUnavailable(address account);
     error TransferFailed(address to, uint256 amount);
 
     event RecipeCreated(uint256 indexed recipeId, address indexed creator);
+    event BlueprintCommitted(
+        uint256 indexed recipeId,
+        bytes32 indexed blueprintHash,
+        bytes32 indexed metadataHash,
+        uint256 outputTokenId,
+        uint256 outputSupplyCap,
+        uint256 reservedOutput
+    );
     event RecipeStatusUpdated(uint256 indexed recipeId, RecipeStatus previousStatus, RecipeStatus status);
+    event OutputReservationReleased(uint256 indexed recipeId, uint256 indexed outputTokenId, uint256 amount);
+    event CraftAllowanceUpdated(uint256 indexed recipeId, address indexed crafter, uint256 allowance);
     event Crafted(
         uint256 indexed recipeId,
         address indexed crafter,
         uint256 indexed outputTokenId,
         uint256 outputAmount,
         uint256 fee
+    );
+    event CraftProvenance(
+        uint256 indexed craftId,
+        uint256 indexed recipeId,
+        address indexed crafter,
+        bytes32 imprintHash,
+        bytes32 blueprintHash
     );
     event TreasuryFeesWithdrawn(address indexed account, address indexed to, uint256 amount);
 
@@ -102,10 +172,17 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
     address payable public immutable treasury;
 
     uint256 public nextRecipeId = 1;
+    uint256 public nextCraftId = 1;
 
     mapping(uint256 recipeId => Recipe recipe) private _recipes;
     mapping(uint256 outputTokenId => string outputUri) private _forgeOutputUris;
     mapping(uint256 recipeId => mapping(address wallet => uint256 crafts)) public walletCrafts;
+    mapping(uint256 recipeId => mapping(address wallet => uint256 allowance)) public reviewAllowances;
+    mapping(uint256 outputTokenId => uint256 supplyCap) public outputSupplyCaps;
+    mapping(uint256 outputTokenId => uint256 reservedOutput) public outputReserved;
+    mapping(uint256 recipeId => mapping(address crafter => mapping(bytes32 imprintHash => bool used)))
+        public usedImprints;
+    mapping(uint256 craftId => CraftRecord record) public crafts;
     mapping(address account => uint256 amount) public treasuryFeesCredit;
 
     constructor(ItemToken itemToken_, InventoryRegistry inventoryRegistry_, address treasury_) {
@@ -125,7 +202,7 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         onlyRole(RECIPE_ADMIN_ROLE)
         returns (uint256 recipeId)
     {
-        _validateCreateRecipeParams(params);
+        (uint256 reservedOutput, bytes32 blueprintHash) = _validateCreateRecipeParams(params);
 
         recipeId = nextRecipeId++;
         Recipe storage recipe = _recipes[recipeId];
@@ -141,15 +218,35 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         recipe.requiresManualReview = params.requiresManualReview;
         recipe.excludeGrailProtectedInputs = params.excludeGrailProtectedInputs;
         recipe.exists = true;
+        recipe.outputSupplyCap = params.outputSupplyCap;
+        recipe.metadataHash = params.metadataHash;
+        recipe.blueprintHash = blueprintHash;
 
         for (uint256 index = 0; index < params.inputTokenIds.length; index++) {
             recipe.inputTokenIds.push(params.inputTokenIds[index]);
             recipe.inputAmounts.push(params.inputAmounts[index]);
         }
 
+        for (uint256 index = 0; index < params.catalystTokenIds.length; index++) {
+            recipe.catalystTokenIds.push(params.catalystTokenIds[index]);
+            recipe.catalystAmounts.push(params.catalystAmounts[index]);
+        }
+
+        if (outputSupplyCaps[params.outputTokenId] == 0) {
+            outputSupplyCaps[params.outputTokenId] = params.outputSupplyCap;
+        }
+        outputReserved[params.outputTokenId] += reservedOutput;
         _lockOutputUri(params.outputTokenId, params.outputUri);
 
         emit RecipeCreated(recipeId, msg.sender);
+        emit BlueprintCommitted(
+            recipeId,
+            blueprintHash,
+            params.metadataHash,
+            params.outputTokenId,
+            params.outputSupplyCap,
+            reservedOutput
+        );
     }
 
     function setRecipeStatus(uint256 recipeId, RecipeStatus status) external onlyRole(RECIPE_ADMIN_ROLE) {
@@ -161,26 +258,116 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         }
 
         recipe.status = status;
+        if (status == RecipeStatus.Retired) {
+            _releaseOutputReservation(recipeId, recipe);
+        }
 
         emit RecipeStatusUpdated(recipeId, previousStatus, status);
     }
 
+    function setCraftAllowance(uint256 recipeId, address crafter, uint256 allowance)
+        external
+        onlyRole(CRAFT_REVIEWER_ROLE)
+    {
+        if (crafter == address(0)) {
+            revert InvalidAddress();
+        }
+
+        Recipe storage recipe = _recipeFor(recipeId);
+        if (!recipe.requiresManualReview) {
+            revert ManualReviewNotEnabled(recipeId);
+        }
+
+        reviewAllowances[recipeId][crafter] = allowance;
+        emit CraftAllowanceUpdated(recipeId, crafter, allowance);
+    }
+
     function craft(uint256 recipeId) external payable nonReentrant whenNotPaused returns (uint256 outputTokenId) {
+        bytes32 imprintHash = keccak256(
+            abi.encode(recipeId, msg.sender, walletCrafts[recipeId][msg.sender] + 1, nextCraftId, address(this))
+        );
+        return _craft(recipeId, imprintHash);
+    }
+
+    function craftWithImprint(uint256 recipeId, bytes32 imprintHash)
+        external
+        payable
+        nonReentrant
+        whenNotPaused
+        returns (uint256 outputTokenId)
+    {
+        return _craft(recipeId, imprintHash);
+    }
+
+    function craftReadiness(uint256 recipeId, address crafter, bytes32 imprintHash)
+        external
+        view
+        returns (CraftReadiness reason, uint256 tokenId, uint256 required, uint256 available)
+    {
         Recipe storage recipe = _recipeFor(recipeId);
 
-        _validateCraft(recipeId, recipe);
-        _recordCraft(recipeId, recipe);
-        _burnInputs(recipe);
+        if (paused()) {
+            return (CraftReadiness.ForgePaused, 0, 0, 0);
+        }
+        if (recipe.status != RecipeStatus.Active) {
+            return (CraftReadiness.RecipeInactive, 0, 0, 0);
+        }
+        if (block.timestamp < recipe.startTime || block.timestamp > recipe.endTime) {
+            return (CraftReadiness.ScheduleInactive, 0, 0, 0);
+        }
+        if (recipe.requiresManualReview && reviewAllowances[recipeId][crafter] == 0) {
+            return (CraftReadiness.ManualReviewMissing, 0, 0, 0);
+        }
+        if (recipe.totalCrafts >= recipe.maxTotalCrafts) {
+            return (CraftReadiness.TotalCapReached, 0, 0, 0);
+        }
+        if (walletCrafts[recipeId][crafter] >= recipe.maxCraftsPerWallet) {
+            return (CraftReadiness.WalletCapReached, 0, 0, 0);
+        }
+        if (!itemToken.isApprovedForAll(crafter, address(this))) {
+            return (CraftReadiness.ApprovalMissing, 0, 0, 0);
+        }
 
-        outputTokenId = _mintOutput(recipe);
+        for (uint256 index = 0; index < recipe.inputTokenIds.length; index++) {
+            uint256 inputTokenId = recipe.inputTokenIds[index];
+            uint256 inputRequired = recipe.inputAmounts[index];
+            uint256 inputAvailable = itemToken.balanceOf(crafter, inputTokenId);
+            if (inputAvailable < inputRequired) {
+                return (CraftReadiness.MissingBurnInput, inputTokenId, inputRequired, inputAvailable);
+            }
+        }
 
-        emit Crafted(recipeId, msg.sender, outputTokenId, recipe.outputAmount, msg.value);
+        for (uint256 index = 0; index < recipe.catalystTokenIds.length; index++) {
+            uint256 catalystTokenId = recipe.catalystTokenIds[index];
+            uint256 catalystRequired = recipe.catalystAmounts[index];
+            uint256 catalystAvailable = itemToken.balanceOf(crafter, catalystTokenId);
+            if (catalystAvailable < catalystRequired) {
+                return (CraftReadiness.MissingCatalyst, catalystTokenId, catalystRequired, catalystAvailable);
+            }
+        }
+
+        uint256 currentSupply = itemToken.totalSupply(recipe.outputTokenId);
+        if (currentSupply > recipe.outputSupplyCap || recipe.outputAmount > recipe.outputSupplyCap - currentSupply) {
+            return (CraftReadiness.OutputCapReached, recipe.outputTokenId, recipe.outputAmount, currentSupply);
+        }
+        if (imprintHash == bytes32(0)) {
+            return (CraftReadiness.EmptyImprint, 0, 0, 0);
+        }
+        if (usedImprints[recipeId][crafter][imprintHash]) {
+            return (CraftReadiness.ImprintUsed, 0, 0, 0);
+        }
+
+        return (CraftReadiness.Ready, 0, 0, 0);
     }
 
     function getRecipeInputs(uint256 recipeId) external view returns (uint256[] memory, uint256[] memory) {
         Recipe storage recipe = _recipeFor(recipeId);
-
         return (recipe.inputTokenIds, recipe.inputAmounts);
+    }
+
+    function getRecipeCatalysts(uint256 recipeId) external view returns (uint256[] memory, uint256[] memory) {
+        Recipe storage recipe = _recipeFor(recipeId);
+        return (recipe.catalystTokenIds, recipe.catalystAmounts);
     }
 
     function recipes(uint256 recipeId) external view returns (RecipeView memory recipeView) {
@@ -199,6 +386,10 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         recipeView.requiresManualReview = recipe.requiresManualReview;
         recipeView.excludeGrailProtectedInputs = recipe.excludeGrailProtectedInputs;
         recipeView.exists = recipe.exists;
+        recipeView.outputSupplyCap = recipe.outputSupplyCap;
+        recipeView.metadataHash = recipe.metadataHash;
+        recipeView.blueprintHash = recipe.blueprintHash;
+        recipeView.reservationReleased = recipe.reservationReleased;
     }
 
     function withdrawTreasuryFees() external nonReentrant {
@@ -209,7 +400,6 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         if (to == address(0)) {
             revert InvalidAddress();
         }
-
         _withdrawTreasuryFeesTo(to);
     }
 
@@ -221,24 +411,51 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         _unpause();
     }
 
-    function _validateCreateRecipeParams(CreateRecipeParams calldata params) private view {
+    function _craft(uint256 recipeId, bytes32 imprintHash) private returns (uint256 outputTokenId) {
+        Recipe storage recipe = _recipeFor(recipeId);
+
+        _validateCraft(recipeId, recipe, imprintHash);
+        uint256 craftId = _recordCraft(recipeId, recipe, imprintHash);
+        _burnInputs(recipe);
+        outputTokenId = _mintOutput(recipe);
+
+        crafts[craftId] = CraftRecord({
+            recipeId: recipeId,
+            crafter: msg.sender,
+            outputTokenId: outputTokenId,
+            outputAmount: recipe.outputAmount,
+            imprintHash: imprintHash,
+            craftedAt: block.timestamp
+        });
+
+        emit Crafted(recipeId, msg.sender, outputTokenId, recipe.outputAmount, msg.value);
+        emit CraftProvenance(craftId, recipeId, msg.sender, imprintHash, recipe.blueprintHash);
+    }
+
+    function _validateCreateRecipeParams(CreateRecipeParams calldata params)
+        private
+        view
+        returns (uint256 reservedOutput, bytes32 blueprintHash)
+    {
         uint256 inputCount = params.inputTokenIds.length;
+        uint256 catalystCount = params.catalystTokenIds.length;
         if (
-            inputCount == 0 || inputCount != params.inputAmounts.length || params.outputAmount == 0
-                || bytes(params.outputUri).length == 0
-                || params.startTime >= params.endTime || params.maxTotalCrafts == 0
-                || params.maxCraftsPerWallet == 0 || params.maxCraftsPerWallet > params.maxTotalCrafts
+            inputCount == 0 || inputCount != params.inputAmounts.length
+                || catalystCount != params.catalystAmounts.length || params.outputAmount == 0
+                || bytes(params.outputUri).length == 0 || params.startTime >= params.endTime
+                || params.maxTotalCrafts == 0 || params.maxCraftsPerWallet == 0
+                || params.maxCraftsPerWallet > params.maxTotalCrafts || params.outputSupplyCap == 0
+                || params.metadataHash == bytes32(0)
         ) {
             revert InvalidRecipeParams();
         }
-
-        for (uint256 index = 0; index < inputCount; index++) {
-            if (params.inputAmounts[index] == 0) {
-                revert InvalidRecipeParams();
-            }
+        if (inputCount > MAX_BURN_INPUTS) {
+            revert TooManyBurnInputs(inputCount, MAX_BURN_INPUTS);
         }
-
-        if (params.outputTokenId > itemToken.GAME_TOKEN_ID_MAX()) {
+        if (catalystCount > MAX_CATALYSTS) {
+            revert TooManyCatalysts(catalystCount, MAX_CATALYSTS);
+        }
+        if (params.outputTokenId == 0 || params.outputTokenId > itemToken.GAME_TOKEN_ID_MAX()) {
             revert InvalidOutputTokenId(params.outputTokenId);
         }
 
@@ -247,15 +464,100 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
             revert InvalidOutputTokenKind(params.outputTokenId, uint8(outputKind));
         }
 
-        string storage configuredOutputUri = _forgeOutputUris[params.outputTokenId];
-        if (bytes(configuredOutputUri).length != 0 && !_sameString(configuredOutputUri, params.outputUri)) {
-            revert OutputUriMismatch(params.outputTokenId, configuredOutputUri, params.outputUri);
+        _validateBurnInputs(params);
+        _validateCatalysts(params);
+        _validateOutputUri(params.outputTokenId, params.outputUri);
+
+        uint256 configuredCap = outputSupplyCaps[params.outputTokenId];
+        if (configuredCap != 0 && configuredCap != params.outputSupplyCap) {
+            revert OutputSupplyCapMismatch(params.outputTokenId, configuredCap, params.outputSupplyCap);
         }
 
-        if (itemToken.hasCustomURI(params.outputTokenId)) {
-            string memory existingOutputUri = itemToken.uri(params.outputTokenId);
-            if (!_sameString(existingOutputUri, params.outputUri)) {
-                revert OutputUriMismatch(params.outputTokenId, existingOutputUri, params.outputUri);
+        reservedOutput = params.outputAmount * params.maxTotalCrafts;
+        uint256 currentSupply = itemToken.totalSupply(params.outputTokenId);
+        uint256 currentReserved = outputReserved[params.outputTokenId];
+        if (
+            currentSupply > params.outputSupplyCap || currentReserved > params.outputSupplyCap - currentSupply
+                || reservedOutput > params.outputSupplyCap - currentSupply - currentReserved
+        ) {
+            revert OutputCapacityExceeded(
+                params.outputTokenId,
+                params.outputSupplyCap,
+                currentSupply + currentReserved,
+                reservedOutput
+            );
+        }
+
+        blueprintHash = keccak256(abi.encode(params));
+    }
+
+    function _validateBurnInputs(CreateRecipeParams calldata params) private view {
+        uint256 inputCount = params.inputTokenIds.length;
+        for (uint256 index = 0; index < inputCount; index++) {
+            uint256 tokenId = params.inputTokenIds[index];
+            if (params.inputAmounts[index] == 0) {
+                revert InvalidRecipeParams();
+            }
+            if (tokenId == params.outputTokenId) {
+                revert OutputTokenUsedAsInput(tokenId);
+            }
+            if (tokenId == 0 || tokenId > itemToken.GAME_TOKEN_ID_MAX()) {
+                revert InvalidBurnInputToken(tokenId);
+            }
+
+            for (uint256 previous = 0; previous < index; previous++) {
+                if (params.inputTokenIds[previous] == tokenId) {
+                    revert DuplicateRecipeToken(tokenId);
+                }
+            }
+        }
+    }
+
+    function _validateCatalysts(CreateRecipeParams calldata params) private view {
+        uint256 catalystCount = params.catalystTokenIds.length;
+        for (uint256 index = 0; index < catalystCount; index++) {
+            uint256 tokenId = params.catalystTokenIds[index];
+            if (tokenId == 0 || params.catalystAmounts[index] == 0) {
+                revert InvalidRecipeParams();
+            }
+            if (tokenId == params.outputTokenId) {
+                revert OutputTokenUsedAsInput(tokenId);
+            }
+
+            for (uint256 inputIndex = 0; inputIndex < params.inputTokenIds.length; inputIndex++) {
+                if (params.inputTokenIds[inputIndex] == tokenId) {
+                    revert DuplicateRecipeToken(tokenId);
+                }
+            }
+            for (uint256 previous = 0; previous < index; previous++) {
+                if (params.catalystTokenIds[previous] == tokenId) {
+                    revert DuplicateRecipeToken(tokenId);
+                }
+            }
+
+            if (tokenId > itemToken.GAME_TOKEN_ID_MAX()) {
+                try inventoryRegistry.getInventoryByTokenId(tokenId) returns (
+                    InventoryRegistry.InventoryRecord memory record
+                ) {
+                    if (record.tokenId != tokenId) {
+                        revert InvalidCatalystToken(tokenId);
+                    }
+                } catch {
+                    revert InvalidCatalystToken(tokenId);
+                }
+            }
+        }
+    }
+
+    function _validateOutputUri(uint256 outputTokenId, string calldata outputUri) private view {
+        string storage configuredOutputUri = _forgeOutputUris[outputTokenId];
+        if (bytes(configuredOutputUri).length != 0 && !_sameString(configuredOutputUri, outputUri)) {
+            revert OutputUriMismatch(outputTokenId, configuredOutputUri, outputUri);
+        }
+        if (itemToken.hasCustomURI(outputTokenId)) {
+            string memory existingOutputUri = itemToken.uri(outputTokenId);
+            if (!_sameString(existingOutputUri, outputUri)) {
+                revert OutputUriMismatch(outputTokenId, existingOutputUri, outputUri);
             }
         }
     }
@@ -266,23 +568,19 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         }
     }
 
-    function _validateCraft(uint256 recipeId, Recipe storage recipe) private view {
+    function _validateCraft(uint256 recipeId, Recipe storage recipe, bytes32 imprintHash) private view {
         if (recipe.status != RecipeStatus.Active) {
             revert RecipeNotActive(recipeId, recipe.status);
         }
-
         if (block.timestamp < recipe.startTime || block.timestamp > recipe.endTime) {
             revert InactiveSchedule(recipeId, recipe.startTime, recipe.endTime);
         }
-
         if (msg.value != recipe.fee) {
             revert ExactPaymentRequired(recipe.fee, msg.value);
         }
-
-        if (recipe.requiresManualReview) {
+        if (recipe.requiresManualReview && reviewAllowances[recipeId][msg.sender] == 0) {
             revert ManualReviewRequired(recipeId);
         }
-
         if (recipe.totalCrafts >= recipe.maxTotalCrafts) {
             revert MaxTotalCraftsReached(recipeId, recipe.maxTotalCrafts);
         }
@@ -291,27 +589,50 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         if (walletCraftCount >= recipe.maxCraftsPerWallet) {
             revert MaxWalletCraftsReached(recipeId, msg.sender, recipe.maxCraftsPerWallet);
         }
+        if (imprintHash == bytes32(0)) {
+            revert EmptyImprint();
+        }
+        if (usedImprints[recipeId][msg.sender][imprintHash]) {
+            revert ImprintAlreadyUsed(recipeId, msg.sender, imprintHash);
+        }
 
-        if (recipe.excludeGrailProtectedInputs) {
-            uint256 inputCount = recipe.inputTokenIds.length;
-            for (uint256 index = 0; index < inputCount; index++) {
-                uint256 tokenId = recipe.inputTokenIds[index];
-                if (inventoryRegistry.isGrailProtectedToken(tokenId)) {
-                    revert GrailProtectedInputExcluded(recipeId, tokenId);
-                }
+        uint256 currentSupply = itemToken.totalSupply(recipe.outputTokenId);
+        if (currentSupply > recipe.outputSupplyCap || recipe.outputAmount > recipe.outputSupplyCap - currentSupply) {
+            revert OutputCapacityExceeded(
+                recipe.outputTokenId,
+                recipe.outputSupplyCap,
+                currentSupply,
+                recipe.outputAmount
+            );
+        }
+
+        for (uint256 index = 0; index < recipe.catalystTokenIds.length; index++) {
+            uint256 tokenId = recipe.catalystTokenIds[index];
+            uint256 required = recipe.catalystAmounts[index];
+            uint256 available = itemToken.balanceOf(msg.sender, tokenId);
+            if (available < required) {
+                revert MissingCatalyst(recipeId, tokenId, required, available);
             }
         }
     }
 
-    function _recordCraft(uint256 recipeId, Recipe storage recipe) private {
+    function _recordCraft(uint256 recipeId, Recipe storage recipe, bytes32 imprintHash)
+        private
+        returns (uint256 craftId)
+    {
         recipe.totalCrafts += 1;
         walletCrafts[recipeId][msg.sender] += 1;
+        usedImprints[recipeId][msg.sender][imprintHash] = true;
+        outputReserved[recipe.outputTokenId] -= recipe.outputAmount;
         treasuryFeesCredit[treasury] += msg.value;
+        if (recipe.requiresManualReview) {
+            reviewAllowances[recipeId][msg.sender] -= 1;
+        }
+        craftId = nextCraftId++;
     }
 
     function _burnInputs(Recipe storage recipe) private {
-        uint256 inputCount = recipe.inputTokenIds.length;
-        for (uint256 index = 0; index < inputCount; index++) {
+        for (uint256 index = 0; index < recipe.inputTokenIds.length; index++) {
             itemToken.burn(msg.sender, recipe.inputTokenIds[index], recipe.inputAmounts[index]);
         }
     }
@@ -321,12 +642,23 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         itemToken.mintGameItem(msg.sender, outputTokenId, recipe.outputAmount, recipe.outputUri);
     }
 
+    function _releaseOutputReservation(uint256 recipeId, Recipe storage recipe) private {
+        if (recipe.reservationReleased) {
+            return;
+        }
+
+        uint256 remainingCrafts = recipe.maxTotalCrafts - recipe.totalCrafts;
+        uint256 releasedOutput = remainingCrafts * recipe.outputAmount;
+        recipe.reservationReleased = true;
+        outputReserved[recipe.outputTokenId] -= releasedOutput;
+        emit OutputReservationReleased(recipeId, recipe.outputTokenId, releasedOutput);
+    }
+
     function _recipeFor(uint256 recipeId) private view returns (Recipe storage) {
         Recipe storage recipe = _recipes[recipeId];
         if (!recipe.exists) {
             revert RecipeNotFound(recipeId);
         }
-
         return recipe;
     }
 
@@ -334,31 +666,24 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         if (from == to || from == RecipeStatus.Retired) {
             return false;
         }
-
         if (to == RecipeStatus.Retired) {
             return true;
         }
-
         if (from == RecipeStatus.Draft && to == RecipeStatus.Simulated) {
             return true;
         }
-
         if (from == RecipeStatus.Simulated && to == RecipeStatus.AdminReviewed) {
             return true;
         }
-
         if (from == RecipeStatus.AdminReviewed && to == RecipeStatus.Scheduled) {
             return true;
         }
-
         if (from == RecipeStatus.Scheduled && to == RecipeStatus.Active) {
             return true;
         }
-
         if (from == RecipeStatus.Active && to == RecipeStatus.Paused) {
             return true;
         }
-
         return from == RecipeStatus.Paused && to == RecipeStatus.Active;
     }
 
@@ -370,7 +695,6 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
 
         treasuryFeesCredit[msg.sender] = 0;
         _sendNative(to, amount);
-
         emit TreasuryFeesWithdrawn(msg.sender, to, amount);
     }
 

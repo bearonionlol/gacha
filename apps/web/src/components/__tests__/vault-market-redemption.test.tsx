@@ -28,12 +28,19 @@ describe("vault, market, and redemption routes", () => {
     expect(screen.getAllByText(/Floor delta/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Buyback delta/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Listing health/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /Open listing for Pokemon TCG Charizard ex/i })).toBeDisabled();
+    expect(screen.getByText(/Market order ticket/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Approve Marketplace/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Marketplace\.list/i).length).toBeGreaterThan(0);
     expect(screen.getAllByLabelText(/Owned inventory token ID/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Scan wallet inventory/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/known seeded inventory/i).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/On-chain listing ID/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Marketplace\.buy/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Marketplace\.cancel/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Marketplace\.withdrawProceeds/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Buyback desk/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/BuybackVault\.acceptQuote/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/BuybackVault\.withdrawPayout/i).length).toBeGreaterThan(0);
   });
 
   it("renders redemption lifecycle states", () => {

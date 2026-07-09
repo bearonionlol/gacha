@@ -1,5 +1,5 @@
 import { Download, FileJson, ShieldCheck } from "lucide-react";
-import { inventoryStatuses, sampleInventory } from "@gacha/inventory";
+import { browserInventoryStatuses, browserSeededInventory } from "../lib/browser-seeded-inventory";
 import { formatCents } from "../lib/format";
 import { PublicTestnetReadinessPanel } from "./public-testnet-readiness-panel";
 import { RedemptionOpsPanel } from "./testnet-write-panels";
@@ -42,10 +42,10 @@ export function AdminInventoryConsole() {
             <span className="eyebrow">Custody states</span>
             <h2>Inventory Lifecycle</h2>
           </div>
-          <span className="chain-pill">{inventoryStatuses.length} states</span>
+          <span className="chain-pill">{browserInventoryStatuses.length} states</span>
         </div>
         <ol className="inventory-lifecycle">
-          {inventoryStatuses.map((status) => (
+          {browserInventoryStatuses.map((status) => (
             <li key={status}>{status}</li>
           ))}
         </ol>
@@ -57,7 +57,7 @@ export function AdminInventoryConsole() {
             <span className="eyebrow">Intake queue</span>
             <h2>Sample Inventory Records</h2>
           </div>
-          <span className="chain-pill">{sampleInventory.length} samples</span>
+          <span className="chain-pill">{browserSeededInventory.length} samples</span>
         </div>
 
         <div className="inventory-table-wrap">
@@ -74,7 +74,7 @@ export function AdminInventoryConsole() {
               </tr>
             </thead>
             <tbody>
-              {sampleInventory.map((item) => (
+              {browserSeededInventory.map((item) => (
                 <tr key={item.inventoryId}>
                   <td>
                     <strong>{item.cardName}</strong>

@@ -58,18 +58,56 @@ describe("transaction helpers", () => {
     expect(list.args).toEqual([1001n, 1n, 15_000_000_000_000_000n]);
   });
 
+  it("builds marketplace buy, cancel, and proceeds requests", () => {
+    const buy = createWriteRequest({
+      kind: "marketBuy",
+      contracts,
+      listingId: 7n,
+      value: 15_000_000_000_000_000n
+    });
+    const cancel = createWriteRequest({ kind: "marketCancel", contracts, listingId: 7n });
+    const withdraw = createWriteRequest({ kind: "marketWithdraw", contracts });
+
+    expect(buy).toMatchObject({ address: contracts.Marketplace, functionName: "buy", args: [7n], value: 15_000_000_000_000_000n });
+    expect(cancel).toMatchObject({ address: contracts.Marketplace, functionName: "cancel", args: [7n] });
+    expect(withdraw).toMatchObject({ address: contracts.Marketplace, functionName: "withdrawProceeds", args: [] });
+  });
+
+  it("builds buyback acceptance and payout requests", () => {
+    const accept = createWriteRequest({
+      kind: "buybackAccept",
+      contracts,
+      tokenId: 1001n,
+      amount: 1n
+    });
+    const withdraw = createWriteRequest({ kind: "buybackWithdraw", contracts });
+
+    expect(accept).toMatchObject({
+      address: contracts.BuybackVault,
+      functionName: "acceptQuote",
+      args: [1001n, 1n]
+    });
+    expect(withdraw).toMatchObject({
+      address: contracts.BuybackVault,
+      functionName: "withdrawPayout",
+      args: []
+    });
+  });
+
   it("builds Forge and redemption requests", () => {
+    const imprintHash = `0x${"ab".repeat(32)}` as const;
     const craft = createWriteRequest({
       kind: "forgeCraft",
       contracts,
-      recipeId: 1n,
+      recipeId: 2n,
+      imprintHash,
       value: 1_000_000_000_000_000n
     });
     const redeem = createWriteRequest({ kind: "redemptionRequest", contracts, tokenId: 1001n });
 
     expect(craft.address).toBe(contracts.Forge);
-    expect(craft.functionName).toBe("craft");
-    expect(craft.args).toEqual([1n]);
+    expect(craft.functionName).toBe("craftWithImprint");
+    expect(craft.args).toEqual([2n, imprintHash]);
     expect(craft.value).toBe(1_000_000_000_000_000n);
     expect(redeem.address).toBe(contracts.RedemptionRegistry);
     expect(redeem.functionName).toBe("requestRedemption");

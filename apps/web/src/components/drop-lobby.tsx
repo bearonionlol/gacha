@@ -1,9 +1,9 @@
-import { BadgeDollarSign, PercentCircle } from "lucide-react";
+import { BadgeDollarSign, PackageCheck } from "lucide-react";
 import { PackPurchasePanel } from "./testnet-write-panels";
 import { activeDrop } from "../lib/game-state";
-import { formatCents, formatCompactNumber } from "../lib/format";
+import { formatCompactNumber } from "../lib/format";
 
-export function DropLobby() {
+export function DropLobby({ onPurchaseConfirmed }: { onPurchaseConfirmed?: (purchaseId: bigint) => void }) {
   return (
     <section className="panel drop-lobby" aria-labelledby="drop-command-title">
       <div className="panel-header">
@@ -11,17 +11,17 @@ export function DropLobby() {
           <span className="eyebrow">Active drop</span>
           <h1 id="drop-command-title">Drop Command</h1>
         </div>
-        <span className="chain-pill">Testnet demo</span>
+        <span className="chain-pill">Public testnet</span>
       </div>
 
       <div className="drop-title-row">
         <div>
           <h2>{activeDrop.title}</h2>
-          <p>{activeDrop.inventoryBackedCount} vault items backing the demo drop pool.</p>
+          <p>{activeDrop.inventoryBackedCount} seeded vault item with guaranteed Forge materials.</p>
         </div>
         <span className="chain-pill">Live write enabled</span>
       </div>
-      <PackPurchasePanel />
+      <PackPurchasePanel onPurchaseConfirmed={onPurchaseConfirmed} />
 
       <dl className="drop-stats">
         <div>
@@ -29,7 +29,7 @@ export function DropLobby() {
             <BadgeDollarSign size={15} aria-hidden="true" />
             Pack price
           </dt>
-          <dd>{formatCents(activeDrop.packPriceCents)}</dd>
+          <dd>{activeDrop.testnetPriceLabel}</dd>
         </div>
         <div>
           <dt>Supply</dt>
@@ -43,15 +43,15 @@ export function DropLobby() {
         </div>
       </dl>
 
-      <div className="odds-table" aria-label="Drop odds">
+      <div className="odds-table" aria-label="Pack contents">
         <div className="odds-heading">
-          <PercentCircle size={16} aria-hidden="true" />
-          <span>Published odds</span>
+          <PackageCheck size={16} aria-hidden="true" />
+          <span>Published contents</span>
         </div>
-        {activeDrop.odds.map((row) => (
+        {activeDrop.guarantees.map((row) => (
           <div className="odds-row" key={row.label}>
             <span>{row.label}</span>
-            <strong>{row.chancePercent}%</strong>
+            <strong>{row.amount}</strong>
           </div>
         ))}
       </div>

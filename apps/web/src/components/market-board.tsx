@@ -1,5 +1,5 @@
 import { BadgeDollarSign, HandCoins, LockKeyhole, PercentCircle, Store } from "lucide-react";
-import { MarketplaceListPanel } from "./testnet-write-panels";
+import { BuybackPanel, MarketplaceListPanel, MarketplaceTradePanel } from "./testnet-write-panels";
 import { formatCents } from "../lib/format";
 import { marketListings } from "../lib/game-state";
 import { enrichMarketListings } from "../lib/marketplace";
@@ -17,7 +17,7 @@ export function MarketBoard() {
           <span className="eyebrow">Listing board</span>
           <h2 id="market-board-title">Inventory-backed asks</h2>
         </div>
-        <span className="chain-pill">Demo escrow model</span>
+        <span className="chain-pill">Pricing reference</span>
       </div>
 
       <p className="disclosure">{marketplaceDisclosure}</p>
@@ -84,18 +84,31 @@ export function MarketBoard() {
               {listing.escrowDisclosure ?? marketplaceDisclosure} Seller receives{" "}
               {formatCents(listing.sellerReceivesCents)} after a {listing.feeBps} bps protocol fee.
             </p>
-            <button
-              aria-label={`Open listing for ${listing.title}`}
-              className="secondary-action"
-              disabled
-              type="button"
-            >
-              Open listing
-            </button>
-            <MarketplaceListPanel inputId={`market-token-id-${listing.id}`} />
           </article>
         ))}
       </div>
+
+      <section className="market-operations" aria-labelledby="market-operations-title">
+        <div className="section-heading-row">
+          <div>
+            <span className="eyebrow">Testnet escrow</span>
+            <h2 id="market-operations-title">Market order ticket</h2>
+          </div>
+          <span className="chain-pill">Live contracts</span>
+        </div>
+        <div className="market-ops-grid">
+          <MarketplaceListPanel inputId="market-token-id" />
+          <MarketplaceTradePanel />
+        </div>
+        <div className="section-heading-row buyback-heading">
+          <div>
+            <span className="eyebrow">Protocol liquidity</span>
+            <h2>Buyback desk</h2>
+          </div>
+          <span className="chain-pill">Exact quotes</span>
+        </div>
+        <BuybackPanel />
+      </section>
     </section>
   );
 }

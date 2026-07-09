@@ -107,7 +107,15 @@ Seed the deployed contracts:
 pnpm --filter @gacha/contracts seed:testnet
 ```
 
-The seed script reads `packages/inventory/src/sample-inventory.ts`, anchors sample inventory hashes, creates one sample drop from drop-ready sample inventory, creates one sample Forge recipe, mints missing sample Forge input game items to the deployer, and approves Forge for the deployer when needed.
+The seed script reads `packages/inventory/src/sample-inventory.ts`, anchors sample inventory hashes, creates one sample drop from drop-ready sample inventory, and guarantees three Fire shards plus one Vault seal with its physical-card reveal. It creates and activates the Duplicate Recycler, Fire Signal, and Vault Resonance Forge blueprints; configures a 250 bps marketplace fee; publishes a 0.004 ETH sample buyback quote; and funds one unreserved payout.
+
+The three Forge recipes form a complete starter loop:
+
+- Duplicate Recycler burns two Fire shards for one Forge dust at no protocol fee.
+- Fire Signal burns one Fire shard, one Vault seal, and one Forge dust for a Signal badge at a 0.001 ETH fee.
+- Vault Resonance burns one Signal badge for a capped Resonance aura at a 0.002 ETH fee while requiring the sample physical card as a retained catalyst.
+
+Physical inventory can never be configured as a Forge burn input. Recipe output caps, blueprint hashes, and user imprint hashes are enforced onchain. The sample seed exits immediately on Robinhood mainnet.
 
 Testnet seed data uses sample inventory and placeholder metadata URIs such as `ipfs://metadata/<inventoryId>.json`. Do not treat testnet seed metadata as production-reviewed inventory metadata or custody evidence.
 
@@ -121,7 +129,25 @@ Run a read-only smoke check:
 pnpm --filter @gacha/contracts smoke:testnet
 ```
 
-The smoke script reads `deployments/robinhoodTestnet.json`, verifies deployed bytecode, checks contract wiring, confirms default admin ownership by the recorded deployer, and checks required operational roles.
+The smoke script reads `deployments/robinhoodTestnet.json`, verifies deployed bytecode, checks contract wiring and roles, and validates the seeded starter bundle, active Forge recipes, retained physical catalyst, marketplace fee, active buyback quote, and unreserved buyback liquidity.
+
+## Automated Collector Rehearsal
+
+Run this only once against a fresh seeded deployment:
+
+```bash
+pnpm --filter @gacha/contracts rehearse:testnet
+```
+
+The script records transaction hashes while it purchases and reveals the pack, crafts the full three-stage Forge path, performs a marketplace settlement, requests and cancels redemption, accepts and withdraws the buyback quote, returns the physical collectible, and restores the buyback reserve. It then verifies 0.01 ETH of pack credit, 0.003 ETH of Forge credit, and the 250 bps market fee path.
+
+Run the read-only smoke again after rehearsal:
+
+```bash
+pnpm --filter @gacha/contracts smoke:testnet
+```
+
+The rehearsal refuses mainnet and refuses a deployment whose sample drop has already been purchased. Redeploy for a clean repeat.
 
 ## Phase 4C Web Operations Smoke
 
@@ -130,6 +156,8 @@ Phase 4C is the browser-wallet rehearsal for testnet operations. Run it only aft
 ```bash
 pnpm --filter @gacha/contracts deploy:testnet
 pnpm --filter @gacha/contracts seed:testnet
+pnpm --filter @gacha/contracts smoke:testnet
+pnpm --filter @gacha/contracts rehearse:testnet
 pnpm --filter @gacha/contracts smoke:testnet
 ```
 
@@ -163,11 +191,16 @@ Browser smoke path:
 - Reserve a seeded pack with `PackSale.purchase`.
 - Reveal the purchase ID with `PackSale.reveal` after the reveal transaction is eligible.
 - Open `/market`, scan known seeded inventory, select an owned token, approve Marketplace, and list the item.
+- In the live market ticket, read an onchain listing ID, buy at its exact price, cancel as the seller, or withdraw credited proceeds.
+- In the buyback desk, select an owned quoted token, review the exact onchain quote, approve BuybackVault, accept, and withdraw the credited payout.
+- Open `/forge`, connect the wallet, load each recipe, place the exact 3 x 3 pattern, review the output cap and fee, create an imprint, approve Forge, and craft.
 - Open `/redemption`, scan known seeded inventory, select a redeemable token, approve RedemptionRegistry, and request redemption.
 - Open `/admin/inventory` with an operator wallet that holds `REDEMPTION_ADMIN_ROLE`.
 - Submit redemption lifecycle updates as separate transactions: approve, mark packed, mark shipped, complete, or cancel.
 
 Record every transaction hash, the wallet address used, and the deployment registry commit or artifact reviewed for the session. Do not use the browser app as the source of truth for fulfillment; the contract state and operator records remain authoritative.
+
+The public release checklist is `docs/public-testnet-checklist.md`.
 
 ## Mainnet Cutover Checks
 

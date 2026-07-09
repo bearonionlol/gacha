@@ -102,6 +102,9 @@ export interface CreateDropParams {
   maxSupply: BigNumberish;
   inventoryIds: string[];
   metadataUris: string[];
+  bonusTokenIds: BigNumberish[];
+  bonusAmounts: BigNumberish[];
+  bonusUris: string[];
 }
 
 export type PackSale = Omit<BaseContract, "connect"> & {
@@ -119,6 +122,7 @@ export type PackSale = Omit<BaseContract, "connect"> & {
   withdrawTreasuryCreditTo(to: string): Promise<ContractTransactionResponse>;
   closeDrop(dropId: BigNumberish): Promise<ContractTransactionResponse>;
   remainingInventory(dropId: BigNumberish): Promise<bigint>;
+  getDropBonus(dropId: BigNumberish): Promise<[bigint[], bigint[], string[]]>;
   pause(): Promise<ContractTransactionResponse>;
   unpause(): Promise<ContractTransactionResponse>;
   grantRole(role: string, account: string): Promise<ContractTransactionResponse>;
@@ -196,6 +200,10 @@ export interface CreateRecipeParams {
   maxCraftsPerWallet: BigNumberish;
   requiresManualReview: boolean;
   excludeGrailProtectedInputs: boolean;
+  catalystTokenIds: BigNumberish[];
+  catalystAmounts: BigNumberish[];
+  outputSupplyCap: BigNumberish;
+  metadataHash: string;
 }
 
 export interface ForgeRecipe {
@@ -212,11 +220,17 @@ export interface ForgeRecipe {
   requiresManualReview: boolean;
   excludeGrailProtectedInputs: boolean;
   exists: boolean;
+  outputSupplyCap: bigint;
+  metadataHash: string;
+  blueprintHash: string;
+  reservationReleased: boolean;
 }
 
 export type Forge = Omit<BaseContract, "connect"> & {
   RECIPE_ADMIN_ROLE(): Promise<string>;
+  CRAFT_REVIEWER_ROLE(): Promise<string>;
   nextRecipeId(): Promise<bigint>;
+  nextCraftId(): Promise<bigint>;
   createRecipe(params: CreateRecipeParams): Promise<ContractTransactionResponse>;
   setRecipeStatus(
     recipeId: BigNumberish,
@@ -226,9 +240,32 @@ export type Forge = Omit<BaseContract, "connect"> & {
     recipeId: BigNumberish,
     overrides?: { value?: BigNumberish }
   ): Promise<ContractTransactionResponse>;
+  craftWithImprint(
+    recipeId: BigNumberish,
+    imprintHash: string,
+    overrides?: { value?: BigNumberish }
+  ): Promise<ContractTransactionResponse>;
   getRecipeInputs(recipeId: BigNumberish): Promise<[bigint[], bigint[]]>;
+  getRecipeCatalysts(recipeId: BigNumberish): Promise<[bigint[], bigint[]]>;
   recipes(recipeId: BigNumberish): Promise<ForgeRecipe>;
   walletCrafts(recipeId: BigNumberish, account: string): Promise<bigint>;
+  reviewAllowances(recipeId: BigNumberish, account: string): Promise<bigint>;
+  setCraftAllowance(
+    recipeId: BigNumberish,
+    account: string,
+    amount: BigNumberish
+  ): Promise<ContractTransactionResponse>;
+  outputSupplyCaps(tokenId: BigNumberish): Promise<bigint>;
+  outputReserved(tokenId: BigNumberish): Promise<bigint>;
+  usedImprints(recipeId: BigNumberish, account: string, imprintHash: string): Promise<boolean>;
+  crafts(craftId: BigNumberish): Promise<{
+    recipeId: bigint;
+    crafter: string;
+    outputTokenId: bigint;
+    outputAmount: bigint;
+    imprintHash: string;
+    craftedAt: bigint;
+  }>;
   treasuryFeesCredit(account: string): Promise<bigint>;
   withdrawTreasuryFees(): Promise<ContractTransactionResponse>;
   withdrawTreasuryFeesTo(to: string): Promise<ContractTransactionResponse>;
@@ -400,6 +437,7 @@ export async function deployProtocolFixture() {
   await marketplace.grantRole(await marketplace.MARKET_ADMIN_ROLE(), marketAdmin.address);
   await buybackVault.grantRole(await buybackVault.BUYBACK_ADMIN_ROLE(), buybackAdmin.address);
   await forge.grantRole(await forge.RECIPE_ADMIN_ROLE(), recipeAdmin.address);
+  await forge.grantRole(await forge.CRAFT_REVIEWER_ROLE(), recipeAdmin.address);
   await redemptionRegistry.grantRole(
     await redemptionRegistry.REDEMPTION_ADMIN_ROLE(),
     redemptionAdmin.address

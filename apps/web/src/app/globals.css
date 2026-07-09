@@ -758,6 +758,35 @@ h1 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.market-operations {
+  display: grid;
+  gap: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+
+.market-ops-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.market-listing-read-state {
+  margin: 0;
+  border-left: 2px solid var(--green-line);
+  padding-left: 9px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.buyback-heading {
+  margin-top: 6px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+
 .timeline-state-row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -820,6 +849,8 @@ h1 {
 .forge-control-panel,
 .material-bank-panel,
 .recycler-panel,
+.catalyst-panel,
+.imprint-panel,
 .provenance-panel {
   display: grid;
   gap: 14px;
@@ -901,6 +932,51 @@ h1 {
   padding: 10px;
 }
 
+.forge-invariant-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.forge-invariant-list div {
+  min-width: 0;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.forge-invariant-list dt,
+.forge-invariant-list dd {
+  margin: 0;
+}
+
+.forge-invariant-list dt {
+  color: var(--faint);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.forge-invariant-list dd {
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.forge-live-status {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border-left: 2px solid var(--green-line);
+  margin: 0;
+  padding-left: 9px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
 .forge-grid-panel,
 .output-preview {
   display: grid;
@@ -914,9 +990,11 @@ h1 {
 }
 
 .forge-slot {
+  appearance: none;
   display: grid;
   min-width: 0;
   min-height: 118px;
+  aspect-ratio: 1.22;
   place-items: center;
   gap: 6px;
   border: 1px dashed var(--line-strong);
@@ -925,6 +1003,7 @@ h1 {
   color: var(--muted);
   padding: 12px;
   text-align: center;
+  cursor: pointer;
 }
 
 .forge-slot strong {
@@ -947,8 +1026,34 @@ h1 {
   color: #c8f8d6;
 }
 
+.forge-slot.hinted {
+  border-color: rgba(0, 200, 5, 0.42);
+  background: rgba(0, 200, 5, 0.035);
+}
+
+.forge-slot.matched {
+  border-style: solid;
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.forge-slot.misplaced {
+  border-style: solid;
+  border-color: rgba(255, 184, 77, 0.7);
+  background: rgba(255, 184, 77, 0.08);
+  color: var(--warm);
+}
+
+.forge-slot svg {
+  pointer-events: none;
+}
+
 .material-card {
   align-content: start;
+}
+
+.material-bank-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .material-card strong,
@@ -966,6 +1071,141 @@ h1 {
 .recipe-card button,
 .recycler-panel button {
   width: 100%;
+}
+
+.catalyst-panel,
+.imprint-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.catalyst-list {
+  display: grid;
+  gap: 8px;
+}
+
+.catalyst-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--green-line);
+  border-radius: 8px;
+  background: var(--green-soft);
+  padding: 11px;
+}
+
+.catalyst-row strong,
+.catalyst-row span {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.catalyst-row span:not(.chain-pill) {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.forge-empty-state {
+  margin: 0;
+  border-left: 2px solid var(--line-strong);
+  padding-left: 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.imprint-frame-control {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.imprint-swatch {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.imprint-swatch.signal.active {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.imprint-swatch.prism.active {
+  border-color: #55d8ff;
+  color: #55d8ff;
+}
+
+.imprint-swatch.mono.active {
+  border-color: var(--warm);
+  color: var(--warm);
+}
+
+.imprint-preview {
+  display: grid;
+  min-height: 116px;
+  place-content: center;
+  gap: 6px;
+  border: 1px solid var(--line-strong);
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #090c0a;
+  padding: 16px;
+  text-align: center;
+}
+
+.imprint-preview.signal {
+  border-left-color: var(--green);
+}
+
+.imprint-preview.prism {
+  border-left-color: #55d8ff;
+}
+
+.imprint-preview.mono {
+  border-left-color: var(--warm);
+}
+
+.imprint-preview strong,
+.imprint-preview span {
+  overflow-wrap: anywhere;
+}
+
+.imprint-preview span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.forge-imprint-hash {
+  display: block;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(6, 8, 7, 0.46);
+  padding: 9px;
+  color: var(--faint);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+
+.forge-output-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.chain-pill.ready {
+  border-color: var(--green-line);
+  color: var(--green);
 }
 
 .provenance-list {
@@ -987,6 +1227,10 @@ h1 {
 .output-preview,
 .material-bank-panel,
 .provenance-panel {
+  grid-column: span 2;
+}
+
+.phase-five-forge > .transaction-panel {
   grid-column: span 2;
 }
 
@@ -1522,6 +1766,7 @@ h1 {
   .dashboard-grid,
   .vault-grid,
   .market-listings,
+  .market-ops-grid,
   .collection-progress-grid,
   .next-chase-panel,
   .forge-workbench,
@@ -1538,6 +1783,7 @@ h1 {
   .output-preview,
   .material-bank-panel,
   .provenance-panel,
+  .phase-five-forge > .transaction-panel,
   .inventory-table-panel {
     grid-column: auto;
   }
@@ -1638,5 +1884,36 @@ h1 {
 
   .status-rail h2 {
     font-size: 1.2rem;
+  }
+
+  .material-bank-grid,
+  .forge-invariant-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .forge-grid {
+    gap: 7px;
+  }
+
+  .forge-slot {
+    min-height: 92px;
+    padding: 8px 5px;
+  }
+
+  .forge-slot strong {
+    font-size: 0.78rem;
+  }
+
+  .forge-slot span {
+    font-size: 0.68rem;
+  }
+
+  .catalyst-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .catalyst-row .chain-pill {
+    grid-column: 2;
+    justify-self: start;
   }
 }

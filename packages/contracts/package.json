@@ -11,7 +11,8 @@
     "deploy:testnet": "hardhat run scripts/deploy.ts --network robinhoodTestnet",
     "deploy:mainnet": "hardhat run scripts/deploy.ts --network robinhoodMainnet",
     "seed:testnet": "hardhat run scripts/seed.ts --network robinhoodTestnet",
-    "smoke:testnet": "hardhat run scripts/smoke.ts --network robinhoodTestnet"
+    "smoke:testnet": "hardhat run scripts/smoke.ts --network robinhoodTestnet",
+    "rehearse:testnet": "hardhat run scripts/rehearse.ts --network robinhoodTestnet"
   },
   "dependencies": {
     "@gacha/shared": "workspace:*",

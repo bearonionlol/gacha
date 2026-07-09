@@ -1,10 +1,10 @@
 import { robinhoodChainTestnet } from "@gacha/shared";
-import { createWalletClient, custom, type Abi, type Address, type Hash, type TransactionReceipt } from "viem";
-import { forgeAbi, itemTokenAbi, marketplaceAbi, packSaleAbi, redemptionRegistryAbi } from "./abis";
+import { createWalletClient, custom, type Abi, type Address, type Hash, type Hex, type TransactionReceipt } from "viem";
+import { buybackVaultAbi, forgeAbi, itemTokenAbi, marketplaceAbi, packSaleAbi, redemptionRegistryAbi } from "./abis";
 import type { ProtocolContractName, ProtocolContracts } from "./registry";
 import type { Eip1193Provider } from "./wallet";
 
-export type ApprovalOperator = Extract<ProtocolContractName, "Marketplace" | "Forge" | "RedemptionRegistry">;
+export type ApprovalOperator = Extract<ProtocolContractName, "Marketplace" | "BuybackVault" | "Forge" | "RedemptionRegistry">;
 
 export type WriteRequest =
   | {
@@ -32,9 +32,35 @@ export type WriteRequest =
       price: bigint;
     }
   | {
+      kind: "marketBuy";
+      contracts: ProtocolContracts;
+      listingId: bigint;
+      value: bigint;
+    }
+  | {
+      kind: "marketCancel";
+      contracts: ProtocolContracts;
+      listingId: bigint;
+    }
+  | {
+      kind: "marketWithdraw";
+      contracts: ProtocolContracts;
+    }
+  | {
+      kind: "buybackAccept";
+      contracts: ProtocolContracts;
+      tokenId: bigint;
+      amount: bigint;
+    }
+  | {
+      kind: "buybackWithdraw";
+      contracts: ProtocolContracts;
+    }
+  | {
       kind: "forgeCraft";
       contracts: ProtocolContracts;
       recipeId: bigint;
+      imprintHash: Hex;
       value: bigint;
     }
   | {
@@ -120,12 +146,58 @@ export function createWriteRequest(request: WriteRequest): PreparedWrite {
     };
   }
 
+  if (request.kind === "marketBuy") {
+    return {
+      address: request.contracts.Marketplace,
+      abi: marketplaceAbi as Abi,
+      functionName: "buy",
+      args: [request.listingId],
+      value: request.value
+    };
+  }
+
+  if (request.kind === "marketCancel") {
+    return {
+      address: request.contracts.Marketplace,
+      abi: marketplaceAbi as Abi,
+      functionName: "cancel",
+      args: [request.listingId]
+    };
+  }
+
+  if (request.kind === "marketWithdraw") {
+    return {
+      address: request.contracts.Marketplace,
+      abi: marketplaceAbi as Abi,
+      functionName: "withdrawProceeds",
+      args: []
+    };
+  }
+
+  if (request.kind === "buybackAccept") {
+    return {
+      address: request.contracts.BuybackVault,
+      abi: buybackVaultAbi as Abi,
+      functionName: "acceptQuote",
+      args: [request.tokenId, request.amount]
+    };
+  }
+
+  if (request.kind === "buybackWithdraw") {
+    return {
+      address: request.contracts.BuybackVault,
+      abi: buybackVaultAbi as Abi,
+      functionName: "withdrawPayout",
+      args: []
+    };
+  }
+
   if (request.kind === "forgeCraft") {
     return {
       address: request.contracts.Forge,
       abi: forgeAbi as Abi,
-      functionName: "craft",
-      args: [request.recipeId],
+      functionName: "craftWithImprint",
+      args: [request.recipeId, request.imprintHash],
       value: request.value
     };
   }

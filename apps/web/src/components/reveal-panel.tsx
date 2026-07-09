@@ -1,4 +1,5 @@
 import { ArrowUpRight, Archive, BadgeCheck, HandCoins, RefreshCw, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { revealPreview } from "../lib/game-state";
 import { PackRevealPanel } from "./testnet-write-panels";
 
@@ -10,33 +11,38 @@ const actionIcons: Record<string, typeof Archive> = {
   "Use in Forge": RefreshCw
 };
 
-export function RevealPanel() {
+const actionLinks: Record<string, string> = {
+  "Keep in vault": "/vault",
+  "List on market": "/market",
+  "Accept buyback": "/market",
+  "Request redemption": "/redemption",
+  "Use in Forge": "/forge"
+};
+
+export function RevealPanel({ purchaseId = null }: { purchaseId?: bigint | null }) {
   return (
     <section className="panel reveal-panel" aria-labelledby="reveal-title">
       <div className="panel-header compact">
         <div>
-          <span className="eyebrow">Reveal preview</span>
+          <span className="eyebrow">Reveal station</span>
           <h2 id="reveal-title">{revealPreview.title}</h2>
         </div>
         <Sparkles size={18} aria-hidden="true" />
       </div>
-      <p>
-        Ready state mirrors the protocol decision flow after a pack reveal. Choose a next action without submitting a
-        chain write in demo mode.
-      </p>
+      <p>Reveal the purchase on testnet, then route the physical pull into custody, market, redemption, or Forge.</p>
       <div className="action-grid" aria-label="Reveal next actions">
         {revealPreview.nextActions.map((action) => {
           const Icon = actionIcons[action] ?? Archive;
 
           return (
-            <button key={action} type="button" className="secondary-action">
+            <Link key={action} href={actionLinks[action] ?? "/vault"} className="secondary-action">
               <Icon size={16} aria-hidden="true" />
               {action}
-            </button>
+            </Link>
           );
         })}
       </div>
-      <PackRevealPanel />
+      <PackRevealPanel initialPurchaseId={purchaseId} />
       <p className="disclosure">Reveal operations submit live testnet writes only after explicit wallet confirmation.</p>
     </section>
   );

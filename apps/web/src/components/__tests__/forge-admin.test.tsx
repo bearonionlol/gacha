@@ -9,18 +9,18 @@ describe("forge and admin routes", () => {
     expect(screen.getByText(/Recipe Book/i)).toBeInTheDocument();
     expect(screen.getByText(/Discovery recipes/i)).toBeInTheDocument();
     expect(screen.getByText(/Material bank/i)).toBeInTheDocument();
-    expect(screen.getByText(/Duplicate recycler/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Duplicate recycler/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Lab mode/i)).toBeInTheDocument();
     expect(screen.getByText(/Live craft/i)).toBeInTheDocument();
     expect(screen.getByText(/3 x 3 Forge Grid/i)).toBeInTheDocument();
     expect(screen.getByText(/Output Preview/i)).toBeInTheDocument();
     expect(screen.getByText(/Protocol fee preview/i)).toBeInTheDocument();
     expect(screen.getByText(/Provenance log/i)).toBeInTheDocument();
-    expect(screen.getByText(/grail-protected/i)).toBeInTheDocument();
+    expect(screen.getByText(/Physical inventory locked from burns/i)).toBeInTheDocument();
     expect(screen.getAllByRole("gridcell")).toHaveLength(9);
     expect(screen.getByText(/Approve Forge/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Forge\.craft/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/0\.001 ETH/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Forge\.craftWithImprint/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/0\.001 ETH/i).length).toBeGreaterThan(0);
   });
 
   it("renders admin lifecycle, required fields, and export controls", () => {

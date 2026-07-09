@@ -1,5 +1,5 @@
 import { collectibleCards } from "../lib/inventory";
-import { forgeRecipes } from "../lib/game-state";
+import { encodePacked, keccak256 } from "viem";
 import {
   ForgeWorkbenchClient,
   type ForgeIngredientView,
@@ -7,116 +7,111 @@ import {
   type ForgeRecipeView
 } from "./forge-workbench-client";
 
-type BaseForgeRecipe = (typeof forgeRecipes)[number];
-
-const fallbackFireRecipe: BaseForgeRecipe = {
-  id: "recipe-fire-signal",
-  title: "Fire Signal Upgrade",
-  progressPercent: 0,
-  ingredients: ["fire", "charizard", "pokemon_raw"],
-  output: "Animated vault badge",
-  cap: 25,
-  feeCents: 150,
-  warning: "Crafting preview does not burn items or guarantee secondary market value."
-};
-
-const fallbackGrailRecipe: BaseForgeRecipe = {
-  id: "recipe-grail-path",
-  title: "Grail Path",
-  progressPercent: 0,
-  ingredients: ["alternate_art", "pokemon_graded"],
-  output: "Priority redemption review",
-  cap: 10,
-  feeCents: 250,
-  warning: "Grail recipes require explicit confirmation in later protocol phases."
-};
-
-const [fireSignalRecipe = fallbackFireRecipe, grailPathRecipe = fallbackGrailRecipe] = forgeRecipes;
-
 const forgeMaterials: ForgeMaterialView[] = [
   {
     id: "fire-shard",
+    tokenId: "7001",
     label: "Fire shard",
-    balance: 12,
-    source: "Duplicate fire-tag pulls",
-    tone: "volatile",
-    recipeTags: ["fire", "charizard"]
+    labBalance: 3,
+    source: "Guaranteed starter bundle",
+    tone: "volatile"
   },
   {
     id: "vault-seal",
+    tokenId: "7002",
     label: "Vault seal",
-    balance: 4,
-    source: "Verified custody bonus",
-    tone: "custody",
-    recipeTags: ["vault", "verified"]
-  },
-  {
-    id: "parallel-ink",
-    label: "Parallel ink",
-    balance: 7,
-    source: "One Piece duplicate foil",
-    tone: "foil",
-    recipeTags: ["parallel", "straw_hat"]
-  },
-  {
-    id: "slab-prism",
-    label: "Slab prism",
-    balance: 2,
-    source: "Graded-card recycling",
-    tone: "graded",
-    recipeTags: ["graded", "alternate_art"]
+    labBalance: 1,
+    source: "Guaranteed starter bundle",
+    tone: "custody"
   },
   {
     id: "forge-dust",
+    tokenId: "7003",
     label: "Forge dust",
-    balance: 18,
-    source: "Universal material recycler",
-    tone: "base",
-    recipeTags: ["dust", "wildcard"]
+    labBalance: 1,
+    source: "Duplicate Recycler output",
+    tone: "recycled"
+  },
+  {
+    id: "signal-badge",
+    tokenId: "9001",
+    label: "Signal badge",
+    labBalance: 1,
+    source: "Fire Signal output",
+    tone: "crafted"
   }
 ];
 
+const emptyPattern = Array<string | null>(9).fill(null);
+
 const forgeRecipeViews: ForgeRecipeView[] = [
   {
-    ...fireSignalRecipe,
+    id: "recipe-duplicate-recycler",
+    chainRecipeId: "1",
+    title: "Duplicate Recycler",
+    tier: "utility",
+    status: "known",
+    category: "recycle",
+    description: "2 Fire shards become 1 Forge dust.",
+    pattern: [null, null, null, "fire-shard", "fire-shard", null, null, null, null],
+    catalystCardIds: [],
+    output: "Forge dust x1",
+    outputTokenId: "7003",
+    outputSupplyCap: 1_000,
+    totalCrafts: 0,
+    maxCraftsPerWallet: 100,
+    feeWei: "0",
+    displayFee: "Free",
+    metadataHashLabel: "recycler:v3"
+  },
+  {
+    id: "recipe-fire-signal",
+    chainRecipeId: "2",
+    title: "Fire Signal",
     tier: "rare",
     status: "known",
-    description: "Turns duplicate fire materials into a vault badge users can flex on their profile.",
-    requiredMaterialIds: ["fire-shard", "vault-seal", "forge-dust"],
-    expectedProtocolRevenueCents: 150
+    category: "craft",
+    description: "Fire, custody, and recycled dust form a numbered Signal badge.",
+    pattern: ["fire-shard", null, "vault-seal", null, "forge-dust", null, null, null, null],
+    catalystCardIds: [],
+    output: "Signal badge x1",
+    outputTokenId: "9001",
+    outputSupplyCap: 100,
+    totalCrafts: 0,
+    maxCraftsPerWallet: 5,
+    feeWei: "1000000000000000",
+    displayFee: "0.001 ETH",
+    metadataHashLabel: "fire-signal:v3"
   },
   {
-    id: "recipe-parallel-captain",
-    title: "Parallel Captain Sigil",
-    tier: "elite",
-    status: "discovery",
-    description: "A hidden One Piece path. Users see the hint, then test combinations in the sandbox.",
-    progressPercent: 12,
-    ingredients: ["parallel", "straw_hat", "vault"],
-    requiredMaterialIds: ["parallel-ink", "vault-seal", "forge-dust"],
-    output: "Animated captain sigil",
-    cap: 50,
-    feeCents: 225,
-    expectedProtocolRevenueCents: 225,
-    warning: "Discovery recipes reveal the path only after a valid lab match."
-  },
-  {
-    ...grailPathRecipe,
+    id: "recipe-vault-resonance",
+    chainRecipeId: "3",
+    title: "Vault Resonance",
     tier: "grail",
-    status: "locked",
-    description: "A premium grail path held behind explicit unlock rules and operator review.",
-    requiredMaterialIds: ["slab-prism", "vault-seal", "forge-dust"],
-    expectedProtocolRevenueCents: 250
+    status: "discovery",
+    category: "catalyst",
+    description: "Evolve a Signal badge while the linked physical pull stays intact.",
+    pattern: [null, null, null, null, "signal-badge", null, null, null, null],
+    catalystCardIds: collectibleCards[0] ? [collectibleCards[0].id] : [],
+    output: "Resonance aura x1",
+    outputTokenId: "9002",
+    outputSupplyCap: 25,
+    totalCrafts: 0,
+    maxCraftsPerWallet: 1,
+    feeWei: "2000000000000000",
+    displayFee: "0.002 ETH",
+    metadataHashLabel: "vault-resonance:v3"
   }
 ];
 
 const protectedInputs: ForgeIngredientView[] = collectibleCards.map((card) => ({
   id: card.id,
+  tokenId: BigInt(keccak256(encodePacked(["string", "string"], ["inventory:", card.id]))).toString(),
   title: card.title,
   subtitle: card.subtitle,
   tags: card.tags,
   grailTier: card.grailTier,
-  protected: card.grailTier === "grail" || card.grailTier === "major"
+  protected: true
 }));
 
 export function ForgeWorkbench() {
@@ -124,7 +119,25 @@ export function ForgeWorkbench() {
     <ForgeWorkbenchClient
       ingredients={protectedInputs}
       materials={forgeMaterials}
-      recipes={forgeRecipeViews}
+      recipes={forgeRecipeViews.length > 0 ? forgeRecipeViews : [{
+        id: "recipe-unavailable",
+        chainRecipeId: "0",
+        title: "Unavailable",
+        tier: "utility",
+        status: "locked",
+        category: "craft",
+        description: "No Forge blueprints are configured.",
+        pattern: emptyPattern,
+        catalystCardIds: [],
+        output: "None",
+        outputTokenId: "0",
+        outputSupplyCap: 0,
+        totalCrafts: 0,
+        maxCraftsPerWallet: 0,
+        feeWei: "0",
+        displayFee: "Free",
+        metadataHashLabel: "unavailable"
+      }]}
     />
   );
 }

@@ -46,6 +46,8 @@ type TransactionActionPanelProps = TransactionPanelAction & {
   approval?: TransactionPanelAction;
   receiptClient?: ReceiptClient;
   sendWrite?: (provider: Eip1193Provider, account: Address, request: PreparedWrite) => Promise<Hash>;
+  onAccountChange?: (account: Address) => void;
+  onConfirmed?: (receipt: TransactionReceipt) => void;
   title: string;
 };
 
@@ -62,6 +64,8 @@ export function TransactionActionPanel({
   contracts,
   ctaLabel,
   description,
+  onAccountChange,
+  onConfirmed,
   receiptClient,
   registryMessage = "Live contracts are not configured for this environment.",
   sendWrite = sendPreparedWrite,
@@ -98,7 +102,11 @@ export function TransactionActionPanel({
 
     try {
       const accounts = await requestWalletAccounts(provider);
-      setAccount((accounts[0] as Address | undefined) ?? null);
+      const connectedAccount = (accounts[0] as Address | undefined) ?? null;
+      setAccount(connectedAccount);
+      if (connectedAccount !== null) {
+        onAccountChange?.(connectedAccount);
+      }
       setChainId(await readWalletChainId(provider));
     } catch (error) {
       setWalletError(getWalletErrorMessage(error));
@@ -168,6 +176,7 @@ export function TransactionActionPanel({
       }
 
       setTransactionState({ status: "confirmed", hash, label: action.ctaLabel, receipt });
+      onConfirmed?.(receipt);
     } catch (error) {
       setTransactionState({
         status: "failed",
