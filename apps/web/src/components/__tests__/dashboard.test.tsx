@@ -59,4 +59,14 @@ describe("dashboard", () => {
 
     expect(screen.getByRole("heading", { name: /Live protocol offline/i })).toBeInTheDocument();
   });
+
+  it("shows Phase 4A guards on dashboard actions", async () => {
+    render(await HomePage());
+
+    expect(screen.getAllByText(/Phase 4A guard/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/Connect wallet before this action can send a testnet transaction/i).length).toBeGreaterThanOrEqual(
+      2
+    );
+    expect(screen.getAllByText(/Transaction submission lands in Phase 4B/i).length).toBeGreaterThanOrEqual(2);
+  });
 });

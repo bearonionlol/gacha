@@ -1,4 +1,5 @@
 import { BadgeDollarSign, HandCoins, LockKeyhole, PercentCircle, Store } from "lucide-react";
+import { ActionGuardPanel } from "./action-guard-panel";
 import { formatCents } from "../lib/format";
 import { marketListings } from "../lib/game-state";
 
@@ -69,6 +70,7 @@ export function MarketBoard() {
             >
               Open listing
             </button>
+            <ActionGuardPanel action="List item" operator="Marketplace" />
           </article>
         ))}
       </div>

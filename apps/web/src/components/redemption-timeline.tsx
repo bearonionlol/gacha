@@ -1,4 +1,5 @@
 import { CheckCircle2, Clock3, PackageCheck, Truck } from "lucide-react";
+import { ActionGuardPanel } from "./action-guard-panel";
 import { redemptionRequests } from "../lib/game-state";
 
 const lifecycleStates = ["requested", "reviewing", "quoted", "fulfilled"];
@@ -59,6 +60,7 @@ export function RedemptionTimeline() {
           </article>
         ))}
       </div>
+      <ActionGuardPanel action="Request redemption" operator="RedemptionRegistry" />
     </section>
   );
 }

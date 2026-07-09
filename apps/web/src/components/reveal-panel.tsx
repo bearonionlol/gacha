@@ -1,4 +1,5 @@
 import { ArrowUpRight, Archive, BadgeCheck, HandCoins, RefreshCw, Sparkles } from "lucide-react";
+import { ActionGuardPanel } from "./action-guard-panel";
 import { revealPreview } from "../lib/game-state";
 
 const actionIcons: Record<string, typeof Archive> = {
@@ -35,6 +36,7 @@ export function RevealPanel() {
           );
         })}
       </div>
+      <ActionGuardPanel action="Reveal next action" />
       <p className="disclosure">Reveal actions are preview-only until protocol writes are connected.</p>
     </section>
   );
