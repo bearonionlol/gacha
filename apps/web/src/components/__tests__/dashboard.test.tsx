@@ -87,4 +87,15 @@ describe("dashboard", () => {
     expect(screen.getByText(/Operator reserve/i)).toBeInTheDocument();
     expect(screen.getByText(/Fee math is shown before wallet confirmation/i)).toBeInTheDocument();
   });
+
+  it("shows indexed protocol activity with next actions and explorer links", async () => {
+    render(await HomePage());
+
+    expect(screen.getByText(/Forge craft submitted/i)).toBeInTheDocument();
+    expect(screen.getByText(/Inspect crafted output/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /View tx/i })).toHaveAttribute(
+      "href",
+      expect.stringContaining("explorer.testnet.chain.robinhood.com/tx/")
+    );
+  });
 });

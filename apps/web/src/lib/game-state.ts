@@ -1,4 +1,5 @@
 import { signalRun } from "./arcade";
+import { buildActivityTimeline, type ProtocolActivityEvent } from "./activity-index";
 import { collectibleCards, vaultStats } from "./inventory";
 
 const redemptionCard =
@@ -74,17 +75,26 @@ export const redemptionRequests = [
   }
 ];
 
-export const activityFeed = [
+const activityEvents: ProtocolActivityEvent[] = [
   {
     id: "activity-drop-ready",
-    label: "Drop inventory verified",
+    type: "INVENTORY_VERIFIED",
     detail: `${vaultStats.totalItems} vault items eligible for deterministic demo drops.`,
     createdAt: "2026-07-09T00:00:00.000Z"
   },
   {
     id: "activity-signal-run",
-    label: "Signal Run streak updated",
+    type: "SIGNAL_RUN_UPDATED",
     detail: `${signalRun.streak} day streak, no odds boost applied.`,
     createdAt: "2026-07-09T00:01:00.000Z"
+  },
+  {
+    id: "activity-forge-submit",
+    type: "FORGE_CRAFTED",
+    detail: "Fire Signal Upgrade recipe #1 queued for wallet confirmation.",
+    txHash: "0xfeed0001",
+    createdAt: "2026-07-09T00:02:00.000Z"
   }
 ];
+
+export const activityFeed = buildActivityTimeline(activityEvents);
