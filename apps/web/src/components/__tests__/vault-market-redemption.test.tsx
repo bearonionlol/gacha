@@ -22,6 +22,8 @@ describe("vault, market, and redemption routes", () => {
     expect(screen.getAllByText(/Approve Marketplace/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Marketplace\.list/i).length).toBeGreaterThan(0);
     expect(screen.getAllByLabelText(/Owned inventory token ID/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Scan wallet inventory/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/known seeded inventory/i).length).toBeGreaterThan(0);
   });
 
   it("renders redemption lifecycle states", () => {
@@ -34,6 +36,8 @@ describe("vault, market, and redemption routes", () => {
     expect(screen.getByText(/Approve RedemptionRegistry/i)).toBeInTheDocument();
     expect(screen.getAllByText(/RedemptionRegistry\.requestRedemption/i).length).toBeGreaterThan(0);
     expect(screen.getByLabelText(/Redeemable inventory token ID/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Scan wallet inventory/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/known seeded inventory/i).length).toBeGreaterThan(0);
   });
 
   it("renders item-specific disabled vault actions", () => {

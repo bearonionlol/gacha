@@ -976,6 +976,7 @@ h1 {
 }
 
 .transaction-panel,
+.known-token-picker,
 .transaction-input-row {
   min-width: 0;
   border: 1px solid var(--line);
@@ -984,14 +985,16 @@ h1 {
   padding: 12px;
 }
 
-.transaction-panel {
+.transaction-panel,
+.known-token-picker {
   display: grid;
   gap: 12px;
 }
 
 .transaction-panel p,
 .transaction-panel ul,
-.transaction-panel dl {
+.transaction-panel dl,
+.known-token-picker p {
   margin: 0;
 }
 
@@ -1152,6 +1155,40 @@ h1 {
 .transaction-input-row input:focus {
   border-color: var(--green-line);
   outline: 2px solid var(--green-soft);
+}
+
+.known-token-picker p {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.known-token-list {
+  display: grid;
+  gap: 8px;
+}
+
+.known-token-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(6, 8, 7, 0.34);
+  padding: 10px;
+}
+
+.known-token-card strong,
+.known-token-card span,
+.known-token-card code {
+  display: block;
+}
+
+.known-token-card span,
+.known-token-card code {
+  margin-top: 3px;
+  color: var(--faint);
+  font-size: 0.74rem;
 }
 
 @media (max-width: 980px) {

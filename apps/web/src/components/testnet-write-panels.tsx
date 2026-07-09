@@ -10,6 +10,7 @@ import {
   testnetWriteConfig
 } from "../lib/contracts/transaction-config";
 import { robinhoodTestnetChainId } from "../lib/contracts/wallet";
+import { KnownInventoryTokenPicker } from "./known-inventory-token-picker";
 import { TransactionActionPanel } from "./transaction-action-panel";
 
 type RegistryPanelState = {
@@ -76,6 +77,11 @@ export function MarketplaceListPanel({ inputId }: TokenInputPanelProps) {
 
   return (
     <div className="transaction-panel-stack">
+      <KnownInventoryTokenPicker
+        contracts={registry.contracts}
+        onSelectTokenId={(selectedTokenId) => setTokenIdInput(selectedTokenId.toString())}
+        registryMessage={registry.message}
+      />
       <label className="transaction-input-row" htmlFor={inputId}>
         <span>Owned inventory token ID</span>
         <input
@@ -157,6 +163,12 @@ export function RedemptionRequestPanel() {
 
   return (
     <div className="transaction-panel-stack">
+      <KnownInventoryTokenPicker
+        contracts={registry.contracts}
+        onSelectTokenId={(selectedTokenId) => setTokenIdInput(selectedTokenId.toString())}
+        registryMessage={registry.message}
+        requireRedeemable
+      />
       <label className="transaction-input-row" htmlFor="redemption-token-id">
         <span>Redeemable inventory token ID</span>
         <input
