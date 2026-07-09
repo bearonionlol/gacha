@@ -123,6 +123,49 @@ pnpm --filter @gacha/contracts smoke:testnet
 
 The smoke script reads `deployments/robinhoodTestnet.json`, verifies deployed bytecode, checks contract wiring, confirms default admin ownership by the recorded deployer, and checks required operational roles.
 
+## Phase 4C Web Operations Smoke
+
+Phase 4C is the browser-wallet rehearsal for testnet operations. Run it only after deploy, seed, and smoke have completed against Robinhood testnet:
+
+```bash
+pnpm --filter @gacha/contracts deploy:testnet
+pnpm --filter @gacha/contracts seed:testnet
+pnpm --filter @gacha/contracts smoke:testnet
+```
+
+Start the web app with the testnet registry and RPC URL:
+
+```bash
+export NEXT_PUBLIC_GACHA_CHAIN_MODE=testnet
+export NEXT_PUBLIC_GACHA_RPC_URL="$ROBINHOOD_TESTNET_RPC_URL"
+export NEXT_PUBLIC_GACHA_ENABLE_ADMIN=true
+export NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY="$(cat deployments/robinhoodTestnet.json)"
+pnpm --filter @gacha/web dev --port 64920
+```
+
+Browser smoke path:
+
+- Connect a funded Robinhood testnet wallet on `/`.
+- Reserve a seeded pack with `PackSale.purchase`.
+- Reveal the purchase ID with `PackSale.reveal` after the reveal transaction is eligible.
+- Open `/market`, scan known seeded inventory, select an owned token, approve Marketplace, and list the item.
+- Open `/redemption`, scan known seeded inventory, select a redeemable token, approve RedemptionRegistry, and request redemption.
+- Open `/admin/inventory` with an operator wallet that holds `REDEMPTION_ADMIN_ROLE`.
+- Submit redemption lifecycle updates as separate transactions: approve, mark packed, mark shipped, complete, or cancel.
+
+Record every transaction hash, the wallet address used, and the deployment registry commit or artifact reviewed for the session. Do not use the browser app as the source of truth for fulfillment; the contract state and operator records remain authoritative.
+
+## Mainnet Cutover Checks
+
+Before changing any Phase 4C workflow from testnet to mainnet, complete the full controls in `docs/mainnet-migration-runbook.md`. At minimum, confirm:
+
+- The web app points at a reviewed Robinhood mainnet deployment registry, not `deployments/robinhoodTestnet.json`.
+- RPC values, chain IDs, explorer links, and wallet switch prompts all target Robinhood mainnet.
+- Admin roles are assigned to reviewed operator wallets or a multisig; no deployer hot wallet should be the long-lived production operator.
+- Real inventory, custody evidence, metadata, redemption terms, and brand/IP language have passed legal and product review.
+- Production randomness, indexing, monitoring, and support workflows are approved before public pack sales.
+- Any testnet-only seed data, placeholder metadata, and unsafe rehearsal contracts are removed or explicitly replaced.
+
 ## Final Verification
 
 Before handing off a protocol change, run:
