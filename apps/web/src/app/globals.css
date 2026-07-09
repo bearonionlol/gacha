@@ -699,20 +699,30 @@ h1 {
   align-items: start;
 }
 
+.phase-five-forge {
+  grid-template-columns: minmax(300px, 0.72fr) minmax(0, 1.28fr);
+}
+
 .recipe-book,
-.ingredient-tray {
+.ingredient-tray,
+.forge-control-panel,
+.material-bank-panel,
+.recycler-panel,
+.provenance-panel {
   display: grid;
   gap: 14px;
 }
 
 .recipe-list,
-.ingredient-list {
+.ingredient-list,
+.material-bank-grid {
   display: grid;
   gap: 12px;
 }
 
 .recipe-card,
-.ingredient-row {
+.ingredient-row,
+.material-card {
   display: grid;
   gap: 12px;
   border: 1px solid var(--line);
@@ -727,13 +737,56 @@ h1 {
   letter-spacing: 0;
 }
 
+.recipe-card.selected,
+.material-card:focus-within,
+.forge-slot.filled {
+  border-color: var(--green-line);
+  background: var(--green-soft);
+}
+
 .recipe-card p,
 .ingredient-row p,
+.material-card p,
+.forge-control-panel p,
+.recycler-panel p,
 .output-preview p,
 .export-panel p {
   margin: 0;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.forge-mode-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mode-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.mode-button.active {
+  border-color: var(--green-line);
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.forge-warning {
+  border: 1px solid var(--green-line);
+  border-radius: 8px;
+  background: rgba(0, 200, 5, 0.08);
+  padding: 10px;
 }
 
 .forge-grid-panel,
@@ -782,8 +835,46 @@ h1 {
   color: #c8f8d6;
 }
 
+.material-card {
+  align-content: start;
+}
+
+.material-card strong,
+.material-card small {
+  display: block;
+}
+
+.material-card small {
+  margin-top: 4px;
+  color: var(--faint);
+  font-size: 0.75rem;
+}
+
+.material-card button,
+.recipe-card button,
+.recycler-panel button {
+  width: 100%;
+}
+
+.provenance-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.provenance-list li {
+  border-left: 2px solid var(--green-line);
+  background: rgba(6, 8, 7, 0.34);
+  color: var(--muted);
+  padding: 8px 10px;
+}
+
 .ingredient-tray,
-.output-preview {
+.output-preview,
+.material-bank-panel,
+.provenance-panel {
   grid-column: span 2;
 }
 
@@ -1226,6 +1317,7 @@ h1 {
   .vault-grid,
   .market-listings,
   .forge-workbench,
+  .phase-five-forge,
   .admin-console,
   .live-protocol-grid,
   .transaction-summary {
@@ -1234,6 +1326,8 @@ h1 {
 
   .ingredient-tray,
   .output-preview,
+  .material-bank-panel,
+  .provenance-panel,
   .inventory-table-panel {
     grid-column: auto;
   }
