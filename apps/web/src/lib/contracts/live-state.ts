@@ -30,8 +30,10 @@ export type LiveProtocolSnapshot = {
 type LiveProtocolOptions = {
   registrySnapshot: DeploymentRegistrySnapshot | null;
   client?: ProtocolReadClient;
+  timeoutMs?: number;
 };
 
+const DEFAULT_READ_TIMEOUT_MS = 4000;
 const bigintToString = (value: bigint): string => value.toString();
 
 async function readBigint(
@@ -54,9 +56,29 @@ async function readBigint(
   return 0n;
 }
 
+function withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("LIVE_PROTOCOL_READ_TIMEOUT"));
+    }, Math.max(0, timeoutMs));
+
+    operation.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
 export async function getLiveProtocolSnapshot({
   registrySnapshot,
-  client = createRobinhoodPublicClient()
+  client = createRobinhoodPublicClient(),
+  timeoutMs = DEFAULT_READ_TIMEOUT_MS
 }: LiveProtocolOptions): Promise<LiveProtocolSnapshot> {
   const registry = getReadyContractRegistry(registrySnapshot);
 
@@ -88,16 +110,19 @@ export async function getLiveProtocolSnapshot({
       feeBps,
       nextRecipeId,
       nextRequestId
-    ] = await Promise.all([
-      readBigint(client, registry.contracts.PackSale, packSaleAbi as Abi, "nextDropId"),
-      readBigint(client, registry.contracts.PackSale, packSaleAbi as Abi, "nextPurchaseId"),
-      readBigint(client, registry.contracts.PackSale, packSaleAbi as Abi, "treasuryCredit"),
-      readBigint(client, registry.contracts.PackSale, packSaleAbi as Abi, "remainingInventory", [1n]).catch(() => 0n),
-      readBigint(client, registry.contracts.Marketplace, marketplaceAbi as Abi, "nextListingId"),
-      readBigint(client, registry.contracts.Marketplace, marketplaceAbi as Abi, "feeBps"),
-      readBigint(client, registry.contracts.Forge, forgeAbi as Abi, "nextRecipeId"),
-      readBigint(client, registry.contracts.RedemptionRegistry, redemptionRegistryAbi as Abi, "nextRequestId")
-    ]);
+    ] = await withTimeout(
+      Promise.all([
+        readBigint(client, registry.contracts.PackSale, packSaleAbi as Abi, "nextDropId"),
+        readBigint(client, registry.contracts.PackSale, packSaleAbi as Abi, "nextPurchaseId"),
+        readBigint(client, registry.contracts.PackSale, packSaleAbi as Abi, "treasuryCredit"),
+        readBigint(client, registry.contracts.PackSale, packSaleAbi as Abi, "remainingInventory", [1n]).catch(() => 0n),
+        readBigint(client, registry.contracts.Marketplace, marketplaceAbi as Abi, "nextListingId"),
+        readBigint(client, registry.contracts.Marketplace, marketplaceAbi as Abi, "feeBps"),
+        readBigint(client, registry.contracts.Forge, forgeAbi as Abi, "nextRecipeId"),
+        readBigint(client, registry.contracts.RedemptionRegistry, redemptionRegistryAbi as Abi, "nextRequestId")
+      ]),
+      timeoutMs
+    );
 
     return {
       state: "ready",

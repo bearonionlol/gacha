@@ -71,6 +71,17 @@ describe("live protocol state", () => {
     expect(snapshot.message).not.toContain("https://secret.example");
   });
 
+  it("returns degraded state when RPC reads do not resolve before the timeout", async () => {
+    const client: ProtocolReadClient = {
+      readContract: async () => new Promise(() => undefined)
+    };
+
+    const snapshot = await getLiveProtocolSnapshot({ registrySnapshot: registry, client, timeoutMs: 1 });
+
+    expect(snapshot.state).toBe("degraded");
+    expect(snapshot.message).toBe("Robinhood testnet RPC is temporarily unavailable. Browsing remains in read-only mode.");
+  });
+
   it("does not read mainnet registries during the Phase 4A testnet slice", async () => {
     const client: ProtocolReadClient = {
       readContract: async () => {
