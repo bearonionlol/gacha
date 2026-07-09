@@ -68,6 +68,13 @@ export type ItemToken = Omit<BaseContract, "connect"> & {
     amount: BigNumberish,
     data: string
   ): Promise<ContractTransactionResponse>;
+  safeBatchTransferFrom(
+    from: string,
+    to: string,
+    tokenIds: BigNumberish[],
+    amounts: BigNumberish[],
+    data: string
+  ): Promise<ContractTransactionResponse>;
   grantRole(role: string, account: string): Promise<ContractTransactionResponse>;
   revokeRole(role: string, account: string): Promise<ContractTransactionResponse>;
   connect(runner: ContractRunner | null): ItemToken;

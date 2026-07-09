@@ -244,11 +244,93 @@ describe("RedemptionRegistry", function () {
     await itemToken.connect(owner).setApprovalForAll(await redemptionRegistry.getAddress(), true);
 
     await expect(redemptionRegistry.connect(owner).requestRedemption(unanchoredTokenId))
-      .to.be.revertedWithCustomError(redemptionRegistry, "InventoryTokenNotAnchored")
+      .to.be.revertedWithCustomError(fixture.registry, "InventoryTokenNotAnchored")
       .withArgs(unanchoredTokenId);
     await expect(redemptionRegistry.connect(owner).requestRedemption(gameTokenId))
-      .to.be.revertedWithCustomError(redemptionRegistry, "InventoryTokenNotAnchored")
+      .to.be.revertedWithCustomError(fixture.registry, "InventoryTokenNotAnchored")
       .withArgs(gameTokenId);
+  });
+
+  it("rejects anchored physical token ids minted as game tokens", async function () {
+    const fixture = await deployProtocolFixture();
+    const { registry, itemToken, redemptionRegistry, inventoryAdmin, minter, owner } = fixture;
+    const inventoryId = "redemption-game-at-physical-id-001";
+    const tokenId = physicalTokenIdFor(inventoryId);
+
+    await registry
+      .connect(inventoryAdmin)
+      .anchorInventory(inventoryId, inventoryHashFor(inventoryId), inventoryTokenUri, true, false);
+    await itemToken.connect(minter).mintGameItem(owner.address, tokenId, 1n, gameTokenUri);
+    await itemToken.connect(owner).setApprovalForAll(await redemptionRegistry.getAddress(), true);
+
+    await expect(redemptionRegistry.connect(owner).requestRedemption(tokenId))
+      .to.be.revertedWithCustomError(redemptionRegistry, "InvalidInventoryTokenKind")
+      .withArgs(tokenId, 2n);
+  });
+
+  it("rejects direct ItemToken transfers outside redemption requests", async function () {
+    const fixture = await deployProtocolFixture();
+    const { itemToken, redemptionRegistry, owner } = fixture;
+    const tokenId = await anchorAndMintInventory(fixture, redeemableInventoryId, owner, true);
+
+    await expect(
+      itemToken
+        .connect(owner)
+        .safeTransferFrom(owner.address, await redemptionRegistry.getAddress(), tokenId, 1n, "0x")
+    ).to.be.revertedWithCustomError(redemptionRegistry, "UnexpectedERC1155Received");
+
+    expect(await itemToken.balanceOf(owner.address, tokenId)).to.equal(1n);
+    expect(await itemToken.balanceOf(await redemptionRegistry.getAddress(), tokenId)).to.equal(0n);
+  });
+
+  it("rejects batch ItemToken transfers", async function () {
+    const fixture = await deployProtocolFixture();
+    const { itemToken, redemptionRegistry, minter, owner } = fixture;
+    const firstTokenId = 22_001n;
+    const secondTokenId = 22_002n;
+
+    await itemToken.connect(minter).mintGameItem(owner.address, firstTokenId, 1n, gameTokenUri);
+    await itemToken.connect(minter).mintGameItem(owner.address, secondTokenId, 1n, gameTokenUri);
+
+    await expect(
+      itemToken
+        .connect(owner)
+        .safeBatchTransferFrom(
+          owner.address,
+          await redemptionRegistry.getAddress(),
+          [firstTokenId, secondTokenId],
+          [1n, 1n],
+          "0x"
+        )
+    ).to.be.revertedWithCustomError(redemptionRegistry, "UnexpectedERC1155BatchReceived");
+
+    expect(await itemToken.balanceOf(owner.address, firstTokenId)).to.equal(1n);
+    expect(await itemToken.balanceOf(owner.address, secondTokenId)).to.equal(1n);
+  });
+
+  it("returns escrowed tokens when cancelling packed and shipped requests", async function () {
+    const fixture = await deployProtocolFixture();
+    const { itemToken, redemptionRegistry, redemptionAdmin, owner } = fixture;
+    const packedTokenId = await anchorAndMintInventory(fixture, "redemption-cancel-packed-001", owner, true);
+    const shippedTokenId = await anchorAndMintInventory(fixture, "redemption-cancel-shipped-001", owner, true);
+
+    await itemToken.connect(owner).setApprovalForAll(await redemptionRegistry.getAddress(), true);
+    await redemptionRegistry.connect(owner).requestRedemption(packedTokenId);
+    await redemptionRegistry.connect(owner).requestRedemption(shippedTokenId);
+
+    await redemptionRegistry.connect(redemptionAdmin).approve(1n);
+    await redemptionRegistry.connect(redemptionAdmin).markPacked(1n);
+    await redemptionRegistry.connect(redemptionAdmin).cancel(1n, cancelReason);
+
+    await shipRequest(fixture, 2n);
+    await redemptionRegistry.connect(redemptionAdmin).cancel(2n, cancelReason);
+
+    expect((await redemptionRegistry.requests(1n)).status).to.equal(RedemptionStatus.Cancelled);
+    expect((await redemptionRegistry.requests(2n)).status).to.equal(RedemptionStatus.Cancelled);
+    expect(await itemToken.balanceOf(owner.address, packedTokenId)).to.equal(1n);
+    expect(await itemToken.balanceOf(owner.address, shippedTokenId)).to.equal(1n);
+    expect(await itemToken.balanceOf(await redemptionRegistry.getAddress(), packedTokenId)).to.equal(0n);
+    expect(await itemToken.balanceOf(await redemptionRegistry.getAddress(), shippedTokenId)).to.equal(0n);
   });
 
   it("rejects cancelling completed requests and completing cancelled requests", async function () {

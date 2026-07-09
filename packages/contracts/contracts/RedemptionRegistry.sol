@@ -28,13 +28,15 @@ contract RedemptionRegistry is AccessControl, ReentrancyGuard, ERC1155Holder {
     }
 
     error InvalidAddress();
-    error InventoryTokenNotAnchored(uint256 tokenId);
+    error InvalidInventoryTokenKind(uint256 tokenId, uint8 tokenKind);
     error InventoryNotRedeemable(uint256 tokenId);
     error InsufficientTokenBalance(address account, uint256 tokenId);
     error InvalidStatusTransition(uint256 requestId, RedemptionStatus currentStatus, RedemptionStatus nextStatus);
     error EmptyTrackingRef();
     error EmptyCancellationReason();
     error RedemptionRequestNotFound(uint256 requestId);
+    error UnexpectedERC1155Received();
+    error UnexpectedERC1155BatchReceived();
 
     event RedemptionRequested(uint256 indexed requestId, address indexed requester, uint256 indexed tokenId);
     event RedemptionStatusUpdated(
@@ -50,6 +52,10 @@ contract RedemptionRegistry is AccessControl, ReentrancyGuard, ERC1155Holder {
     uint256 public nextRequestId = 1;
 
     mapping(uint256 requestId => RedemptionRequest request) public requests;
+
+    bool private _acceptingEscrowTransfer;
+    address private _escrowFrom;
+    uint256 private _escrowTokenId;
 
     constructor(ItemToken itemToken_, InventoryRegistry inventoryRegistry_) {
         if (address(itemToken_) == address(0) || address(inventoryRegistry_) == address(0)) {
@@ -68,6 +74,11 @@ contract RedemptionRegistry is AccessControl, ReentrancyGuard, ERC1155Holder {
             revert InventoryNotRedeemable(tokenId);
         }
 
+        ItemToken.TokenKind tokenKind = itemToken.tokenKind(tokenId);
+        if (tokenKind != ItemToken.TokenKind.Inventory) {
+            revert InvalidInventoryTokenKind(tokenId, uint8(tokenKind));
+        }
+
         if (itemToken.balanceOf(msg.sender, tokenId) < 1) {
             revert InsufficientTokenBalance(msg.sender, tokenId);
         }
@@ -81,7 +92,13 @@ contract RedemptionRegistry is AccessControl, ReentrancyGuard, ERC1155Holder {
             reason: ""
         });
 
+        _acceptingEscrowTransfer = true;
+        _escrowFrom = msg.sender;
+        _escrowTokenId = tokenId;
         itemToken.safeTransferFrom(msg.sender, address(this), tokenId, 1, "");
+        _acceptingEscrowTransfer = false;
+        _escrowFrom = address(0);
+        _escrowTokenId = 0;
 
         emit RedemptionRequested(requestId, msg.sender, tokenId);
     }
@@ -139,6 +156,33 @@ contract RedemptionRegistry is AccessControl, ReentrancyGuard, ERC1155Holder {
 
         emit RedemptionStatusUpdated(requestId, previousStatus, RedemptionStatus.Cancelled);
         emit RedemptionCancelled(requestId, reason);
+    }
+
+    function onERC1155Received(
+        address operator,
+        address from,
+        uint256 id,
+        uint256 value,
+        bytes memory
+    ) public view override returns (bytes4) {
+        if (
+            msg.sender != address(itemToken) || !_acceptingEscrowTransfer || operator != address(this)
+                || from != _escrowFrom || id != _escrowTokenId || value != 1
+        ) {
+            revert UnexpectedERC1155Received();
+        }
+
+        return this.onERC1155Received.selector;
+    }
+
+    function onERC1155BatchReceived(
+        address,
+        address,
+        uint256[] memory,
+        uint256[] memory,
+        bytes memory
+    ) public pure override returns (bytes4) {
+        revert UnexpectedERC1155BatchReceived();
     }
 
     function supportsInterface(bytes4 interfaceId)
