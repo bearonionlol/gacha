@@ -167,6 +167,60 @@ export type BuybackVault = Omit<BaseContract, "connect"> & {
   connect(runner: ContractRunner | null): BuybackVault;
 };
 
+export interface CreateRecipeParams {
+  inputTokenIds: BigNumberish[];
+  inputAmounts: BigNumberish[];
+  outputTokenId: BigNumberish;
+  outputAmount: BigNumberish;
+  outputUri: string;
+  fee: BigNumberish;
+  startTime: BigNumberish;
+  endTime: BigNumberish;
+  maxTotalCrafts: BigNumberish;
+  maxCraftsPerWallet: BigNumberish;
+  requiresManualReview: boolean;
+  excludeGrailProtectedInputs: boolean;
+}
+
+export interface ForgeRecipe {
+  outputTokenId: bigint;
+  outputAmount: bigint;
+  outputUri: string;
+  fee: bigint;
+  startTime: bigint;
+  endTime: bigint;
+  maxTotalCrafts: bigint;
+  maxCraftsPerWallet: bigint;
+  totalCrafts: bigint;
+  status: bigint;
+  requiresManualReview: boolean;
+  excludeGrailProtectedInputs: boolean;
+  exists: boolean;
+}
+
+export type Forge = Omit<BaseContract, "connect"> & {
+  RECIPE_ADMIN_ROLE(): Promise<string>;
+  createRecipe(params: CreateRecipeParams): Promise<ContractTransactionResponse>;
+  setRecipeStatus(
+    recipeId: BigNumberish,
+    status: BigNumberish
+  ): Promise<ContractTransactionResponse>;
+  craft(
+    recipeId: BigNumberish,
+    overrides?: { value?: BigNumberish }
+  ): Promise<ContractTransactionResponse>;
+  getRecipeInputs(recipeId: BigNumberish): Promise<[bigint[], bigint[]]>;
+  recipes(recipeId: BigNumberish): Promise<ForgeRecipe>;
+  walletCrafts(recipeId: BigNumberish, account: string): Promise<bigint>;
+  treasuryFeesCredit(account: string): Promise<bigint>;
+  withdrawTreasuryFees(): Promise<ContractTransactionResponse>;
+  withdrawTreasuryFeesTo(to: string): Promise<ContractTransactionResponse>;
+  pause(): Promise<ContractTransactionResponse>;
+  unpause(): Promise<ContractTransactionResponse>;
+  grantRole(role: string, account: string): Promise<ContractTransactionResponse>;
+  connect(runner: ContractRunner | null): Forge;
+};
+
 function requireSigner(
   signers: HardhatEthersSigner[],
   index: number,
@@ -244,6 +298,7 @@ export async function deployProtocolFixture() {
   const treasury = requireSigner(signers, 13, "treasury");
   const marketAdmin = requireSigner(signers, 14, "market admin");
   const buybackAdmin = requireSigner(signers, 15, "buyback admin");
+  const recipeAdmin = requireSigner(signers, 16, "recipe admin");
   const registry = (await ethers.deployContract("InventoryRegistry")) as unknown as InventoryRegistry;
   const itemToken = (await ethers.deployContract("ItemToken")) as unknown as ItemToken;
   const randomnessProvider = (await ethers.deployContract(
@@ -269,16 +324,24 @@ export async function deployProtocolFixture() {
   const buybackVault = (await ethers.deployContract("BuybackVault", [
     await itemToken.getAddress()
   ])) as unknown as BuybackVault;
+  const forge = (await ethers.deployContract("Forge", [
+    await itemToken.getAddress(),
+    await registry.getAddress(),
+    treasury.address
+  ])) as unknown as Forge;
 
   await marketplace.waitForDeployment();
   await buybackVault.waitForDeployment();
+  await forge.waitForDeployment();
 
   await registry.grantRole(await registry.INVENTORY_ADMIN_ROLE(), inventoryAdmin.address);
   await registry.grantRole(await registry.TOKENIZER_ROLE(), tokenizer.address);
   await registry.grantRole(await registry.TOKENIZER_ROLE(), await packSale.getAddress());
   await itemToken.grantRole(await itemToken.MINTER_ROLE(), minter.address);
   await itemToken.grantRole(await itemToken.MINTER_ROLE(), await packSale.getAddress());
+  await itemToken.grantRole(await itemToken.MINTER_ROLE(), await forge.getAddress());
   await itemToken.grantRole(await itemToken.BURNER_ROLE(), burner.address);
+  await itemToken.grantRole(await itemToken.BURNER_ROLE(), await forge.getAddress());
   await itemToken.grantRole(await itemToken.URI_SETTER_ROLE(), uriSetter.address);
   await itemToken.grantRole(await itemToken.PAUSER_ROLE(), pauser.address);
   await randomnessProvider.grantRole(REQUESTER_ROLE, await packSale.getAddress());
@@ -286,6 +349,7 @@ export async function deployProtocolFixture() {
   await packSale.grantRole(await packSale.DROP_ADMIN_ROLE(), dropAdmin.address);
   await marketplace.grantRole(await marketplace.MARKET_ADMIN_ROLE(), marketAdmin.address);
   await buybackVault.grantRole(await buybackVault.BUYBACK_ADMIN_ROLE(), buybackAdmin.address);
+  await forge.grantRole(await forge.RECIPE_ADMIN_ROLE(), recipeAdmin.address);
 
   return {
     registry,
@@ -294,6 +358,7 @@ export async function deployProtocolFixture() {
     packSale,
     marketplace,
     buybackVault,
+    forge,
     deployer,
     inventoryAdmin,
     tokenizer,
@@ -309,6 +374,7 @@ export async function deployProtocolFixture() {
     buyer,
     treasury,
     marketAdmin,
-    buybackAdmin
+    buybackAdmin,
+    recipeAdmin
   };
 }
