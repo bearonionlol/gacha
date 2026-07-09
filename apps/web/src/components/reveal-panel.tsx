@@ -1,6 +1,6 @@
 import { ArrowUpRight, Archive, BadgeCheck, HandCoins, RefreshCw, Sparkles } from "lucide-react";
-import { ActionGuardPanel } from "./action-guard-panel";
 import { revealPreview } from "../lib/game-state";
+import { PackRevealPanel } from "./testnet-write-panels";
 
 const actionIcons: Record<string, typeof Archive> = {
   "Keep in vault": Archive,
@@ -36,8 +36,8 @@ export function RevealPanel() {
           );
         })}
       </div>
-      <ActionGuardPanel action="Reveal next action" />
-      <p className="disclosure">Reveal actions are preview-only until protocol writes are connected.</p>
+      <PackRevealPanel />
+      <p className="disclosure">Reveal operations submit live testnet writes only after explicit wallet confirmation.</p>
     </section>
   );
 }

@@ -794,7 +794,8 @@ h1 {
 .admin-fields-panel,
 .lifecycle-panel,
 .inventory-table-panel,
-.export-panel {
+.export-panel,
+.operator-checklist-panel {
   display: grid;
   gap: 14px;
 }
@@ -804,7 +805,8 @@ h1 {
 }
 
 .required-field-list,
-.inventory-lifecycle {
+.inventory-lifecycle,
+.operator-checklist {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -813,7 +815,8 @@ h1 {
 }
 
 .required-field-list li,
-.inventory-lifecycle li {
+.inventory-lifecycle li,
+.operator-checklist li {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface-2);
@@ -1152,9 +1155,34 @@ h1 {
   padding: 0 10px;
 }
 
-.transaction-input-row input:focus {
+.transaction-input-row select,
+.transaction-input-row textarea {
+  width: min(260px, 100%);
+  min-height: 38px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #080b0a;
+  color: var(--text);
+  padding: 0 10px;
+}
+
+.transaction-input-row textarea {
+  min-height: 76px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.transaction-input-row input:focus,
+.transaction-input-row select:focus,
+.transaction-input-row textarea:focus {
   border-color: var(--green-line);
   outline: 2px solid var(--green-soft);
+}
+
+.admin-ops-stack,
+.redemption-ops-controls {
+  display: grid;
+  gap: 10px;
 }
 
 .known-token-picker p {
@@ -1266,7 +1294,9 @@ h1 {
   }
 
   .transaction-actions button,
-  .transaction-input-row input {
+  .transaction-input-row input,
+  .transaction-input-row select,
+  .transaction-input-row textarea {
     width: 100%;
   }
 
