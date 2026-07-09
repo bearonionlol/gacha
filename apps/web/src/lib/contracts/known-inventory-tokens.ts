@@ -1,6 +1,5 @@
-import { sampleInventory } from "@gacha/inventory";
-import type { GrailTier } from "@gacha/inventory";
 import type { Abi, Address } from "viem";
+import { browserSeededInventory, type BrowserSeededInventoryItem } from "../browser-seeded-inventory";
 import { inventoryRegistryAbi, itemTokenAbi } from "./abis";
 import { createRobinhoodPublicClient } from "./public-client";
 import type { ProtocolContracts } from "./registry";
@@ -21,7 +20,7 @@ export type KnownInventoryToken = {
   tokenId: bigint;
   balance: bigint;
   redeemable: boolean;
-  grailTier: GrailTier;
+  grailTier: BrowserSeededInventoryItem["grailTier"];
 };
 
 export type KnownInventoryTokenScan =
@@ -43,7 +42,7 @@ export async function readKnownInventoryTokenStates({
   try {
     const tokens = (
       await Promise.all(
-        sampleInventory.map(async (item) => {
+        browserSeededInventory.map(async (item) => {
           const tokenId = await readBigint(client, contracts.InventoryRegistry, inventoryRegistryAbi as Abi, [
             item.inventoryId
           ]);
@@ -108,9 +107,7 @@ async function readBigint(
   return 0n;
 }
 
-type SampleInventoryItem = (typeof sampleInventory)[number];
-
-function buildSubtitle(item: SampleInventoryItem): string {
+function buildSubtitle(item: BrowserSeededInventoryItem): string {
   const condition = item.gradingCompany && item.grade ? `${item.gradingCompany} ${item.grade}` : item.rawConditionEstimate;
 
   return [item.setName, item.cardNumber, item.variant, condition].filter(Boolean).join(" / ");
