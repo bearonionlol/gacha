@@ -1,4 +1,4 @@
-import { Clock3 } from "lucide-react";
+import { ArrowUpRight, Clock3 } from "lucide-react";
 import { activityFeed } from "../lib/game-state";
 
 const formatTime = (value: string) =>
@@ -22,7 +22,20 @@ export function ActivityFeed() {
         {activityFeed.map((entry) => (
           <li key={entry.id}>
             <time dateTime={entry.createdAt}>{formatTime(entry.createdAt)}</time>
+            <div className="activity-title-row">
+              <strong>{entry.label}</strong>
+              <span>{entry.source}</span>
+            </div>
             <p>{entry.detail}</p>
+            <div className="activity-actions">
+              <span>{entry.nextAction}</span>
+              {entry.txUrl === null ? null : (
+                <a href={entry.txUrl} rel="noreferrer" target="_blank">
+                  View tx
+                  <ArrowUpRight size={13} aria-hidden="true" />
+                </a>
+              )}
+            </div>
           </li>
         ))}
       </ol>
