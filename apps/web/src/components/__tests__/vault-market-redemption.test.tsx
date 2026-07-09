@@ -10,6 +10,10 @@ describe("vault, market, and redemption routes", () => {
     expect(screen.getByText(/Pokemon TCG Charizard ex/i)).toBeInTheDocument();
     expect(screen.getByText(/Authentic resale collectible descriptor/i)).toBeInTheDocument();
     expect(screen.getByText(/no affiliation or endorsement/i)).toBeInTheDocument();
+    expect(screen.getByText(/Album progress/i)).toBeInTheDocument();
+    expect(screen.getByText(/Master set/i)).toBeInTheDocument();
+    expect(screen.getByText(/Next chase/i)).toBeInTheDocument();
+    expect(screen.getByText(/Trade, forge, or buy/i)).toBeInTheDocument();
   });
 
   it("renders marketplace fees and escrow disclosure", () => {

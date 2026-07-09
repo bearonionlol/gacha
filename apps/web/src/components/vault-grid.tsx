@@ -1,8 +1,11 @@
-import { BadgeCheck, Gem, PackageCheck, ShieldCheck, Tags } from "lucide-react";
+import { BadgeCheck, Gem, PackageCheck, ShieldCheck, Tags, Trophy } from "lucide-react";
+import { buildCollectionProgression } from "../lib/collection-progression";
 import { formatCents } from "../lib/format";
 import { collectibleCards, vaultStats } from "../lib/inventory";
 
 export function VaultGrid() {
+  const progression = buildCollectionProgression(collectibleCards);
+
   return (
     <section className="portfolio-section" aria-labelledby="vault-grid-title">
       <div className="portfolio-summary" aria-label="Vault summary">
@@ -19,6 +22,47 @@ export function VaultGrid() {
           <strong>{vaultStats.grailCount} items</strong>
         </div>
       </div>
+
+      <section className="collection-progress-panel" aria-labelledby="collection-progress-title">
+        <div className="panel-header compact">
+          <div>
+            <span className="eyebrow">{progression.albumTitle}</span>
+            <h2 id="collection-progress-title">Album progress</h2>
+          </div>
+          <Trophy size={18} aria-hidden="true" />
+        </div>
+        <div className="collection-progress-grid">
+          {progression.sets.map((set) => (
+            <article className="collection-set-card" key={set.id}>
+              <div className="card-title-row">
+                <div>
+                  <span className="eyebrow">{set.rewardLabel}</span>
+                  <h3>{set.title}</h3>
+                </div>
+                <strong>{set.percentComplete}%</strong>
+              </div>
+              <div className="progress-track" aria-hidden="true">
+                <span style={{ width: `${set.percentComplete}%` }} />
+              </div>
+              <p>
+                {set.ownedCount} of {set.totalCount} tags matched
+              </p>
+            </article>
+          ))}
+        </div>
+        <div className="next-chase-panel">
+          <div>
+            <span className="eyebrow">Next chase</span>
+            <strong>{progression.nextChase.title}</strong>
+            <p>{progression.nextChase.nextBestAction}</p>
+          </div>
+          <div className="tag-row" aria-label="Collection milestones">
+            {progression.milestones.map((milestone) => (
+              <span key={milestone}>{milestone}</span>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <div className="section-heading-row">
         <div>
