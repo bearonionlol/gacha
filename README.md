@@ -1,6 +1,6 @@
-# Gacha Protocol Package
+# Gacha Super App
 
-This repository currently contains the protocol package for the Gacha Super App phase 2 work. It does not include the web app, indexer, metadata service, fantasy stock arena, or a production mainnet deployment.
+This repository contains the Gacha Super App protocol package and the Phase 3 web app. It does not include the indexer, metadata service, fantasy stock arena, or a production mainnet deployment.
 
 The protocol package lives in `packages/contracts` and includes:
 
@@ -108,6 +108,26 @@ pnpm --filter @gacha/contracts deploy:mainnet
 Mainnet deploy is blocked by default while the deploy script still uses `CommitRevealRandomnessProvider`. Mainnet migration must review and replace randomness with an approved fair/verifiable provider; `ALLOW_OPERATOR_RANDOMNESS_MAINNET=true` is only an unsafe override for controlled rehearsal.
 
 Deployment scripts write registries to `deployments/<network>.json`.
+
+## Web App
+
+The Phase 3 web app lives in `apps/web`. It is a demo/testnet command surface for drops, reveal actions, vault portfolio, fixed-price market, Forge, redemption, and admin inventory intake.
+
+Run the web app locally:
+
+```bash
+pnpm --filter @gacha/web dev
+```
+
+Build and verify the web app:
+
+```bash
+pnpm --filter @gacha/web test
+pnpm --filter @gacha/web typecheck
+pnpm --filter @gacha/web build
+```
+
+The app runs in deterministic demo mode when no deployment registry is present. After Robinhood testnet deployment, review `deployments/robinhoodTestnet.json`; the app deployment adapter expects the Phase 2 registry shape with Robinhood chain ID and the eight protocol contract addresses.
 
 ## Runbooks
 

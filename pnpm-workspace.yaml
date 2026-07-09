@@ -1,10 +1,13 @@
 packages:
   - "packages/*"
+  - "apps/*"
 onlyBuiltDependencies:
   - esbuild
   - keccak
   - secp256k1
+  - sharp
 allowBuilds:
   esbuild: true
   keccak: true
   secp256k1: true
+  sharp: true

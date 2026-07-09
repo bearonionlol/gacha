@@ -1,0 +1,975 @@
+:root {
+  color-scheme: dark;
+  --bg: #060807;
+  --surface: #0d1110;
+  --surface-2: #121715;
+  --surface-3: #171d1a;
+  --line: rgba(244, 247, 242, 0.12);
+  --line-strong: rgba(244, 247, 242, 0.2);
+  --text: #f4f7f2;
+  --muted: #a9b4aa;
+  --faint: #737d76;
+  --green: #25d366;
+  --green-soft: rgba(37, 211, 102, 0.14);
+  --green-line: rgba(37, 211, 102, 0.42);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    linear-gradient(180deg, rgba(37, 211, 102, 0.08) 0, transparent 1px),
+    linear-gradient(180deg, #0a0d0c 0%, var(--bg) 34rem);
+  background-size: 100% 48px, auto;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  border: 0;
+}
+
+.command-center {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.app-shell {
+  display: grid;
+  min-height: 100vh;
+  grid-template-columns: 248px minmax(0, 1fr);
+}
+
+.shell-sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  height: 100vh;
+  flex-direction: column;
+  gap: 24px;
+  border-right: 1px solid var(--line);
+  background: rgba(9, 12, 11, 0.9);
+  padding: 20px;
+}
+
+.brand-mark,
+.nav-link,
+.wallet-card,
+.primary-action,
+.secondary-action {
+  display: inline-flex;
+  align-items: center;
+}
+
+.brand-mark {
+  gap: 12px;
+}
+
+.brand-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--green-line);
+  border-radius: 8px;
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.brand-mark strong,
+.brand-mark small {
+  display: block;
+}
+
+.brand-mark strong {
+  font-size: 0.98rem;
+}
+
+.brand-mark small,
+.eyebrow,
+.chain-pill,
+.wallet-card,
+.status-metrics dt,
+.drop-stats dt,
+.arcade-stats dt,
+.progress-row,
+.activity-feed time {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0;
+}
+
+.brand-mark small {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.primary-nav {
+  display: grid;
+  gap: 6px;
+}
+
+.nav-link {
+  gap: 10px;
+  border-radius: 8px;
+  color: var(--muted);
+  padding: 10px 11px;
+}
+
+.nav-link:hover,
+.nav-link:focus-visible {
+  background: var(--surface-2);
+  color: var(--text);
+  outline: none;
+}
+
+.wallet-card {
+  margin-top: auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  padding: 12px;
+  font-size: 0.78rem;
+}
+
+.wallet-card strong {
+  width: 100%;
+  color: var(--green);
+  font-size: 0.82rem;
+}
+
+.shell-content {
+  min-width: 0;
+}
+
+.shell-footer {
+  border-top: 1px solid var(--line);
+  color: var(--faint);
+  padding: 18px 24px 24px;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.status-rail,
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(13, 17, 16, 0.88);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
+}
+
+.status-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(360px, 1fr);
+  gap: 24px;
+  margin-bottom: 18px;
+  padding: 18px;
+}
+
+.status-rail h2,
+.panel h1,
+.panel h2,
+.drop-title-row h2 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.status-rail h2 {
+  margin-top: 6px;
+  font-size: 1.35rem;
+}
+
+.status-rail p,
+.panel p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.status-metrics,
+.drop-stats,
+.arcade-stats {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.status-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.status-metrics div,
+.drop-stats div,
+.arcade-stats div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 12px;
+}
+
+.status-metrics dt,
+.drop-stats dt,
+.arcade-stats dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--faint);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+}
+
+.status-metrics dd,
+.drop-stats dd,
+.arcade-stats dd {
+  margin: 8px 0 0;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.panel {
+  padding: 18px;
+}
+
+.drop-lobby {
+  grid-row: span 2;
+}
+
+.panel-header,
+.drop-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.panel-header.compact {
+  align-items: center;
+}
+
+.eyebrow {
+  color: var(--green);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.chain-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--green-line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: var(--green);
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+
+h1 {
+  font-size: 3.4rem;
+  line-height: 0.95;
+}
+
+.drop-title-row {
+  margin-top: 28px;
+}
+
+.drop-title-row h2,
+.panel h2 {
+  font-size: 1.08rem;
+}
+
+.primary-action,
+.secondary-action {
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.primary-action {
+  background: var(--green);
+  color: #041006;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.secondary-action {
+  border: 1px solid var(--line-strong);
+  background: var(--surface-3);
+  color: var(--text);
+  padding: 0 12px;
+}
+
+.primary-action:hover,
+.primary-action:focus-visible,
+.secondary-action:hover,
+.secondary-action:focus-visible {
+  outline: 2px solid var(--green-line);
+  outline-offset: 2px;
+}
+
+.drop-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.odds-table {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.odds-heading,
+.odds-row,
+.progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.odds-heading {
+  justify-content: flex-start;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.odds-row {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0;
+}
+
+.odds-row span {
+  color: var(--muted);
+}
+
+.odds-row strong {
+  color: var(--text);
+}
+
+.disclosure {
+  border: 1px solid var(--green-line);
+  border-radius: 8px;
+  background: var(--green-soft);
+  padding: 10px 12px;
+  color: #c8f8d6 !important;
+  font-size: 0.86rem;
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.arcade-stats {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 16px;
+}
+
+.progress-row {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.progress-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.progress-track {
+  height: 8px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #252b28;
+}
+
+.progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--green);
+}
+
+.activity-feed ol {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity-feed li {
+  border-left: 2px solid var(--green);
+  padding-left: 12px;
+}
+
+.activity-feed time {
+  color: var(--faint);
+  font-size: 0.75rem;
+}
+
+.activity-feed p {
+  margin-top: 4px;
+}
+
+.route-page {
+  display: grid;
+  gap: 18px;
+}
+
+.route-hero p {
+  max-width: 760px;
+}
+
+.portfolio-section {
+  display: grid;
+  gap: 18px;
+}
+
+.portfolio-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.portfolio-summary div,
+.collectible-card,
+.listing-card,
+.redemption-card,
+.timeline-state {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(13, 17, 16, 0.88);
+}
+
+.portfolio-summary div {
+  padding: 16px;
+}
+
+.portfolio-summary strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.35rem;
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.section-heading-row h2,
+.collectible-card h3,
+.listing-card h3,
+.redemption-card h3 {
+  margin: 4px 0 0;
+  letter-spacing: 0;
+}
+
+.section-heading-row h2 {
+  font-size: 1.35rem;
+}
+
+.vault-grid,
+.market-listings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.collectible-card,
+.listing-card,
+.redemption-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.photo-hash-cue {
+  display: grid;
+  min-height: 132px;
+  place-items: center;
+  border: 1px solid var(--green-line);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(37, 211, 102, 0.16), rgba(244, 247, 242, 0.03)),
+    var(--surface-2);
+  color: var(--green);
+  text-align: center;
+}
+
+.photo-hash-cue span,
+.photo-hash-cue code {
+  display: block;
+}
+
+.photo-hash-cue code,
+.detail-grid dt,
+.tier-pill,
+.tag-row,
+.timeline-state,
+.request-steps {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0;
+}
+
+.photo-hash-cue code {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.card-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card-copy p,
+.listing-card p,
+.redemption-card p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.tier-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--green);
+  padding: 6px 8px;
+  font-size: 0.74rem;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.detail-grid div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 10px;
+}
+
+.detail-grid dt,
+.detail-grid dd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-grid dt {
+  color: var(--faint);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.detail-grid dd {
+  margin: 7px 0 0;
+  font-weight: 700;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.tag-row span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  padding: 5px 7px;
+}
+
+.market-listings {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.timeline-state-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.timeline-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  padding: 12px;
+  text-transform: capitalize;
+}
+
+.timeline-state:first-child,
+.timeline-state:last-child {
+  border-color: var(--green-line);
+  color: var(--green);
+}
+
+.redemption-requests {
+  display: grid;
+  gap: 12px;
+}
+
+.request-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.request-steps li {
+  border-top: 2px solid var(--green-line);
+  padding-top: 8px;
+}
+
+.forge-workbench,
+.admin-console {
+  display: grid;
+  gap: 18px;
+}
+
+.forge-workbench {
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+  align-items: start;
+}
+
+.recipe-book,
+.ingredient-tray {
+  display: grid;
+  gap: 14px;
+}
+
+.recipe-list,
+.ingredient-list {
+  display: grid;
+  gap: 12px;
+}
+
+.recipe-card,
+.ingredient-row {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 14px;
+}
+
+.recipe-card h3,
+.ingredient-row h3 {
+  margin: 4px 0 0;
+  letter-spacing: 0;
+}
+
+.recipe-card p,
+.ingredient-row p,
+.output-preview p,
+.export-panel p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.forge-grid-panel,
+.output-preview {
+  display: grid;
+  gap: 16px;
+}
+
+.forge-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.forge-slot {
+  display: grid;
+  min-width: 0;
+  min-height: 118px;
+  place-items: center;
+  gap: 6px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  padding: 12px;
+  text-align: center;
+}
+
+.forge-slot strong {
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.forge-slot span {
+  font-size: 0.78rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.forge-slot.protected {
+  border-style: solid;
+  border-color: var(--green-line);
+  background: var(--green-soft);
+  color: #c8f8d6;
+}
+
+.ingredient-tray,
+.output-preview {
+  grid-column: span 2;
+}
+
+.admin-console {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+
+.admin-fields-panel,
+.lifecycle-panel,
+.inventory-table-panel,
+.export-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.inventory-table-panel {
+  grid-column: span 2;
+}
+
+.required-field-list,
+.inventory-lifecycle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.required-field-list li,
+.inventory-lifecycle li {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  padding: 7px 9px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  list-style: none;
+}
+
+.required-field-list code,
+.inventory-lifecycle li {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0;
+}
+
+.inventory-lifecycle {
+  list-style: none;
+}
+
+.inventory-lifecycle li {
+  color: var(--green);
+}
+
+.inventory-table-wrap {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.inventory-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.inventory-table th,
+.inventory-table td {
+  border-top: 1px solid var(--line);
+  background: rgba(18, 23, 21, 0.72);
+  padding: 12px;
+  color: var(--muted);
+  text-align: left;
+  font-size: 0.86rem;
+}
+
+.inventory-table th {
+  border-top: 0;
+  background: var(--surface-3);
+  color: var(--green);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.inventory-table strong,
+.inventory-table code {
+  display: block;
+}
+
+.inventory-table strong {
+  color: var(--text);
+}
+
+.inventory-table code {
+  margin-top: 4px;
+  color: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0;
+}
+
+@media (max-width: 980px) {
+  .app-shell,
+  .status-rail,
+  .dashboard-grid,
+  .vault-grid,
+  .market-listings,
+  .forge-workbench,
+  .admin-console {
+    grid-template-columns: 1fr;
+  }
+
+  .ingredient-tray,
+  .output-preview,
+  .inventory-table-panel {
+    grid-column: auto;
+  }
+
+  .inventory-table-wrap {
+    overflow-x: auto;
+  }
+
+  .inventory-table {
+    min-width: 860px;
+  }
+
+  .shell-sidebar {
+    position: static;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .primary-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .wallet-card {
+    margin-top: 0;
+  }
+
+  .portfolio-summary,
+  .timeline-state-row,
+  .request-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .command-center {
+    padding: 14px;
+  }
+
+  .primary-nav,
+  .status-metrics,
+  .drop-stats,
+  .action-grid,
+  .portfolio-summary,
+  .detail-grid,
+  .timeline-state-row,
+  .request-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .primary-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .nav-link {
+    min-width: 0;
+    justify-content: center;
+    padding: 9px 7px;
+  }
+
+  .nav-link span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .panel-header,
+  .drop-title-row,
+  .section-heading-row,
+  .card-title-row {
+    flex-direction: column;
+  }
+
+  .chain-pill,
+  .primary-action,
+  .secondary-action {
+    width: 100%;
+  }
+
+  h1 {
+    font-size: 2.35rem;
+  }
+
+  .status-rail h2 {
+    font-size: 1.2rem;
+  }
+}
