@@ -32,6 +32,9 @@ describe("forge and admin routes", () => {
     expect(screen.getByRole("table", { name: /Inventory intake records/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Export JSON/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Export CSV/i })).toBeInTheDocument();
+    expect(screen.getByText(/Public testnet readiness/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Deployment registry/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Mainnet cutover gate/i)).toBeInTheDocument();
     expect(screen.getByText(/Redemption operations/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Request ID/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Operation mode/i)).toBeInTheDocument();

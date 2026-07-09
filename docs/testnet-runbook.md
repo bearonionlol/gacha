@@ -143,6 +143,20 @@ export NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY="$(cat deployments/robinhoodTestnet
 pnpm --filter @gacha/web dev --port 64920
 ```
 
+## Public Testnet Go/No-Go
+
+Before inviting testers, open `/admin/inventory` and review the Public testnet readiness panel. Treat the session as blocked if any readiness row is failing.
+
+The panel expects:
+
+- `NEXT_PUBLIC_GACHA_CHAIN_MODE=testnet`
+- `NEXT_PUBLIC_GACHA_RPC_URL` set to a reviewed Robinhood testnet RPC endpoint
+- `NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY` set to the reviewed contents of `deployments/robinhoodTestnet.json`
+- `NEXT_PUBLIC_GACHA_ENABLE_ADMIN=true` for operator rehearsal sessions
+- Mainnet migration still gated by `docs/mainnet-migration-runbook.md`
+
+The readiness panel is an app-facing checklist. It does not replace `pnpm --filter @gacha/contracts smoke:testnet`, transaction hash recording, custody records, or fulfillment operator records.
+
 Browser smoke path:
 
 - Connect a funded Robinhood testnet wallet on `/`.
