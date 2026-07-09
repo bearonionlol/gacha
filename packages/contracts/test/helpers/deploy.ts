@@ -35,6 +35,7 @@ export type InventoryRegistry = Omit<BaseContract, "connect"> & {
 };
 
 export type ItemToken = Omit<BaseContract, "connect"> & {
+  GAME_TOKEN_ID_MAX(): Promise<bigint>;
   MINTER_ROLE(): Promise<string>;
   BURNER_ROLE(): Promise<string>;
   URI_SETTER_ROLE(): Promise<string>;
@@ -104,6 +105,7 @@ export interface CreateDropParams {
 export type PackSale = Omit<BaseContract, "connect"> & {
   DROP_ADMIN_ROLE(): Promise<string>;
   REFUND_TIMEOUT(): Promise<bigint>;
+  treasuryCredit(): Promise<bigint>;
   createDrop(params: CreateDropParams): Promise<ContractTransactionResponse>;
   purchase(dropId: BigNumberish, overrides?: { value?: BigNumberish }): Promise<ContractTransactionResponse>;
   reveal(purchaseId: BigNumberish): Promise<ContractTransactionResponse>;
@@ -111,6 +113,8 @@ export type PackSale = Omit<BaseContract, "connect"> & {
   refundCredit(account: string): Promise<bigint>;
   refundExpiredPurchase(purchaseId: BigNumberish): Promise<ContractTransactionResponse>;
   withdrawRefund(): Promise<ContractTransactionResponse>;
+  withdrawTreasuryCredit(): Promise<ContractTransactionResponse>;
+  withdrawTreasuryCreditTo(to: string): Promise<ContractTransactionResponse>;
   closeDrop(dropId: BigNumberish): Promise<ContractTransactionResponse>;
   remainingInventory(dropId: BigNumberish): Promise<bigint>;
   pause(): Promise<ContractTransactionResponse>;

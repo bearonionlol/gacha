@@ -6,6 +6,7 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 contract InventoryRegistry is AccessControl {
     bytes32 public constant INVENTORY_ADMIN_ROLE = keccak256("INVENTORY_ADMIN_ROLE");
     bytes32 public constant TOKENIZER_ROLE = keccak256("TOKENIZER_ROLE");
+    uint256 public constant GAME_TOKEN_ID_MAX = type(uint128).max;
 
     struct InventoryRecord {
         string inventoryId;
@@ -24,6 +25,7 @@ contract InventoryRegistry is AccessControl {
     error InventoryNotAnchored(string inventoryId);
     error InventoryTokenNotAnchored(uint256 tokenId);
     error InventoryAlreadyTokenized(string inventoryId);
+    error InvalidPhysicalTokenId(uint256 tokenId);
     error ZeroOwner();
 
     event InventoryAnchored(
@@ -69,6 +71,10 @@ contract InventoryRegistry is AccessControl {
         }
 
         uint256 tokenId = derivePhysicalTokenId(inventoryId);
+        if (tokenId <= GAME_TOKEN_ID_MAX) {
+            revert InvalidPhysicalTokenId(tokenId);
+        }
+
         _inventoryRecords[key] = InventoryRecord({
             inventoryId: inventoryId,
             inventoryHash: inventoryHash,

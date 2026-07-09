@@ -41,6 +41,7 @@ type InventoryItem = {
 type DeploymentFile = {
   contracts: {
     InventoryRegistry: string;
+    ItemToken: string;
     PackSale: string;
     Forge: string;
   };
@@ -68,6 +69,22 @@ type PackSaleContract = BaseContract & {
     inventoryIds: string[];
     metadataUris: string[];
   }): Promise<ContractTransactionResponse>;
+};
+
+type ItemTokenContract = BaseContract & {
+  MINTER_ROLE(): Promise<string>;
+  hasRole(role: string, account: string): Promise<boolean>;
+  grantRole(role: string, account: string): Promise<ContractTransactionResponse>;
+  revokeRole(role: string, account: string): Promise<ContractTransactionResponse>;
+  balanceOf(account: string, tokenId: BigNumberish): Promise<bigint>;
+  mintGameItem(
+    to: string,
+    tokenId: BigNumberish,
+    amount: BigNumberish,
+    tokenUri: string
+  ): Promise<ContractTransactionResponse>;
+  isApprovedForAll(owner: string, operator: string): Promise<boolean>;
+  setApprovalForAll(operator: string, approved: boolean): Promise<ContractTransactionResponse>;
 };
 
 type ForgeContract = BaseContract & {
@@ -118,12 +135,9 @@ const recipeStatus = {
 
 const sampleRecipeId = 1n;
 const sampleForgeRecipe = {
-  inputTokenIds: [
-    ethers.toBigInt(ethers.id("game:sample-forge-input-a")),
-    ethers.toBigInt(ethers.id("game:sample-forge-input-b"))
-  ],
+  inputTokenIds: [7_001n, 7_002n],
   inputAmounts: [1n, 1n],
-  outputTokenId: ethers.toBigInt(ethers.id("game:sample-forge-output")),
+  outputTokenId: 9_001n,
   outputAmount: 1n,
   outputUri: "ipfs://metadata/game/sample-forge-output.json",
   fee: ethers.parseEther("0.001"),
@@ -434,6 +448,68 @@ async function seedForgeRecipe(forge: ForgeContract): Promise<void> {
   console.log(`created and activated sample Forge recipe ${sampleRecipeId}`);
 }
 
+async function ensureSampleForgeInputs(
+  itemToken: ItemTokenContract,
+  forge: ForgeContract,
+  deployerAddress: string
+): Promise<void> {
+  const mintPlan: Array<{ tokenId: bigint; amount: bigint }> = [];
+  for (let index = 0; index < sampleForgeRecipe.inputTokenIds.length; index++) {
+    const tokenId = sampleForgeRecipe.inputTokenIds[index];
+    const requiredAmount = sampleForgeRecipe.inputAmounts[index];
+    if (tokenId === undefined || requiredAmount === undefined) {
+      throw new Error(`Missing sample Forge recipe input at index ${index}`);
+    }
+
+    const balance = await itemToken.balanceOf(deployerAddress, tokenId);
+    if (balance < requiredAmount) {
+      mintPlan.push({ tokenId, amount: requiredAmount - balance });
+    }
+  }
+
+  if (mintPlan.length > 0) {
+    const minterRole = await itemToken.MINTER_ROLE();
+    const hadMinterRole = await itemToken.hasRole(minterRole, deployerAddress);
+    let grantedMinterRole = false;
+
+    if (!hadMinterRole) {
+      await waitFor(itemToken.grantRole(minterRole, deployerAddress));
+      grantedMinterRole = true;
+      console.log(`temporarily granted ItemToken.MINTER_ROLE to ${deployerAddress}`);
+    }
+
+    try {
+      for (const { tokenId, amount } of mintPlan) {
+        await waitFor(
+          itemToken.mintGameItem(
+            deployerAddress,
+            tokenId,
+            amount,
+            `ipfs://metadata/game/sample-forge-input-${tokenId}.json`
+          )
+        );
+        console.log(`minted ${amount} sample Forge input ${tokenId} to ${deployerAddress}`);
+      }
+    } finally {
+      if (grantedMinterRole) {
+        await waitFor(itemToken.revokeRole(minterRole, deployerAddress));
+        console.log(`revoked temporary ItemToken.MINTER_ROLE from ${deployerAddress}`);
+      }
+    }
+  } else {
+    console.log("sample Forge inputs already present for deployer");
+  }
+
+  const forgeAddress = await forge.getAddress();
+  if (await itemToken.isApprovedForAll(deployerAddress, forgeAddress)) {
+    console.log("Forge already approved for deployer sample inputs");
+    return;
+  }
+
+  await waitFor(itemToken.setApprovalForAll(forgeAddress, true));
+  console.log(`approved Forge ${forgeAddress} for deployer sample inputs`);
+}
+
 async function validateSampleForgeRecipe(forge: ForgeContract): Promise<void> {
   const recipe = await forge.recipes(sampleRecipeId);
   if (!recipe.exists) {
@@ -498,6 +574,12 @@ function compareBigintArrays(
 }
 
 async function main(): Promise<void> {
+  const [deployer] = await ethers.getSigners();
+  if (!deployer) {
+    throw new Error("No deployer signer is configured");
+  }
+
+  const deployerAddress = await deployer.getAddress();
   const deployment = loadDeployment();
   const inventory = loadSampleInventory();
   const dropItem = inventory.find(
@@ -512,6 +594,10 @@ async function main(): Promise<void> {
     "InventoryRegistry",
     deployment.contracts.InventoryRegistry
   )) as unknown as InventoryRegistryContract;
+  const itemToken = (await ethers.getContractAt(
+    "ItemToken",
+    deployment.contracts.ItemToken
+  )) as unknown as ItemTokenContract;
   const packSale = (await ethers.getContractAt(
     "PackSale",
     deployment.contracts.PackSale
@@ -527,6 +613,7 @@ async function main(): Promise<void> {
 
   await seedDrop(packSale, dropItem);
   await seedForgeRecipe(forge);
+  await ensureSampleForgeInputs(itemToken, forge, deployerAddress);
 }
 
 main().catch((error: unknown) => {

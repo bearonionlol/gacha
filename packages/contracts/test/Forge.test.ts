@@ -183,7 +183,7 @@ describe("Forge", function () {
     expect(inputAmounts).to.deep.equal(params.inputAmounts);
   });
 
-  it("rejects inventory-kind output token ids at recipe creation", async function () {
+  it("rejects physical inventory output token ids at recipe creation", async function () {
     const fixture = await deployProtocolFixture();
     const { forge, itemToken, minter, owner, recipeAdmin } = fixture;
     const inventoryOutputId = physicalTokenIdFor("forge-output-inventory-001");
@@ -200,8 +200,21 @@ describe("Forge", function () {
     await expect(
       forge.connect(recipeAdmin).createRecipe(recipeParams({ outputTokenId: inventoryOutputId }))
     )
-      .to.be.revertedWithCustomError(forge, "InvalidOutputTokenKind")
-      .withArgs(inventoryOutputId, 1n);
+      .to.be.revertedWithCustomError(forge, "InvalidOutputTokenId")
+      .withArgs(inventoryOutputId);
+    expect(await forge.nextRecipeId()).to.equal(1n);
+  });
+
+  it("rejects output token ids outside the game namespace at recipe creation", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, itemToken, recipeAdmin } = fixture;
+    const invalidOutputTokenId = (await itemToken.GAME_TOKEN_ID_MAX()) + 1n;
+
+    await expect(
+      forge.connect(recipeAdmin).createRecipe(recipeParams({ outputTokenId: invalidOutputTokenId }))
+    )
+      .to.be.revertedWithCustomError(forge, "InvalidOutputTokenId")
+      .withArgs(invalidOutputTokenId);
     expect(await forge.nextRecipeId()).to.equal(1n);
   });
 

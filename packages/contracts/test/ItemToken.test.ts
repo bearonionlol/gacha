@@ -110,6 +110,27 @@ describe("ItemToken", function () {
     ).to.be.revertedWithCustomError(itemToken, "InvalidAmount");
   });
 
+  it("rejects game item token ids outside the game namespace", async function () {
+    const { itemToken, minter, owner } = await deployProtocolFixture();
+    const invalidGameTokenId = (await itemToken.GAME_TOKEN_ID_MAX()) + 1n;
+
+    await expect(
+      itemToken.connect(minter).mintGameItem(owner.address, invalidGameTokenId, 1n, gameTokenUri)
+    )
+      .to.be.revertedWithCustomError(itemToken, "InvalidGameTokenId")
+      .withArgs(invalidGameTokenId);
+  });
+
+  it("rejects inventory mints inside the game token namespace before derivation mismatch checks", async function () {
+    const { itemToken, minter, owner } = await deployProtocolFixture();
+
+    await expect(
+      itemToken.connect(minter).mintInventoryItem(owner.address, gameTokenId, inventoryId, inventoryTokenUri)
+    )
+      .to.be.revertedWithCustomError(itemToken, "InvalidInventoryTokenId")
+      .withArgs(gameTokenId);
+  });
+
   it("exposes token kind for unknown, inventory, and game tokens", async function () {
     const { itemToken, minter, owner } = await deployProtocolFixture();
 
@@ -143,34 +164,32 @@ describe("ItemToken", function () {
     expect(await itemToken.hasCustomURI(configuredTokenId)).to.equal(true);
   });
 
-  it("rejects game minting an inventory token id", async function () {
-    const { itemToken, minter, owner, other } = await deployProtocolFixture();
+  it("rejects game minting a physical inventory token id", async function () {
+    const { itemToken, minter, owner } = await deployProtocolFixture();
 
     await itemToken
       .connect(minter)
       .mintInventoryItem(owner.address, inventoryTokenId, inventoryId, inventoryTokenUri);
 
     await expect(
-      itemToken.connect(minter).mintGameItem(other.address, inventoryTokenId, 1n, gameTokenUri)
+      itemToken.connect(minter).mintGameItem(owner.address, inventoryTokenId, 1n, gameTokenUri)
     )
-      .to.be.revertedWithCustomError(itemToken, "TokenKindConflict")
+      .to.be.revertedWithCustomError(itemToken, "InvalidGameTokenId")
       .withArgs(inventoryTokenId);
   });
 
   it("rejects inventory minting a game token id", async function () {
     const { itemToken, minter, owner, other } = await deployProtocolFixture();
-    const gameFirstInventoryId = "game-first-001";
-    const gameFirstTokenId = physicalTokenIdFor(gameFirstInventoryId);
 
-    await itemToken.connect(minter).mintGameItem(owner.address, gameFirstTokenId, 1n, gameTokenUri);
+    await itemToken.connect(minter).mintGameItem(owner.address, gameTokenId, 1n, gameTokenUri);
 
     await expect(
       itemToken
         .connect(minter)
-        .mintInventoryItem(other.address, gameFirstTokenId, gameFirstInventoryId, inventoryTokenUri)
+        .mintInventoryItem(other.address, gameTokenId, inventoryId, inventoryTokenUri)
     )
-      .to.be.revertedWithCustomError(itemToken, "TokenKindConflict")
-      .withArgs(gameFirstTokenId);
+      .to.be.revertedWithCustomError(itemToken, "InvalidInventoryTokenId")
+      .withArgs(gameTokenId);
   });
 
   it("lets the burner role burn user-approved items", async function () {

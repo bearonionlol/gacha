@@ -15,6 +15,8 @@ The protocol package lives in `packages/contracts` and includes:
 
 Physical token IDs are deterministic from inventory IDs. Preserve inventory IDs across environments so testnet and mainnet token IDs remain stable for the same physical items.
 
+The default `CommitRevealRandomnessProvider` is for local, testnet, and controlled demo deployments. It is operator-controlled and is not production-safe randomness for mainnet drops without explicit review and replacement by an approved fair/verifiable provider.
+
 ## Requirements
 
 - Node.js and pnpm compatible with the workspace lockfile.
@@ -103,6 +105,8 @@ Deploy to Robinhood mainnet:
 pnpm --filter @gacha/contracts deploy:mainnet
 ```
 
+Mainnet deploy is blocked by default while the deploy script still uses `CommitRevealRandomnessProvider`. Mainnet migration must review and replace randomness with an approved fair/verifiable provider; `ALLOW_OPERATOR_RANDOMNESS_MAINNET=true` is only an unsafe override for controlled rehearsal.
+
 Deployment scripts write registries to `deployments/<network>.json`.
 
 ## Runbooks
@@ -110,4 +114,4 @@ Deployment scripts write registries to `deployments/<network>.json`.
 - Testnet operations: `docs/testnet-runbook.md`
 - Mainnet migration controls: `docs/mainnet-migration-runbook.md`
 
-Testnet seeding uses sample inventory and placeholder metadata URIs. Production mainnet requires frozen, legally reviewed inventory metadata, custody verification, deployment registry review, admin role review, explicit mainnet RPC override, and a private smoke run before any public launch.
+Testnet seeding uses sample inventory and placeholder metadata URIs. It also mints the sample Forge input game items to the deployer and approves Forge so the sample recipe can be crafted immediately on local and testnet deployments. Production mainnet requires frozen, legally reviewed inventory metadata, approved fair/verifiable randomness, custody verification, deployment registry review, admin role review, explicit mainnet RPC override, and a private smoke run before any public launch.

@@ -71,6 +71,7 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
 
     error InvalidAddress();
     error InvalidRecipeParams();
+    error InvalidOutputTokenId(uint256 tokenId);
     error InvalidOutputTokenKind(uint256 tokenId, uint8 tokenKind);
     error OutputUriMismatch(uint256 tokenId, string expectedUri, string actualUri);
     error RecipeNotFound(uint256 recipeId);
@@ -235,6 +236,10 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
             if (params.inputAmounts[index] == 0) {
                 revert InvalidRecipeParams();
             }
+        }
+
+        if (params.outputTokenId > itemToken.GAME_TOKEN_ID_MAX()) {
+            revert InvalidOutputTokenId(params.outputTokenId);
         }
 
         ItemToken.TokenKind outputKind = itemToken.tokenKind(params.outputTokenId);

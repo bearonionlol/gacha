@@ -76,6 +76,7 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     error RefundNotAvailable(uint256 purchaseId);
     error RefundRandomnessReady(uint256 purchaseId);
     error RefundWithdrawalUnavailable(address account);
+    error TreasuryCreditUnavailable();
     error DropStillActive(uint256 dropId);
     error PendingPurchasesRemaining(uint256 dropId);
     error TransferFailed(address to, uint256 amount);
@@ -106,6 +107,8 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     event PackRefunded(uint256 indexed purchaseId, uint256 indexed dropId, address indexed buyer, uint256 price);
     event RevealedTokenClaimed(uint256 indexed purchaseId, address indexed buyer, address indexed to, uint256 tokenId);
     event RefundWithdrawn(address indexed account, uint256 amount);
+    event TreasuryCreditRecorded(address indexed treasury, uint256 amount, uint256 totalCredit);
+    event TreasuryCreditWithdrawn(address indexed caller, address indexed to, uint256 amount);
     event DropClosed(uint256 indexed dropId, uint256 releasedInventory);
 
     InventoryRegistry public immutable inventoryRegistry;
@@ -115,6 +118,7 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
 
     uint256 public nextDropId = 1;
     uint256 public nextPurchaseId = 1;
+    uint256 public treasuryCredit;
 
     mapping(uint256 dropId => Drop drop) private _drops;
     mapping(uint256 purchaseId => Purchase purchase) private _purchases;
@@ -305,7 +309,8 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         itemToken.mintInventoryItem(address(this), tokenId, inventoryId, metadataUri);
         drop.pendingPurchases -= 1;
         _advanceRevealCursor(drop, purchaseRecord.dropId);
-        _sendNative(treasury, purchaseRecord.price);
+        treasuryCredit += purchaseRecord.price;
+        emit TreasuryCreditRecorded(treasury, purchaseRecord.price, treasuryCredit);
         _tryAutoClaimRevealedToken(purchaseId, purchaseRecord);
 
         emit PackRevealed(purchaseId, purchaseRecord.dropId, purchaseRecord.buyer, inventoryId, tokenId);
@@ -365,6 +370,18 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         _sendNative(payable(msg.sender), amount);
 
         emit RefundWithdrawn(msg.sender, amount);
+    }
+
+    function withdrawTreasuryCredit() external nonReentrant {
+        _withdrawTreasuryCreditTo(treasury);
+    }
+
+    function withdrawTreasuryCreditTo(address payable to) external nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (to == address(0)) {
+            revert InvalidAddress();
+        }
+
+        _withdrawTreasuryCreditTo(to);
     }
 
     function closeDrop(uint256 dropId) external onlyRole(DROP_ADMIN_ROLE) {
@@ -480,6 +497,18 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     function _canReceiveERC1155(address account) private view returns (bool) {
         return account.code.length == 0
             || ERC165Checker.supportsInterface(account, type(IERC1155Receiver).interfaceId);
+    }
+
+    function _withdrawTreasuryCreditTo(address payable to) private {
+        uint256 amount = treasuryCredit;
+        if (amount == 0) {
+            revert TreasuryCreditUnavailable();
+        }
+
+        treasuryCredit = 0;
+        _sendNative(to, amount);
+
+        emit TreasuryCreditWithdrawn(msg.sender, to, amount);
     }
 
     function _sendNative(address payable to, uint256 amount) private {

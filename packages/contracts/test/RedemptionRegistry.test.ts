@@ -251,21 +251,18 @@ describe("RedemptionRegistry", function () {
       .withArgs(gameTokenId);
   });
 
-  it("rejects anchored physical token ids minted as game tokens", async function () {
+  it("rejects minting anchored physical token ids as game tokens before redemption", async function () {
     const fixture = await deployProtocolFixture();
-    const { registry, itemToken, redemptionRegistry, inventoryAdmin, minter, owner } = fixture;
+    const { registry, itemToken, inventoryAdmin, minter, owner } = fixture;
     const inventoryId = "redemption-game-at-physical-id-001";
     const tokenId = physicalTokenIdFor(inventoryId);
 
     await registry
       .connect(inventoryAdmin)
       .anchorInventory(inventoryId, inventoryHashFor(inventoryId), inventoryTokenUri, true, false);
-    await itemToken.connect(minter).mintGameItem(owner.address, tokenId, 1n, gameTokenUri);
-    await itemToken.connect(owner).setApprovalForAll(await redemptionRegistry.getAddress(), true);
-
-    await expect(redemptionRegistry.connect(owner).requestRedemption(tokenId))
-      .to.be.revertedWithCustomError(redemptionRegistry, "InvalidInventoryTokenKind")
-      .withArgs(tokenId, 2n);
+    await expect(itemToken.connect(minter).mintGameItem(owner.address, tokenId, 1n, gameTokenUri))
+      .to.be.revertedWithCustomError(itemToken, "InvalidGameTokenId")
+      .withArgs(tokenId);
   });
 
   it("rejects direct ItemToken transfers outside redemption requests", async function () {

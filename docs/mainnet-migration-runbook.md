@@ -2,13 +2,15 @@
 
 This runbook defines controls for moving the protocol package from testnet to Robinhood mainnet. It is a gated operational checklist, not approval to launch.
 
-Mainnet deployment requires legal review, inventory freeze, deployment registry review, admin role review, explicit RPC override, and a private smoke run before any public launch.
+Mainnet deployment requires legal review, inventory freeze, randomness-provider review or replacement, deployment registry review, admin role review, explicit RPC override, and a private smoke run before any public launch.
 
 ## Scope
 
 The protocol is mainnet-ready by configuration through environment variables, Hardhat network selection, and deployment registry review. Migration does not require contract rewrites when the approved artifacts and configuration are unchanged.
 
 Mainnet migration must preserve inventory IDs. Physical token IDs are deterministically derived from inventory IDs, so changing IDs between environments changes the corresponding physical token IDs.
+
+The default `CommitRevealRandomnessProvider` is a testnet/demo adapter. It is operator-controlled and must not be treated as production-safe randomness for mainnet pack drops.
 
 ## Required Environment
 
@@ -31,6 +33,7 @@ Complete these gates before running `deploy:mainnet`:
 - Custody verification: verify that each production physical item has reviewed custody evidence before it can be anchored or used in a public drop.
 - Metadata review: confirm that production metadata is final, pinned or otherwise durably available, and free of affiliation, endorsement, sponsorship, or investment language.
 - Artifact review: verify the compiled contracts correspond to the reviewed source and test results.
+- Randomness-provider review: replace the default `CommitRevealRandomnessProvider` with approved fair/verifiable randomness before production launch, or explicitly document that any mainnet deployment is only a controlled unsafe rehearsal.
 - Deployment registry review: confirm the expected `deployments/robinhoodMainnet.json` path, chain ID, deployer address, and address review procedure.
 - Admin role review: approve the deployer and post-deploy role holders for default admin and operational roles.
 - Treasury review: approve treasury addresses used by `PackSale`, `Marketplace`, and `Forge`.
@@ -57,6 +60,8 @@ Deploy to Robinhood mainnet only after every pre-migration gate is complete:
 ```bash
 pnpm --filter @gacha/contracts deploy:mainnet
 ```
+
+The deploy script blocks `robinhoodMainnet` by default while it deploys `CommitRevealRandomnessProvider`. For a controlled rehearsal only, operators may set `ALLOW_OPERATOR_RANDOMNESS_MAINNET=true`; this override is unsafe for production drops and must be recorded in the deployment notes.
 
 The deployment script writes `deployments/robinhoodMainnet.json` with the network name, chain ID, deployer, timestamp, and contract addresses.
 
@@ -87,6 +92,8 @@ The smoke check verifies deployed bytecode, contract wiring, default admin owner
 ## Production Seeding Policy
 
 Do not run the testnet seed command against mainnet. The `seed:testnet` script is for sample inventory and placeholder metadata only.
+
+For local and testnet craft rehearsal, the seed script also mints the sample Forge input game items to the deployer if missing and approves Forge for those inputs. This sample convenience must not be used as a production inventory or role policy.
 
 Mainnet inventory anchoring must use frozen, reviewed production inventory metadata and custody verification. Real-brand names may appear only as resale inventory descriptors and must not imply affiliation, endorsement, sponsorship, or investment exposure.
 

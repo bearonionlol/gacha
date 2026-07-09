@@ -17,10 +17,13 @@ contract ItemToken is ERC1155, ERC1155Supply, AccessControl, Pausable {
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
     bytes32 public constant URI_SETTER_ROLE = keccak256("URI_SETTER_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    uint256 public constant GAME_TOKEN_ID_MAX = type(uint128).max;
 
     error ZeroRecipient();
     error EmptyInventoryId();
     error EmptyTokenURI();
+    error InvalidGameTokenId(uint256 tokenId);
+    error InvalidInventoryTokenId(uint256 tokenId);
     error InventoryTokenIdMismatch(string inventoryId, uint256 expectedTokenId, uint256 actualTokenId);
     error InventoryTokenAlreadyMinted(uint256 tokenId);
     error TokenKindConflict(uint256 tokenId);
@@ -47,6 +50,10 @@ contract ItemToken is ERC1155, ERC1155Supply, AccessControl, Pausable {
 
         if (bytes(inventoryId).length == 0) {
             revert EmptyInventoryId();
+        }
+
+        if (tokenId <= GAME_TOKEN_ID_MAX) {
+            revert InvalidInventoryTokenId(tokenId);
         }
 
         uint256 expectedTokenId = _derivePhysicalTokenId(inventoryId);
@@ -80,6 +87,10 @@ contract ItemToken is ERC1155, ERC1155Supply, AccessControl, Pausable {
 
         if (amount == 0) {
             revert InvalidAmount();
+        }
+
+        if (tokenId > GAME_TOKEN_ID_MAX) {
+            revert InvalidGameTokenId(tokenId);
         }
 
         TokenKind kind = _tokenKinds[tokenId];

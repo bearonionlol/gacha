@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { ethers } from "hardhat";
 import type { BaseContract, BigNumberish, ContractRunner, ContractTransactionResponse } from "ethers";
-import { deployProtocolFixture, type CreateDropParams } from "./helpers/deploy";
+import { deployProtocolFixture, type CreateDropParams, type PackSale } from "./helpers/deploy";
 
 const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 const dropName = "First Test Drop";
@@ -32,6 +32,8 @@ type RejectingPackBuyer = Omit<BaseContract, "connect"> & {
   withdrawRefund(packSale: string): Promise<ContractTransactionResponse>;
   connect(runner: ContractRunner | null): RejectingPackBuyer;
 };
+
+type RejectingNativeParticipant = BaseContract;
 
 function inventoryHashFor(inventoryId: string): string {
   return ethers.keccak256(ethers.toUtf8Bytes(`inventory:${inventoryId}:v1`));
@@ -115,6 +117,44 @@ async function deployRejectingPackBuyer(): Promise<RejectingPackBuyer> {
   await rejectingBuyer.waitForDeployment();
 
   return rejectingBuyer;
+}
+
+async function deployRejectingNativeParticipant(): Promise<RejectingNativeParticipant> {
+  const rejectingParticipant = await ethers.deployContract("RejectingNativeParticipant");
+  await rejectingParticipant.waitForDeployment();
+
+  return rejectingParticipant;
+}
+
+async function createActiveDropWithTreasury(treasuryAddress: string): Promise<{
+  fixture: Awaited<ReturnType<typeof deployProtocolFixture>>;
+  dropId: bigint;
+}> {
+  const fixture = await deployProtocolFixture();
+  const { registry, inventoryAdmin, itemToken, randomnessProvider, dropAdmin } = fixture;
+  const packSale = (await ethers.deployContract("PackSale", [
+    await registry.getAddress(),
+    await itemToken.getAddress(),
+    await randomnessProvider.getAddress(),
+    treasuryAddress
+  ])) as unknown as PackSale;
+  await packSale.waitForDeployment();
+
+  await registry.grantRole(await registry.TOKENIZER_ROLE(), await packSale.getAddress());
+  await itemToken.grantRole(await itemToken.MINTER_ROLE(), await packSale.getAddress());
+  await randomnessProvider.grantRole(await randomnessProvider.REQUESTER_ROLE(), await packSale.getAddress());
+  await packSale.grantRole(await packSale.DROP_ADMIN_ROLE(), dropAdmin.address);
+
+  await anchorInventories(registry, inventoryAdmin);
+  await packSale.connect(dropAdmin).createDrop(await activeDropParams({ maxSupply: 1n }));
+
+  return {
+    fixture: {
+      ...fixture,
+      packSale: packSale as unknown as Awaited<ReturnType<typeof deployProtocolFixture>>["packSale"]
+    },
+    dropId: 1n
+  };
 }
 
 function requestIdFor(packSaleAddress: string, purchaseId: bigint, buyerAddress: string, chainId: bigint): string {
@@ -387,9 +427,9 @@ describe("PackSale", function () {
     expect(await packSale.remainingInventory(dropId)).to.equal(2n);
   });
 
-  it("forwards pack payments to the treasury after reveal", async function () {
+  it("credits pack revenue to treasury after reveal and lets anyone withdraw it to treasury", async function () {
     const {
-      fixture: { packSale, randomnessProvider, buyer, treasury, revealer },
+      fixture: { packSale, randomnessProvider, buyer, treasury, revealer, other },
       dropId
     } = await createActiveDrop();
     const seed = ethers.keccak256(ethers.toUtf8Bytes("treasury-forward-seed"));
@@ -398,10 +438,71 @@ describe("PackSale", function () {
     const requestId = await requestIdForPack(packSale, 1n, buyer.address);
     await makeRandomnessReady(randomnessProvider, revealer, requestId, seed);
 
-    await expect(packSale.connect(buyer).reveal(1n)).to.changeEtherBalances(
-      [treasury, packSale],
-      [packPrice, -packPrice]
-    );
+    await expect(packSale.connect(buyer).reveal(1n))
+      .to.emit(packSale, "TreasuryCreditRecorded")
+      .withArgs(treasury.address, packPrice, packPrice);
+    expect(await packSale.treasuryCredit()).to.equal(packPrice);
+
+    const treasuryBalanceBefore = await ethers.provider.getBalance(treasury.address);
+    const packSaleBalanceBefore = await ethers.provider.getBalance(await packSale.getAddress());
+    const withdrawal = await packSale.connect(other).withdrawTreasuryCredit();
+    await expect(withdrawal)
+      .to.emit(packSale, "TreasuryCreditWithdrawn")
+      .withArgs(other.address, treasury.address, packPrice);
+    expect(await ethers.provider.getBalance(treasury.address)).to.equal(treasuryBalanceBefore + packPrice);
+    expect(await ethers.provider.getBalance(await packSale.getAddress())).to.equal(packSaleBalanceBefore - packPrice);
+    expect(await packSale.treasuryCredit()).to.equal(0n);
+  });
+
+  it("does not let a native-rejecting treasury block reveal or drop closure", async function () {
+    const rejectingTreasury = await deployRejectingNativeParticipant();
+    const rejectingTreasuryAddress = await rejectingTreasury.getAddress();
+    const { fixture, dropId } = await createActiveDropWithTreasury(rejectingTreasuryAddress);
+    const { packSale, randomnessProvider, buyer, dropAdmin, revealer } = fixture;
+    const requestId = await requestIdForPack(packSale, 1n, buyer.address);
+    const seed = await seedForInventoryIndex(randomnessProvider, requestId, 0n);
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    await makeRandomnessReady(randomnessProvider, revealer, requestId, seed);
+
+    await expect(packSale.connect(buyer).reveal(1n))
+      .to.emit(packSale, "TreasuryCreditRecorded")
+      .withArgs(rejectingTreasuryAddress, packPrice, packPrice);
+    expect(await packSale.treasuryCredit()).to.equal(packPrice);
+
+    await increaseTime(3601);
+    await expect(packSale.connect(dropAdmin).closeDrop(dropId)).to.emit(packSale, "DropClosed");
+  });
+
+  it("preserves treasury credit when treasury withdrawal fails and lets admin recover to another recipient", async function () {
+    const rejectingTreasury = await deployRejectingNativeParticipant();
+    const rejectingTreasuryAddress = await rejectingTreasury.getAddress();
+    const { fixture, dropId } = await createActiveDropWithTreasury(rejectingTreasuryAddress);
+    const { packSale, randomnessProvider, buyer, deployer, other, recipient, revealer } = fixture;
+    const requestId = await requestIdForPack(packSale, 1n, buyer.address);
+    const seed = await seedForInventoryIndex(randomnessProvider, requestId, 0n);
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    await makeRandomnessReady(randomnessProvider, revealer, requestId, seed);
+    await packSale.connect(buyer).reveal(1n);
+
+    await expect(packSale.connect(other).withdrawTreasuryCredit())
+      .to.be.revertedWithCustomError(packSale, "TransferFailed")
+      .withArgs(rejectingTreasuryAddress, packPrice);
+    expect(await packSale.treasuryCredit()).to.equal(packPrice);
+
+    const recipientBalanceBefore = await ethers.provider.getBalance(recipient.address);
+    const packSaleBalanceBefore = await ethers.provider.getBalance(await packSale.getAddress());
+    const recovery = await packSale.connect(deployer).withdrawTreasuryCreditTo(recipient.address);
+    await expect(recovery)
+      .to.emit(packSale, "TreasuryCreditWithdrawn")
+      .withArgs(deployer.address, recipient.address, packPrice);
+    expect(await ethers.provider.getBalance(recipient.address)).to.equal(recipientBalanceBefore + packPrice);
+    expect(await ethers.provider.getBalance(await packSale.getAddress())).to.equal(packSaleBalanceBefore - packPrice);
+    expect(await packSale.treasuryCredit()).to.equal(0n);
+
+    await expect(packSale.connect(deployer).withdrawTreasuryCreditTo(ethers.ZeroAddress))
+      .to.be.revertedWithCustomError(packSale, "InvalidAddress");
   });
 
   it("blocks later purchase reveals until earlier purchases reveal", async function () {

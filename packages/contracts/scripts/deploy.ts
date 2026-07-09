@@ -81,7 +81,26 @@ function deploymentsPath(networkName: string): string {
   return path.resolve(__dirname, "../../../deployments", `${networkName}.json`);
 }
 
+function assertMainnetRandomnessAllowed(): void {
+  if (network.name !== "robinhoodMainnet") {
+    return;
+  }
+
+  if (process.env.ALLOW_OPERATOR_RANDOMNESS_MAINNET === "true") {
+    console.warn(
+      "ALLOW_OPERATOR_RANDOMNESS_MAINNET=true: deploying testnet/demo CommitRevealRandomnessProvider on mainnet"
+    );
+    return;
+  }
+
+  throw new Error(
+    "Mainnet deploy blocked: the default CommitRevealRandomnessProvider is testnet/demo only. Mainnet requires approved fair/verifiable randomness, or set ALLOW_OPERATOR_RANDOMNESS_MAINNET=true only for an explicitly controlled unsafe rehearsal."
+  );
+}
+
 async function main(): Promise<void> {
+  assertMainnetRandomnessAllowed();
+
   const [deployer] = await ethers.getSigners();
   if (!deployer) {
     throw new Error("No deployer signer is configured");

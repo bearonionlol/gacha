@@ -4,6 +4,7 @@ import { ethers, network } from "hardhat";
 import type { BaseContract } from "ethers";
 
 type DeploymentFile = {
+  chainId: number;
   deployer: string;
   contracts: Record<string, string>;
 };
@@ -154,6 +155,13 @@ async function assertDefaultAdmin(
 
 async function main(): Promise<void> {
   const deployment = loadDeployment();
+  const chain = await ethers.provider.getNetwork();
+  if (deployment.chainId !== Number(chain.chainId)) {
+    throw new Error(
+      `Deployment file chainId ${deployment.chainId} does not match provider chainId ${chain.chainId}`
+    );
+  }
+
   const deployer = deployment.deployer;
   const addresses = Object.fromEntries(
     contractNames.map((name) => [name, requireAddress(deployment, name)])

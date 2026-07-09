@@ -107,7 +107,7 @@ Seed the deployed contracts:
 pnpm --filter @gacha/contracts seed:testnet
 ```
 
-The seed script reads `packages/inventory/src/sample-inventory.ts`, anchors sample inventory hashes, creates one sample drop from drop-ready sample inventory, and creates one sample Forge recipe.
+The seed script reads `packages/inventory/src/sample-inventory.ts`, anchors sample inventory hashes, creates one sample drop from drop-ready sample inventory, creates one sample Forge recipe, mints missing sample Forge input game items to the deployer, and approves Forge for the deployer when needed.
 
 Testnet seed data uses sample inventory and placeholder metadata URIs such as `ipfs://metadata/<inventoryId>.json`. Do not treat testnet seed metadata as production-reviewed inventory metadata or custody evidence.
 
