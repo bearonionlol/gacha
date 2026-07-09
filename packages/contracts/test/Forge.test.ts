@@ -201,6 +201,53 @@ describe("Forge", function () {
     expect(await forge.nextRecipeId()).to.equal(3n);
   });
 
+  it("rejects existing game output token ids with a mismatched custom URI", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, itemToken, minter, owner, recipeAdmin } = fixture;
+    const existingGameOutputId = outputTokenId + 200n;
+
+    await itemToken
+      .connect(minter)
+      .mintGameItem(owner.address, existingGameOutputId, 1n, outputTokenUri);
+
+    await expect(
+      forge.connect(recipeAdmin).createRecipe(
+        recipeParams({
+          outputTokenId: existingGameOutputId,
+          outputUri: alternateOutputTokenUri
+        })
+      )
+    )
+      .to.be.revertedWithCustomError(forge, "OutputUriMismatch")
+      .withArgs(existingGameOutputId, outputTokenUri, alternateOutputTokenUri);
+    expect(await forge.nextRecipeId()).to.equal(1n);
+  });
+
+  it("allows existing game output token ids with the matching custom URI", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, itemToken, minter, owner, recipeAdmin } = fixture;
+    const existingGameOutputId = outputTokenId + 201n;
+
+    await itemToken
+      .connect(minter)
+      .mintGameItem(owner.address, existingGameOutputId, 1n, outputTokenUri);
+
+    await expect(
+      forge.connect(recipeAdmin).createRecipe(
+        recipeParams({
+          outputTokenId: existingGameOutputId,
+          outputUri: outputTokenUri
+        })
+      )
+    )
+      .to.emit(forge, "RecipeCreated")
+      .withArgs(1n, recipeAdmin.address);
+
+    const recipe = await forge.recipes(1n);
+    expect(recipe.outputTokenId).to.equal(existingGameOutputId);
+    expect(recipe.outputUri).to.equal(outputTokenUri);
+  });
+
   it("activates an admin-reviewed recipe", async function () {
     const fixture = await deployProtocolFixture();
     const { forge, recipeAdmin } = fixture;
@@ -481,6 +528,37 @@ describe("Forge", function () {
     expect(await itemToken.balanceOf(owner.address, inputTokenB)).to.equal(beforeInputBBalance);
     expect(await itemToken.balanceOf(owner.address, outputTokenId)).to.equal(beforeOutputBalance);
     expect(await ethers.provider.getBalance(await forge.getAddress())).to.equal(0n);
+  });
+
+  it("rolls back an earlier input burn when a later input burn fails", async function () {
+    const fixture = await deployProtocolFixture();
+    const { forge, itemToken, minter, owner, treasury } = fixture;
+    const recipeId = await createActiveRecipe(fixture);
+    const forgeAddress = await forge.getAddress();
+
+    await itemToken.connect(minter).mintGameItem(owner.address, inputTokenA, 2n, inputTokenUri);
+    await approveForge(fixture, owner);
+
+    const beforeRecipe = await forge.recipes(recipeId);
+    const beforeWalletCrafts = await forge.walletCrafts(recipeId, owner.address);
+    const beforeTreasuryCredit = await forge.treasuryFeesCredit(treasury.address);
+    const beforeForgeBalance = await ethers.provider.getBalance(forgeAddress);
+    const beforeInputABalance = await itemToken.balanceOf(owner.address, inputTokenA);
+    const beforeInputBBalance = await itemToken.balanceOf(owner.address, inputTokenB);
+    const beforeOutputBalance = await itemToken.balanceOf(owner.address, outputTokenId);
+
+    await expect(forge.connect(owner).craft(recipeId, { value: recipeFee }))
+      .to.be.revertedWithCustomError(itemToken, "ERC1155InsufficientBalance")
+      .withArgs(owner.address, 0n, 1n, inputTokenB);
+
+    const afterRecipe = await forge.recipes(recipeId);
+    expect(afterRecipe.totalCrafts).to.equal(beforeRecipe.totalCrafts);
+    expect(await forge.walletCrafts(recipeId, owner.address)).to.equal(beforeWalletCrafts);
+    expect(await forge.treasuryFeesCredit(treasury.address)).to.equal(beforeTreasuryCredit);
+    expect(await ethers.provider.getBalance(forgeAddress)).to.equal(beforeForgeBalance);
+    expect(await itemToken.balanceOf(owner.address, inputTokenA)).to.equal(beforeInputABalance);
+    expect(await itemToken.balanceOf(owner.address, inputTokenB)).to.equal(beforeInputBBalance);
+    expect(await itemToken.balanceOf(owner.address, outputTokenId)).to.equal(beforeOutputBalance);
   });
 
   it("enforces schedule window start and end", async function () {

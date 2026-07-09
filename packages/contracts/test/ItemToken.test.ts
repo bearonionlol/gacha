@@ -124,6 +124,25 @@ describe("ItemToken", function () {
     expect(await itemToken.tokenKind(gameTokenId)).to.equal(2n);
   });
 
+  it("exposes whether a token has a custom URI", async function () {
+    const { itemToken, minter, owner, uriSetter } = await deployProtocolFixture();
+    const fallbackOnlyTokenId = gameTokenId + 100n;
+    const configuredTokenId = gameTokenId + 101n;
+
+    expect(await itemToken.hasCustomURI(fallbackOnlyTokenId)).to.equal(false);
+
+    await itemToken.connect(minter).mintGameItem(owner.address, fallbackOnlyTokenId, 1n, "");
+
+    expect(await itemToken.uri(fallbackOnlyTokenId)).to.equal("ipfs://gacha/items/{id}.json");
+    expect(await itemToken.hasCustomURI(fallbackOnlyTokenId)).to.equal(false);
+
+    await itemToken.connect(uriSetter).setTokenURI(fallbackOnlyTokenId, gameTokenUri);
+    await itemToken.connect(minter).mintGameItem(owner.address, configuredTokenId, 1n, gameTokenUri);
+
+    expect(await itemToken.hasCustomURI(fallbackOnlyTokenId)).to.equal(true);
+    expect(await itemToken.hasCustomURI(configuredTokenId)).to.equal(true);
+  });
+
   it("rejects game minting an inventory token id", async function () {
     const { itemToken, minter, owner, other } = await deployProtocolFixture();
 

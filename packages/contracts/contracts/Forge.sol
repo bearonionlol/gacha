@@ -246,6 +246,13 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         if (bytes(configuredOutputUri).length != 0 && !_sameString(configuredOutputUri, params.outputUri)) {
             revert OutputUriMismatch(params.outputTokenId, configuredOutputUri, params.outputUri);
         }
+
+        if (outputKind == ItemToken.TokenKind.Game && itemToken.hasCustomURI(params.outputTokenId)) {
+            string memory existingOutputUri = itemToken.uri(params.outputTokenId);
+            if (!_sameString(existingOutputUri, params.outputUri)) {
+                revert OutputUriMismatch(params.outputTokenId, existingOutputUri, params.outputUri);
+            }
+        }
     }
 
     function _lockOutputUri(uint256 outputTokenId, string calldata outputUri) private {
@@ -369,7 +376,7 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         }
     }
 
-    function _sameString(string storage left, string calldata right) private pure returns (bool) {
+    function _sameString(string memory left, string memory right) private pure returns (bool) {
         return keccak256(bytes(left)) == keccak256(bytes(right));
     }
 }

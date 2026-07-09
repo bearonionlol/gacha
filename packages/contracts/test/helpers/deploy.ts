@@ -41,6 +41,7 @@ export type ItemToken = Omit<BaseContract, "connect"> & {
   balanceOf(account: string, tokenId: BigNumberish): Promise<bigint>;
   "totalSupply(uint256)"(tokenId: BigNumberish): Promise<bigint>;
   tokenKind(tokenId: BigNumberish): Promise<bigint>;
+  hasCustomURI(tokenId: BigNumberish): Promise<boolean>;
   uri(tokenId: BigNumberish): Promise<string>;
   mintInventoryItem(
     to: string,
