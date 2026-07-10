@@ -1,4 +1,5 @@
-import { BadgeCheck, Gem, PackageCheck, ShieldCheck, Tags, Trophy } from "lucide-react";
+import Link from "next/link";
+import { BadgeCheck, Gem, Hammer, PackageCheck, ShieldCheck, Tags, Trophy } from "lucide-react";
 import { buildCollectionProgression } from "../lib/collection-progression";
 import { formatCents } from "../lib/format";
 import { collectibleCards, vaultStats } from "../lib/inventory";
@@ -18,8 +19,14 @@ export function VaultGrid() {
           <strong>{formatCents(vaultStats.buybackValueCents)}</strong>
         </div>
         <div>
-          <span className="eyebrow">Grail tracked</span>
-          <strong>{vaultStats.grailCount} items</strong>
+          <span className="eyebrow">Forge pool ready</span>
+          <strong>{vaultStats.tierPoolEligibleCount} items</strong>
+        </div>
+        <div>
+          <span className="eyebrow">Trade-in eligible</span>
+          <strong>
+            {vaultStats.tradeInEligibleCount} {vaultStats.tradeInEligibleCount === 1 ? "item" : "items"}
+          </strong>
         </div>
       </div>
 
@@ -91,9 +98,15 @@ export function VaultGrid() {
                   </span>
                   <h3>{card.title}</h3>
                 </div>
-                <span className="tier-pill">
-                  <Gem size={14} aria-hidden="true" />
-                  {card.grailTier}
+                <span className="card-tier-stack">
+                  <span className="tier-pill forge-tier-pill">
+                    <Hammer size={14} aria-hidden="true" />
+                    Forge Tier {card.forgeTier}
+                  </span>
+                  <span className="grail-label">
+                    <Gem size={13} aria-hidden="true" />
+                    {card.grailTier} grail class
+                  </span>
                 </span>
               </div>
               <p>{card.subtitle}</p>
@@ -119,6 +132,14 @@ export function VaultGrid() {
                   Descriptor checked
                 </dd>
               </div>
+              <div>
+                <dt>Forge role</dt>
+                <dd>{card.tradeInEligible ? "Eligible trade-in input" : "Anchor candidate"}</dd>
+              </div>
+              <div>
+                <dt>Tier pool</dt>
+                <dd>{card.tierPoolEligible ? "Eligible" : "Excluded"}</dd>
+              </div>
             </dl>
 
             <div className="tag-row" aria-label={`${card.title} tags`}>
@@ -128,15 +149,16 @@ export function VaultGrid() {
               ))}
             </div>
 
-            <button
-              aria-label={`Review vault item ${card.title}`}
-              className="secondary-action"
-              disabled
-              type="button"
-            >
-              <PackageCheck size={16} aria-hidden="true" />
-              Review vault item
-            </button>
+            <div className="vault-card-actions">
+              <Link className="secondary-action" href="/forge">
+                <Hammer size={16} aria-hidden="true" />
+                {card.tradeInEligible ? "Use as trade-in" : "Use as Anchor"}
+              </Link>
+              <Link className="secondary-action" href="/redemption">
+                <PackageCheck size={16} aria-hidden="true" />
+                Redeem options
+              </Link>
+            </div>
           </article>
         ))}
       </div>

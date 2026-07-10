@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.7.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck workspaces
+        run: pnpm -r typecheck
+
+      - name: Run unit and contract tests
+        run: pnpm -r test
+
+      - name: Rehearse the complete local contract journey
+        run: pnpm --filter @gacha/contracts local
+
+      - name: Build workspaces
+        run: pnpm -r build
+        env:
+          NEXT_PUBLIC_GACHA_CHAIN_MODE: demo
+          NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY: demo
+          NEXT_PUBLIC_GACHA_ENABLE_ADMIN: "false"
+          NEXT_PUBLIC_GACHA_RPC_URL: ""
+
+      - name: Install Chromium
+        run: pnpm --filter @gacha/web exec playwright install --with-deps chromium
+
+      - name: Run browser journeys
+        run: pnpm --filter @gacha/web test:e2e
+        env:
+          GACHA_E2E_USE_BUILD: "true"
+
+      - name: Upload browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-failure-artifacts
+          path: apps/web/e2e/.artifacts
+          if-no-files-found: ignore
+          retention-days: 7

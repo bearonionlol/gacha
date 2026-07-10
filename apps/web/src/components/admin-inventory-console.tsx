@@ -1,6 +1,9 @@
-import { Download, FileJson, ShieldCheck } from "lucide-react";
+import { exportInventoryAsCsv, exportInventoryAsJson } from "@gacha/inventory";
+import { AlertTriangle, CheckCircle2, ShieldCheck, XCircle } from "lucide-react";
 import { browserInventoryStatuses, browserSeededInventory } from "../lib/browser-seeded-inventory";
 import { formatCents } from "../lib/format";
+import { reconcileInventory } from "../lib/inventory-reconciliation";
+import { InventoryExportControls } from "./inventory-export-controls";
 import { PublicTestnetReadinessPanel } from "./public-testnet-readiness-panel";
 import { RedemptionOpsPanel } from "./testnet-write-panels";
 
@@ -11,13 +14,90 @@ const requiredFields = [
   "photoHash",
   "custodyStatus",
   "marketEstimateCents",
-  "buybackQuoteCents"
+  "buybackQuoteCents",
+  "canonicalCollectibleKey",
+  "forgeTier",
+  "tradeInEligible",
+  "tierPoolEligible",
+  "forgeSetKey"
 ];
+
+const reconciliation = reconcileInventory(browserSeededInventory);
+const inventoryJson = exportInventoryAsJson(browserSeededInventory);
+const inventoryCsv = exportInventoryAsCsv(browserSeededInventory);
 
 export function AdminInventoryConsole() {
   return (
     <section className="admin-console" aria-label="Admin inventory console">
       <PublicTestnetReadinessPanel />
+
+      <div className="panel inventory-reconciliation-panel">
+        <div className="panel-header compact">
+          <div>
+            <span className="eyebrow">Deterministic intake audit</span>
+            <h2>Inventory Reconciliation</h2>
+          </div>
+          <span className={`chain-pill reconciliation-pill ${reconciliation.summary}`}>
+            <ReconciliationIcon summary={reconciliation.summary} />
+            {reconciliation.summary === "needs_review" ? "needs review" : reconciliation.summary}
+          </span>
+        </div>
+
+        <dl className="inventory-reconciliation-stats">
+          <div>
+            <dt>Custody records</dt>
+            <dd>{reconciliation.counts.total}</dd>
+          </div>
+          <div>
+            <dt>Drop eligible</dt>
+            <dd>{reconciliation.counts.dropEligible}</dd>
+          </div>
+          <div>
+            <dt>Trade-in inputs</dt>
+            <dd>{reconciliation.counts.tradeInEligible}</dd>
+          </div>
+          <div>
+            <dt>Tier-pool outputs</dt>
+            <dd>{reconciliation.counts.tierPoolEligible}</dd>
+          </div>
+          <div>
+            <dt>Protected grails</dt>
+            <dd>{reconciliation.counts.protectedGrails}</dd>
+          </div>
+        </dl>
+
+        <div className="tier-pool-reconciliation" aria-label="Tier pool inventory counts">
+          {([1, 2, 3, 4] as const).map((tier) => (
+            <span key={tier}>
+              Tier {tier}
+              <strong>{reconciliation.tierPoolByTier[tier]}</strong>
+            </span>
+          ))}
+        </div>
+
+        {reconciliation.issues.length === 0 ? (
+          <p className="reconciliation-clear">
+            <CheckCircle2 size={17} aria-hidden="true" />
+            IDs, custody photos, valuations, grail protection, and ascension output reserves pass deterministic checks.
+          </p>
+        ) : (
+          <ul className="reconciliation-issue-list" aria-label="Inventory reconciliation issues">
+            {reconciliation.issues.map((issue) => (
+              <li className={issue.severity} key={issue.id}>
+                {issue.severity === "error" ? (
+                  <XCircle size={16} aria-hidden="true" />
+                ) : (
+                  <AlertTriangle size={16} aria-hidden="true" />
+                )}
+                <span>
+                  <strong>{issue.label}</strong>
+                  <small>{issue.detail}</small>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="panel admin-fields-panel">
         <div className="panel-header compact">
@@ -71,6 +151,9 @@ export function AdminInventoryConsole() {
                 <th scope="col">Photo hash</th>
                 <th scope="col">Estimate</th>
                 <th scope="col">Buyback</th>
+                <th scope="col">Forge tier</th>
+                <th scope="col">Trade-in</th>
+                <th scope="col">Tier pool</th>
               </tr>
             </thead>
             <tbody>
@@ -88,6 +171,9 @@ export function AdminInventoryConsole() {
                   </td>
                   <td>{formatCents(item.marketEstimateCents)}</td>
                   <td>{formatCents(item.buybackQuoteCents)}</td>
+                  <td>Tier {item.forgeTier}</td>
+                  <td>{item.tradeInEligible ? "Eligible" : "Protected"}</td>
+                  <td>{item.tierPoolEligible ? "Eligible" : "Excluded"}</td>
                 </tr>
               ))}
             </tbody>
@@ -98,24 +184,15 @@ export function AdminInventoryConsole() {
       <div className="panel export-panel">
         <div className="panel-header compact">
           <div>
-            <span className="eyebrow">Export hooks</span>
-            <h2>Read-only Exports</h2>
+            <span className="eyebrow">Validated handoff</span>
+            <h2>Inventory Exports</h2>
           </div>
         </div>
-        <p id="export-disabled-reason">
-          JSON and CSV exports are wired to inventory helpers in the next persistence pass; current controls are disabled
-          so this screen does not imply live export or production writes.
+        <p>
+          Download schema-validated snapshots for custody reconciliation and operator review. Exports contain public
+          inventory metadata only and never include wallet credentials.
         </p>
-        <div className="action-grid">
-          <button aria-describedby="export-disabled-reason" className="secondary-action" disabled type="button">
-            <FileJson size={16} aria-hidden="true" />
-            Export JSON
-          </button>
-          <button aria-describedby="export-disabled-reason" className="secondary-action" disabled type="button">
-            <Download size={16} aria-hidden="true" />
-            Export CSV
-          </button>
-        </div>
+        <InventoryExportControls csv={inventoryCsv} json={inventoryJson} />
       </div>
 
       <div className="panel operator-checklist-panel">
@@ -136,4 +213,10 @@ export function AdminInventoryConsole() {
       <RedemptionOpsPanel />
     </section>
   );
+}
+
+function ReconciliationIcon({ summary }: { summary: "blocked" | "needs_review" | "ready" }) {
+  if (summary === "ready") return <CheckCircle2 size={14} aria-hidden="true" />;
+  if (summary === "needs_review") return <AlertTriangle size={14} aria-hidden="true" />;
+  return <XCircle size={14} aria-hidden="true" />;
 }

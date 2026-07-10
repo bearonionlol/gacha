@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { formatEther, type Address, type Hex, type TransactionReceipt } from "viem";
-import { loadDeploymentRegistrySnapshotFromEnv } from "../lib/deployments";
+import { getDeploymentDiagnostics, loadDeploymentRegistrySnapshotFromEnv } from "../lib/deployments";
 import { getReadyContractRegistry, type ProtocolContracts } from "../lib/contracts/registry";
 import {
   createPackRevealRequestForPurchase,
@@ -24,45 +24,54 @@ import { TransactionActionPanel } from "./transaction-action-panel";
 
 type RegistryPanelState = {
   contracts: ProtocolContracts | null;
+  fullStackReady: boolean;
   message: string;
 };
 
 function useClientRegistry(): RegistryPanelState {
   return useMemo(() => {
-    const registry = getReadyContractRegistry(
-      loadDeploymentRegistrySnapshotFromEnv({
-        NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY: process.env.NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY
-      })
-    );
+    const snapshot = loadDeploymentRegistrySnapshotFromEnv({
+      NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY: process.env.NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY
+    });
+    const registry = getReadyContractRegistry(snapshot);
+    const diagnostics = getDeploymentDiagnostics(snapshot);
 
     if (registry.contracts === null) {
-      return { contracts: null, message: registry.status.message };
+      return { contracts: null, fullStackReady: false, message: registry.status.message };
     }
 
     if (registry.chainId !== robinhoodTestnetChainId) {
       return {
         contracts: null,
+        fullStackReady: false,
         message: "This write flow is locked to Robinhood Chain Testnet."
       };
     }
 
-    return { contracts: registry.contracts, message: registry.status.message };
+    return {
+      contracts: registry.contracts,
+      fullStackReady: diagnostics.fullStackReady,
+      message: registry.status.message
+    };
   }, []);
 }
 
 export function PackPurchasePanel({ onPurchaseConfirmed }: { onPurchaseConfirmed?: (purchaseId: bigint) => void }) {
   const registry = useClientRegistry();
+  const fullStackBlocked = registry.contracts !== null && !registry.fullStackReady;
+  const blockedMessage =
+    "New pulls are paused until PackSale and Vault Forge V4 are deployed together. Existing purchases can still be revealed.";
 
   return (
     <TransactionActionPanel
-      contracts={registry.contracts}
+      contracts={fullStackBlocked ? null : registry.contracts}
       ctaLabel="Reserve pack"
       description="Calls PackSale.purchase with the exact seeded testnet ETH value."
       onConfirmed={(receipt) => {
         const purchaseId = extractPackPurchaseId(receipt);
         if (purchaseId !== null) onPurchaseConfirmed?.(purchaseId);
       }}
-      registryMessage={registry.message}
+      registryMessage={fullStackBlocked ? blockedMessage : registry.message}
       summary={[
         { label: "Function", value: "PackSale.purchase" },
         { label: "Drop ID", value: testnetWriteConfig.pack.dropId.toString() },

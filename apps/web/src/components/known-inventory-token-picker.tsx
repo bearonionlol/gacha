@@ -155,6 +155,7 @@ function TokenScanResult({
           <div>
             <strong>{token.title}</strong>
             <span>{token.subtitle}</span>
+            <span>Forge Tier {token.forgeTier} / {token.tradeInEligible ? "trade-in eligible" : "protected hold"}</span>
             <code>{token.tokenId.toString()}</code>
           </div>
           <button className="secondary-action" onClick={() => onSelectTokenId(token.tokenId)} type="button">

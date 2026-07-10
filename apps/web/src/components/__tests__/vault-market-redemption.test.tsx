@@ -14,13 +14,15 @@ describe("vault, market, and redemption routes", () => {
     expect(screen.getByText(/Master set/i)).toBeInTheDocument();
     expect(screen.getByText(/Next chase/i)).toBeInTheDocument();
     expect(screen.getByText(/Trade, forge, or buy/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Forge Tier/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: /Use as trade-in/i })).toHaveAttribute("href", "/forge");
   });
 
   it("renders marketplace fees and escrow disclosure", () => {
     render(<MarketPage />);
 
-    expect(screen.getByText(/Fixed-price market/i)).toBeInTheDocument();
-    expect(screen.getByText(/vault-backed listings/i)).toBeInTheDocument();
+    expect(screen.getByText(/Vault Market/i)).toBeInTheDocument();
+    expect(screen.getByText(/Compare vault-backed listings/i)).toBeInTheDocument();
     expect(screen.queryByText(/deterministic demo listings/i)).not.toBeInTheDocument();
     expect(screen.getByText(/escrowed until sale or cancellation/i)).toBeInTheDocument();
     expect(screen.getAllByText(/protocol fee/i).length).toBeGreaterThan(0);
@@ -28,6 +30,7 @@ describe("vault, market, and redemption routes", () => {
     expect(screen.getAllByText(/Floor delta/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Buyback delta/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Listing health/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Duplicate trade-in eligible/i)).toBeInTheDocument();
     expect(screen.getByText(/Market order ticket/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Approve Marketplace/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Marketplace\.list/i).length).toBeGreaterThan(0);
@@ -39,6 +42,7 @@ describe("vault, market, and redemption routes", () => {
     expect(screen.getAllByText(/Marketplace\.cancel/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Marketplace\.withdrawProceeds/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Buyback desk/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Review in Vault Ascension/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/BuybackVault\.acceptQuote/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/BuybackVault\.withdrawPayout/i).length).toBeGreaterThan(0);
   });
@@ -47,8 +51,9 @@ describe("vault, market, and redemption routes", () => {
     render(<RedemptionPage />);
 
     expect(screen.getByText(/Redemption Desk/i)).toBeInTheDocument();
-    expect(screen.getByText(/requested/i)).toBeInTheDocument();
-    expect(screen.getByText(/fulfilled/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/requested/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/completed/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Vault Ascension boundary/i)).toBeInTheDocument();
     expect(screen.getByText(/Opened on Jul 9/i)).toBeInTheDocument();
     expect(screen.getByText(/Approve RedemptionRegistry/i)).toBeInTheDocument();
     expect(screen.getAllByText(/RedemptionRegistry\.requestRedemption/i).length).toBeGreaterThan(0);
@@ -57,9 +62,10 @@ describe("vault, market, and redemption routes", () => {
     expect(screen.getAllByText(/known seeded inventory/i).length).toBeGreaterThan(0);
   });
 
-  it("renders item-specific disabled vault actions", () => {
+  it("routes item-specific vault actions into Forge and redemption", () => {
     render(<VaultPage />);
 
-    expect(screen.getByRole("button", { name: /Review vault item Pokemon TCG Charizard ex/i })).toBeDisabled();
+    expect(screen.getByRole("link", { name: /Use as trade-in/i })).toHaveAttribute("href", "/forge");
+    expect(screen.getAllByRole("link", { name: /Redeem options/i }).length).toBeGreaterThan(0);
   });
 });

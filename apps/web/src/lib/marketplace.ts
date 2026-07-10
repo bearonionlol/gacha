@@ -6,9 +6,13 @@ export type MarketplaceListingInput = {
   cardId: string;
   escrowDisclosure?: string;
   feeBps: number;
+  forgeSetKey?: string;
+  forgeTier?: number;
+  grailTier?: string;
   id: string;
   seller: string;
   title: string;
+  tradeInEligible?: boolean;
 };
 
 export type SellerProceeds = {

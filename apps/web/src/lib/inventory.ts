@@ -9,6 +9,11 @@ export type CollectibleCard = {
   estimateCents: number;
   buybackCents: number;
   grailTier: string;
+  forgeTier: BrowserSeededInventoryItem["forgeTier"];
+  tradeInEligible: boolean;
+  tierPoolEligible: boolean;
+  forgeSetKey: string;
+  canonicalCollectibleKey: string;
   redeemable: boolean;
   tags: string[];
   legalDisclaimer: string;
@@ -46,6 +51,11 @@ export const collectibleCards: CollectibleCard[] = browserSeededInventory.map((i
   estimateCents: item.marketEstimateCents,
   buybackCents: item.buybackQuoteCents,
   grailTier: item.grailTier,
+  forgeTier: item.forgeTier,
+  tradeInEligible: item.tradeInEligible,
+  tierPoolEligible: item.tierPoolEligible,
+  forgeSetKey: item.forgeSetKey,
+  canonicalCollectibleKey: item.canonicalCollectibleKey,
   redeemable: item.redeemable,
   tags: [...item.craftingTags],
   legalDisclaimer: item.legalDisclaimer,
@@ -56,5 +66,7 @@ export const vaultStats = {
   totalItems: collectibleCards.length,
   marketValueCents: collectibleCards.reduce((total, card) => total + card.estimateCents, 0),
   buybackValueCents: collectibleCards.reduce((total, card) => total + card.buybackCents, 0),
-  grailCount: collectibleCards.filter((card) => card.grailTier === "grail" || card.grailTier === "major").length
+  grailCount: collectibleCards.filter((card) => card.grailTier === "grail" || card.grailTier === "major").length,
+  tradeInEligibleCount: collectibleCards.filter((card) => card.tradeInEligible).length,
+  tierPoolEligibleCount: collectibleCards.filter((card) => card.tierPoolEligible).length
 };

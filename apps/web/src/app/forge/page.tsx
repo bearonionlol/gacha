@@ -4,7 +4,7 @@ import { VaultForgeLivePanel } from "../../components/vault-forge-live-panel";
 
 export default function ForgePage() {
   return (
-    <AppShell>
+    <AppShell activePath="/forge">
       <main className="command-center route-page">
         <section className="panel route-hero" aria-labelledby="forge-title">
           <div className="panel-header">

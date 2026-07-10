@@ -46,9 +46,10 @@ const serializeCsvValue = (value: InventoryItem[(typeof inventoryCsvColumns)[num
   }
 
   const text = Array.isArray(value) ? JSON.stringify(value) : String(value);
-  const escaped = text.replace(/"/g, '""');
+  const spreadsheetSafeText = /^[\t\r\n ]*[=+\-@]/.test(text) ? `'${text}` : text;
+  const escaped = spreadsheetSafeText.replace(/"/g, '""');
 
-  return /[",\n\r]/.test(text) ? `"${escaped}"` : escaped;
+  return /[",\n\r]/.test(spreadsheetSafeText) ? `"${escaped}"` : escaped;
 };
 
 export const exportInventoryAsJson = (items: readonly InventoryItem[]): string => {

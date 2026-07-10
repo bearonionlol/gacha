@@ -57,8 +57,8 @@ export function EconomyPanel() {
       </dl>
 
       <p className="disclosure">
-        Fee math is shown before wallet confirmation. Fantasy portfolio points, arcade score, and Forge discovery never
-        change published pull odds.
+        Fee math is shown before wallet confirmation. Fantasy portfolio points, arcade score, and Vault Ascension
+        activity never change published gacha odds or the Dust reward policy.
       </p>
     </section>
   );

@@ -96,7 +96,7 @@ function buildMilestones(cards: CollectibleCard[]): string[] {
   }
 
   if (tags.has("fire") && tags.has("parallel")) {
-    milestones.push("Forge-ready cross-set path");
+    milestones.push("Multiple Forge lanes unlocked");
   }
 
   return milestones;

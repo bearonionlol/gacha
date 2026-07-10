@@ -6,7 +6,7 @@ export function ArcadePanel() {
     <section className="panel arcade-panel" aria-labelledby="signal-run-title">
       <div className="panel-header compact">
         <div>
-          <span className="eyebrow">Arcade route</span>
+          <span className="eyebrow">Daily arcade</span>
           <h2 id="signal-run-title">{signalRun.title}</h2>
         </div>
         <Zap size={18} aria-hidden="true" />
@@ -24,10 +24,10 @@ export function ArcadePanel() {
           <dd>{signalRun.xp.toLocaleString("en-US")}</dd>
         </div>
       </dl>
-      <div className="progress-row" aria-label="Recipe progress">
+      <div className="progress-row" aria-label="Ascension preparation">
         <span>
           <Gauge size={15} aria-hidden="true" />
-          Recipe progress
+          Ascension prep
         </span>
         <strong>{signalRun.recipeProgressPercent}%</strong>
       </div>
