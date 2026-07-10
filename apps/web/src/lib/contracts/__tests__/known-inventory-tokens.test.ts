@@ -62,7 +62,9 @@ describe("known inventory token scanner", () => {
       tokenId: 1001n,
       balance: 1n,
       redeemable: true,
-      grailTier: "major"
+      grailTier: "major",
+      forgeTier: 2,
+      tradeInEligible: true
     });
     expect(client.readContract).toHaveBeenCalledWith(
       expect.objectContaining({

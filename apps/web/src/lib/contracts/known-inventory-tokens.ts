@@ -21,6 +21,8 @@ export type KnownInventoryToken = {
   balance: bigint;
   redeemable: boolean;
   grailTier: BrowserSeededInventoryItem["grailTier"];
+  forgeTier: BrowserSeededInventoryItem["forgeTier"];
+  tradeInEligible: boolean;
 };
 
 export type KnownInventoryTokenScan =
@@ -59,7 +61,9 @@ export async function readKnownInventoryTokenStates({
             tokenId,
             balance,
             redeemable: item.redeemable,
-            grailTier: item.grailTier
+            grailTier: item.grailTier,
+            forgeTier: item.forgeTier,
+            tradeInEligible: item.tradeInEligible
           } satisfies KnownInventoryToken;
         })
       )

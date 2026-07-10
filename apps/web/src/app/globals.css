@@ -8,7 +8,7 @@
   --line-strong: rgba(244, 247, 242, 0.2);
   --text: #f4f7f2;
   --muted: #a9b4aa;
-  --faint: #737d76;
+  --faint: #7f8a82;
   --green: #00c805;
   --green-soft: rgba(0, 200, 5, 0.14);
   --green-line: rgba(0, 200, 5, 0.42);
@@ -1241,6 +1241,7 @@ h1 {
 .admin-fields-panel,
 .lifecycle-panel,
 .inventory-table-panel,
+.inventory-reconciliation-panel,
 .export-panel,
 .operator-checklist-panel,
 .public-readiness-panel {
@@ -1248,8 +1249,213 @@ h1 {
   gap: 14px;
 }
 
-.public-readiness-panel {
+.public-readiness-panel,
+.inventory-reconciliation-panel {
   grid-column: 1 / -1;
+}
+
+.inventory-reconciliation-stats,
+.deployment-diagnostic-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.inventory-reconciliation-stats > div,
+.deployment-diagnostic-summary > div {
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--green-line);
+  background: var(--surface-2);
+  padding: 11px 12px;
+}
+
+.inventory-reconciliation-stats dt,
+.deployment-diagnostic-summary span {
+  color: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.inventory-reconciliation-stats dd,
+.deployment-diagnostic-summary strong,
+.deployment-diagnostic-summary small {
+  display: block;
+}
+
+.inventory-reconciliation-stats dd,
+.deployment-diagnostic-summary strong {
+  margin: 5px 0 0;
+  color: var(--text);
+  font-size: 1.08rem;
+}
+
+.deployment-diagnostic-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.deployment-diagnostic-summary small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.tier-pool-reconciliation {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tier-pool-reconciliation span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding: 8px 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.tier-pool-reconciliation strong {
+  color: var(--green);
+}
+
+.reconciliation-clear {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0;
+  border: 1px solid var(--green-line);
+  background: var(--green-soft);
+  padding: 11px 12px;
+  color: var(--muted);
+}
+
+.reconciliation-clear svg {
+  flex: 0 0 auto;
+  color: var(--green);
+}
+
+.reconciliation-issue-list,
+.deployment-contract-details ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reconciliation-issue-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  padding: 11px 12px;
+}
+
+.reconciliation-issue-list li.error {
+  border-color: rgba(255, 90, 95, 0.44);
+  color: var(--danger);
+}
+
+.reconciliation-issue-list li.warning,
+.reconciliation-pill.needs_review {
+  border-color: rgba(243, 186, 47, 0.48);
+  color: var(--warm);
+}
+
+.reconciliation-pill.blocked {
+  color: var(--danger);
+}
+
+.reconciliation-issue-list strong,
+.reconciliation-issue-list small {
+  display: block;
+}
+
+.reconciliation-issue-list small {
+  margin-top: 3px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.deployment-contract-details {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.deployment-contract-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.deployment-contract-details ul {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.deployment-contract-details li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  border-left: 2px solid var(--line);
+  background: var(--surface-2);
+  padding: 9px 10px;
+}
+
+.deployment-contract-details li.ready {
+  border-left-color: var(--green);
+}
+
+.deployment-contract-details li.invalid,
+.deployment-contract-details li.duplicate,
+.deployment-contract-details li.missing {
+  border-left-color: var(--danger);
+}
+
+.deployment-contract-details strong,
+.deployment-contract-details small {
+  display: block;
+}
+
+.deployment-contract-details strong {
+  font-size: 0.76rem;
+}
+
+.deployment-contract-details small,
+.deployment-contract-details code {
+  color: var(--faint);
+  font-size: 0.65rem;
+}
+
+.deployment-contract-details code {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.deployment-contract-value {
+  display: grid;
+  justify-items: end;
+}
+
+.deployment-contract-value em {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.62rem;
+  font-style: normal;
+  text-transform: uppercase;
+}
+
+.deployment-contract-details li.invalid .deployment-contract-value em,
+.deployment-contract-details li.duplicate .deployment-contract-value em,
+.deployment-contract-details li.missing .deployment-contract-value em {
+  color: var(--danger);
 }
 
 .inventory-table-panel {
@@ -1773,10 +1979,17 @@ h1 {
   .phase-five-forge,
   .admin-console,
   .readiness-check-list,
+  .inventory-reconciliation-stats,
+  .deployment-diagnostic-summary,
+  .deployment-contract-details ul,
   .live-protocol-grid,
   .economy-grid,
   .transaction-summary {
     grid-template-columns: 1fr;
+  }
+
+  .tier-pool-reconciliation {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .ingredient-tray,
@@ -2838,7 +3051,7 @@ h1 {
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 780px) {
   .va-command-bar {
     align-items: stretch;
     flex-direction: column;

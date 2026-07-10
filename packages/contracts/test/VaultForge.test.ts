@@ -49,6 +49,29 @@ function commitmentFor(seed: string): string {
   return ethers.keccak256(abiCoder.encode(["bytes32"], [seed]));
 }
 
+function randomnessFor(seed: string, requestId: string, providerAddress: string): bigint {
+  const randomness = BigInt(
+    ethers.keccak256(
+      abiCoder.encode(["bytes32", "bytes32", "address"], [seed, requestId, providerAddress])
+    )
+  );
+  return randomness === 0n ? 1n : randomness;
+}
+
+function findSeedForModulo(
+  requestId: string,
+  providerAddress: string,
+  modulus: bigint,
+  remainder: bigint,
+  label: string
+): string {
+  for (let attempt = 0; attempt < 1_000; attempt++) {
+    const seed = ethers.id(`${label}-${attempt}`);
+    if (randomnessFor(seed, requestId, providerAddress) % modulus === remainder) return seed;
+  }
+  throw new Error(`Unable to find ${label} seed for ${remainder} mod ${modulus}`);
+}
+
 function requireSigner(
   signers: HardhatEthersSigner[],
   index: number,
@@ -67,6 +90,16 @@ async function deployContract(name: string, args: unknown[] = []): Promise<any> 
 
 async function dustBalances(ledger: any, account: string): Promise<bigint[]> {
   return Array.from(await ledger.balancesOf(account)) as bigint[];
+}
+
+async function expectDustAccountingConserved(ledger: any, account: string): Promise<void> {
+  const balances = await dustBalances(ledger, account);
+  for (let index = 0; index < 4; index++) {
+    const credited = await ledger.totalCredited(account, index);
+    const spent = await ledger.totalSpent(account, index);
+    const restored = await ledger.totalRestored(account, index);
+    expect(credited + restored).to.equal(balances[index]! + spent);
+  }
 }
 
 async function deployVaultForgeFixture(poolMode: PoolMode = "full") {
@@ -390,21 +423,81 @@ async function deployVaultForgeFixture(poolMode: PoolMode = "full") {
     tier1OutputC,
     tier2OutputA,
     tier2OutputB,
-    setTier2OutputA
+    setTier2OutputA,
+    createInventoryToken
   };
 }
 
 async function fulfillRandomness(fixture: Awaited<ReturnType<typeof deployVaultForgeFixture>>, claimId: bigint) {
-  const claim = await fixture.forge.getClaim(claimId);
   const seed = ethers.id(`vault-forge-seed-${claimId}`);
+  await makeClaimRandomnessReady(fixture, claimId, seed);
+  await fixture.forge.connect(fixture.other).reveal(claimId);
+}
+
+async function makeClaimRandomnessReady(
+  fixture: Awaited<ReturnType<typeof deployVaultForgeFixture>>,
+  claimId: bigint,
+  seed: string
+): Promise<bigint> {
+  const claim = await fixture.forge.getClaim(claimId);
   await fixture.randomnessProvider
     .connect(fixture.revealer)
     .commitRandomness(claim.requestId, commitmentFor(seed));
   await fixture.randomnessProvider
     .connect(fixture.revealer)
     .revealRandomness(claim.requestId, seed);
-  await fixture.forge.connect(fixture.other).reveal(claimId);
+  const [, randomness] = await fixture.randomnessProvider.readRandomness(claim.requestId);
+  return randomness;
 }
+
+describe("TierPool managed capacity", function () {
+  it("keeps prepared candidates inside the pool cap until a selection leaves custody", async function () {
+    this.timeout(120_000);
+    const signers = await ethers.getSigners();
+    const deployer = requireSigner(signers, 0, "deployer");
+    const poolAdmin = requireSigner(signers, 1, "pool admin");
+    const forge = requireSigner(signers, 2, "forge");
+    const itemToken = await deployContract("TierPoolMockItemToken");
+    const policy = await deployContract("TierPoolMockPolicy");
+    const tierPool = await deployContract("TierPool", [
+      await itemToken.getAddress(),
+      await policy.getAddress()
+    ]);
+    const maxPoolTokens = Number(await tierPool.MAX_POOL_TOKENS());
+    const firstTokenId = 1n;
+    const refillTokenId = firstTokenId + BigInt(maxPoolTokens);
+    const setKey = ethers.id("capacity-test-set");
+
+    await tierPool.grantRole(await tierPool.POOL_ADMIN_ROLE(), poolAdmin.address);
+    await tierPool.connect(deployer).configureForge(forge.address);
+    for (let offset = 0; offset <= maxPoolTokens; offset += 64) {
+      const count = Math.min(64, maxPoolTokens + 1 - offset);
+      await itemToken.mintRange(poolAdmin.address, firstTokenId + BigInt(offset), count);
+      await policy.setPolicyRange(firstTokenId + BigInt(offset), count, setKey, 1);
+    }
+    await itemToken.connect(poolAdmin).setApprovalForAll(await tierPool.getAddress(), true);
+
+    for (let offset = 0; offset < maxPoolTokens; offset++) {
+      await tierPool.connect(poolAdmin).deposit(firstTokenId + BigInt(offset), false);
+    }
+
+    const poolKey = await tierPool.poolKeyFor(1, ethers.ZeroHash);
+    expect(await tierPool.managedTokenCount(poolKey)).to.equal(BigInt(maxPoolTokens));
+    await tierPool.connect(forge).reserveClaim(1n, 1, ethers.ZeroHash, 3, ethers.ZeroHash);
+    await tierPool.connect(forge).prepareClaim(1n, 123n);
+    expect(await tierPool.getPoolTokens(poolKey)).to.have.length(maxPoolTokens - 3);
+    expect(await tierPool.managedTokenCount(poolKey)).to.equal(BigInt(maxPoolTokens));
+
+    await expect(tierPool.connect(poolAdmin).deposit(refillTokenId, false))
+      .to.be.revertedWithCustomError(tierPool, "PoolCapacityReached")
+      .withArgs(poolKey);
+
+    await tierPool.connect(forge).releaseClaim(1n, 0n, poolAdmin.address);
+    expect(await tierPool.managedTokenCount(poolKey)).to.equal(BigInt(maxPoolTokens - 1));
+    await tierPool.connect(poolAdmin).deposit(refillTokenId, false);
+    expect(await tierPool.managedTokenCount(poolKey)).to.equal(BigInt(maxPoolTokens));
+  });
+});
 
 describe("Vault Forge V4", function () {
   it("enforces Dust credit/spend replay protection and insufficient balances", async function () {
@@ -883,6 +976,962 @@ describe("Vault Forge V4", function () {
       [forge, other],
       [-fee, fee]
     );
+    expect(await forge.refundCredit(player.address)).to.equal(0n);
+  });
+
+  it("rejects duplicate trade-ins and proofs that would be surrendered atomically", async function () {
+    const fixture = await deployVaultForgeFixture();
+    const {
+      forge,
+      player,
+      itemToken,
+      tierPool,
+      anchor,
+      tradeA1,
+      tradeA2,
+      proofA1,
+      proofA2
+    } = fixture;
+    const dustBefore = await dustBalances(fixture.dustLedger, player.address);
+    const poolBefore = await tierPool.availableCount(2, ethers.ZeroHash);
+
+    await expect(
+      forge
+        .connect(player)
+        .craft(
+          RecipeKind.Ascension,
+          anchor,
+          [tradeA1, tradeA1],
+          [proofA1, proofA1],
+          ethers.id("duplicate-trade-in")
+        )
+    )
+      .to.be.revertedWithCustomError(forge, "DuplicateTradeInToken")
+      .withArgs(tradeA1);
+
+    await expect(
+      forge
+        .connect(player)
+        .craft(
+          RecipeKind.Ascension,
+          anchor,
+          [tradeA1, tradeA2],
+          [tradeA2, proofA2],
+          ethers.id("surrendered-proof")
+        )
+    )
+      .to.be.revertedWithCustomError(forge, "InvalidDuplicateProof")
+      .withArgs(tradeA1, tradeA2);
+
+    expect(await forge.nextClaimId()).to.equal(1n);
+    expect(await forge.totalClaimsByRecipe(RecipeKind.Ascension)).to.equal(0n);
+    expect(await tierPool.availableCount(2, ethers.ZeroHash)).to.equal(poolBefore);
+    expect(await itemToken.balanceOf(player.address, tradeA1)).to.equal(1n);
+    expect(await itemToken.balanceOf(player.address, tradeA2)).to.equal(1n);
+    expect(await dustBalances(fixture.dustLedger, player.address)).to.deep.equal(dustBefore);
+  });
+
+  it("snapshots pending recipe economics across version changes and disabling", async function () {
+    const fixture = await deployVaultForgeFixture();
+    const { forge, recipeAdmin, player, treasury, tradeA1, proofA1 } = fixture;
+    const claimDust = [12n, 4n, 0n, 0n];
+    const claimFee = 13n;
+
+    await forge
+      .connect(recipeAdmin)
+      .configureRecipe(RecipeKind.Recast, claimDust, claimFee, 30n, 5n, true);
+    expect((await forge.getRecipeConfig(RecipeKind.Recast)).version).to.equal(2n);
+
+    const dustBefore = await dustBalances(fixture.dustLedger, player.address);
+    const claimId = await forge.nextClaimId();
+    await forge
+      .connect(player)
+      .craft(RecipeKind.Recast, 0n, [tradeA1], [proofA1], ethers.id("version-two-claim"), {
+        value: claimFee
+      });
+
+    const pending = await forge.getClaim(claimId);
+    expect(Array.from(pending.dustAmounts)).to.deep.equal(claimDust);
+    expect(pending.fee).to.equal(claimFee);
+
+    await forge
+      .connect(recipeAdmin)
+      .configureRecipe(RecipeKind.Recast, [30n, 7n, 0n, 0n], 29n, 30n, 5n, false);
+    const disabledConfig = await forge.getRecipeConfig(RecipeKind.Recast);
+    expect(disabledConfig.version).to.equal(3n);
+    expect(disabledConfig.active).to.equal(false);
+
+    await expect(
+      forge
+        .connect(player)
+        .craft(RecipeKind.Recast, 0n, [tradeA1], [proofA1], ethers.id("disabled-replay"), {
+          value: 29n
+        })
+    )
+      .to.be.revertedWithCustomError(forge, "RecipeInactive")
+      .withArgs(RecipeKind.Recast);
+
+    expect(await forge.nextClaimId()).to.equal(claimId + 1n);
+    expect(await forge.totalClaimsByRecipe(RecipeKind.Recast)).to.equal(1n);
+    expect(await dustBalances(fixture.dustLedger, player.address)).to.deep.equal([
+      dustBefore[0]! - claimDust[0]!,
+      dustBefore[1]! - claimDust[1]!,
+      dustBefore[2]!,
+      dustBefore[3]!
+    ]);
+
+    await fulfillRandomness(fixture, claimId);
+    expect((await forge.getClaim(claimId)).status).to.equal(ClaimStatus.Settled);
+    expect(await forge.treasuryFeesCredit(treasury.address)).to.equal(claimFee);
+    expect(await ethers.provider.getBalance(await forge.getAddress())).to.equal(claimFee);
+  });
+
+  it("keeps concurrent Guided Recast reservations solvent and failed selections atomic", async function () {
+    const fixture = await deployVaultForgeFixture();
+    const {
+      forge,
+      player,
+      itemToken,
+      tierPool,
+      tradeA1,
+      proofA1,
+      setA,
+      createInventoryToken
+    } = fixture;
+    const secondCanonical = ethers.id("concurrent-guided-second");
+    const thirdCanonical = ethers.id("concurrent-guided-third");
+    const secondTrade = await createInventoryToken({
+      inventoryId: "concurrent-guided-trade-2",
+      owner: player,
+      canonicalKey: secondCanonical,
+      setKey: setA,
+      tier: 1,
+      tradeInEligible: true,
+      tierPoolEligible: false
+    });
+    const secondProof = await createInventoryToken({
+      inventoryId: "concurrent-guided-proof-2",
+      owner: player,
+      canonicalKey: secondCanonical,
+      setKey: setA,
+      tier: 1,
+      tradeInEligible: false,
+      tierPoolEligible: false
+    });
+    const thirdTrade = await createInventoryToken({
+      inventoryId: "concurrent-guided-trade-3",
+      owner: player,
+      canonicalKey: thirdCanonical,
+      setKey: setA,
+      tier: 1,
+      tradeInEligible: true,
+      tierPoolEligible: false
+    });
+    const thirdProof = await createInventoryToken({
+      inventoryId: "concurrent-guided-proof-3",
+      owner: player,
+      canonicalKey: thirdCanonical,
+      setKey: setA,
+      tier: 1,
+      tradeInEligible: false,
+      tierPoolEligible: false
+    });
+    const dustBefore = await dustBalances(fixture.dustLedger, player.address);
+    const poolKey = await tierPool.poolKeyFor(1, ethers.ZeroHash);
+    const firstClaimId = await forge.nextClaimId();
+
+    await forge
+      .connect(player)
+      .craft(RecipeKind.GuidedRecast, 0n, [tradeA1], [proofA1], ethers.id("guided-one"));
+    const secondClaimId = await forge.nextClaimId();
+    await forge
+      .connect(player)
+      .craft(
+        RecipeKind.GuidedRecast,
+        0n,
+        [secondTrade],
+        [secondProof],
+        ethers.id("guided-two")
+      );
+
+    expect((await tierPool.pools(poolKey)).reservedOptions).to.equal(4n);
+    expect(await tierPool.availableCount(1, ethers.ZeroHash)).to.equal(0n);
+
+    await expect(
+      forge
+        .connect(player)
+        .craft(
+          RecipeKind.GuidedRecast,
+          0n,
+          [thirdTrade],
+          [thirdProof],
+          ethers.id("guided-overbook")
+        )
+    )
+      .to.be.revertedWithCustomError(tierPool, "InsufficientPoolInventory")
+      .withArgs(poolKey, 6n, 4n);
+
+    expect(await forge.nextClaimId()).to.equal(secondClaimId + 1n);
+    expect((await tierPool.pools(poolKey)).reservedOptions).to.equal(4n);
+    expect(await itemToken.balanceOf(player.address, thirdTrade)).to.equal(1n);
+    expect(await dustBalances(fixture.dustLedger, player.address)).to.deep.equal([
+      dustBefore[0]! - 30n,
+      dustBefore[1]! - 6n,
+      dustBefore[2]!,
+      dustBefore[3]! - 4n
+    ]);
+
+    await fulfillRandomness(fixture, firstClaimId);
+    await fulfillRandomness(fixture, secondClaimId);
+    const firstCandidates = Array.from(await forge.getClaimCandidates(firstClaimId)) as bigint[];
+    const secondCandidates = Array.from(await forge.getClaimCandidates(secondClaimId)) as bigint[];
+    expect(new Set([...firstCandidates, ...secondCandidates].map(String)).size).to.equal(4);
+    expect((await tierPool.pools(poolKey)).reservedOptions).to.equal(0n);
+    expect(await tierPool.availableCount(1, ethers.ZeroHash)).to.equal(0n);
+
+    await expect(
+      forge.connect(player).selectCandidate(firstClaimId, 2n, player.address)
+    )
+      .to.be.revertedWithCustomError(tierPool, "InvalidSelection")
+      .withArgs(firstClaimId, 2n);
+    expect((await forge.getClaim(firstClaimId)).status).to.equal(ClaimStatus.AwaitingChoice);
+    expect(Array.from(await forge.getClaimCandidates(firstClaimId))).to.deep.equal(firstCandidates);
+
+    await forge.connect(player).selectCandidate(firstClaimId, 0n, player.address);
+    const secondClaim = await forge.getClaim(secondClaimId);
+    await ethers.provider.send("evm_setNextBlockTimestamp", [Number(secondClaim.choiceDeadline)]);
+    await expect(forge.connect(fixture.other).settleDefault(secondClaimId))
+      .to.be.revertedWithCustomError(forge, "ChoiceWindowOpen")
+      .withArgs(secondClaimId, secondClaim.choiceDeadline);
+    await ethers.provider.send("evm_setNextBlockTimestamp", [Number(secondClaim.choiceDeadline + 1n)]);
+    await forge.connect(fixture.other).settleDefault(secondClaimId);
+
+    const settledSecond = await forge.getClaim(secondClaimId);
+    expect(settledSecond.outputTokenId).to.equal(secondCandidates[Number(secondClaim.defaultIndex)]);
+    expect(await itemToken.balanceOf(player.address, firstCandidates[0]!)).to.equal(1n);
+    expect(await itemToken.balanceOf(player.address, settledSecond.outputTokenId)).to.equal(1n);
+    expect(await tierPool.availableCount(1, ethers.ZeroHash)).to.equal(2n);
+    await expect(forge.connect(fixture.other).settleDefault(secondClaimId))
+      .to.be.revertedWithCustomError(forge, "InvalidClaimStatus")
+      .withArgs(secondClaimId, ClaimStatus.AwaitingChoice, ClaimStatus.Settled);
+  });
+
+  it("protects an earlier Guided Recast when a later broad Recast settles first", async function () {
+    const fixture = await deployVaultForgeFixture();
+    const {
+      forge,
+      player,
+      poolAdmin,
+      itemToken,
+      collectiblePolicy,
+      randomnessProvider,
+      tierPool,
+      setA,
+      canonicalTradeA,
+      tradeA1,
+      proofA1,
+      sameCanonicalOutput,
+      tier1OutputA,
+      tier1OutputB,
+      tier1OutputC,
+      createInventoryToken
+    } = fixture;
+    const broadCanonical = ethers.id("reverse-recast-broad-canonical");
+    const broadTrade = await createInventoryToken({
+      inventoryId: "reverse-recast-broad-trade",
+      owner: player,
+      canonicalKey: broadCanonical,
+      setKey: setA,
+      tier: 1,
+      tradeInEligible: true,
+      tierPoolEligible: false
+    });
+    const broadProof = await createInventoryToken({
+      inventoryId: "reverse-recast-broad-proof",
+      owner: player,
+      canonicalKey: broadCanonical,
+      setKey: setA,
+      tier: 1,
+      tradeInEligible: false,
+      tierPoolEligible: false
+    });
+
+    const poolKey = await tierPool.poolKeyFor(1, ethers.ZeroHash);
+    await tierPool.connect(poolAdmin).withdrawAvailable(tier1OutputC, poolAdmin.address);
+    const initialPool = Array.from(await tierPool.getPoolTokens(poolKey)) as bigint[];
+    expect(initialPool).to.deep.equal([sameCanonicalOutput, tier1OutputA, tier1OutputB]);
+
+    const guidedClaimId = await forge.nextClaimId();
+    await forge
+      .connect(player)
+      .craft(
+        RecipeKind.GuidedRecast,
+        0n,
+        [tradeA1],
+        [proofA1],
+        ethers.id("reverse-guided-first")
+      );
+    const broadClaimId = await forge.nextClaimId();
+    await forge
+      .connect(player)
+      .craft(
+        RecipeKind.Recast,
+        0n,
+        [broadTrade],
+        [broadProof],
+        ethers.id("reverse-broad-second")
+      );
+
+    expect((await tierPool.pools(poolKey)).reservedOptions).to.equal(3n);
+    expect(await tierPool.availableCount(1, ethers.ZeroHash)).to.equal(0n);
+    await makeClaimRandomnessReady(
+      fixture,
+      guidedClaimId,
+      ethers.id("reverse-guided-ready-first")
+    );
+
+    const broadClaim = await forge.getClaim(broadClaimId);
+    const providerAddress = await randomnessProvider.getAddress();
+    const broadSeed = findSeedForModulo(
+      broadClaim.requestId,
+      providerAddress,
+      3n,
+      1n,
+      "reverse-broad-adversarial"
+    );
+    const broadRandomness = randomnessFor(broadSeed, broadClaim.requestId, providerAddress);
+    expect(initialPool[Number(broadRandomness % 3n)]).to.equal(tier1OutputA);
+    await makeClaimRandomnessReady(fixture, broadClaimId, broadSeed);
+    await forge.connect(fixture.other).reveal(broadClaimId);
+
+    const settledBroadClaim = await forge.getClaim(broadClaimId);
+    expect(settledBroadClaim.status).to.equal(ClaimStatus.Settled);
+    expect(settledBroadClaim.outputTokenId).to.equal(sameCanonicalOutput);
+    expect(
+      (await collectiblePolicy.getTokenPolicy(settledBroadClaim.outputTokenId)).canonicalKey
+    ).to.equal(canonicalTradeA);
+
+    await forge.connect(fixture.other).reveal(guidedClaimId);
+    const guidedCandidates = Array.from(
+      await forge.getClaimCandidates(guidedClaimId)
+    ) as bigint[];
+    expect(guidedCandidates).to.have.members([tier1OutputA, tier1OutputB]);
+    await forge.connect(player).selectCandidate(guidedClaimId, 0n, player.address);
+
+    expect((await forge.getClaim(guidedClaimId)).status).to.equal(ClaimStatus.Settled);
+    expect(await itemToken.balanceOf(player.address, sameCanonicalOutput)).to.equal(1n);
+    expect(await itemToken.balanceOf(player.address, guidedCandidates[0]!)).to.equal(1n);
+  });
+
+  it("keeps the seeded broad Recast draw when every candidate leaves the Guided obligation solvent", async function () {
+    const fixture = await deployVaultForgeFixture();
+    const {
+      forge,
+      player,
+      itemToken,
+      randomnessProvider,
+      tierPool,
+      setA,
+      tradeA1,
+      proofA1,
+      sameCanonicalOutput,
+      tier1OutputA,
+      tier1OutputB,
+      tier1OutputC,
+      createInventoryToken
+    } = fixture;
+    const broadCanonical = ethers.id("slack-recast-broad-canonical");
+    const broadTrade = await createInventoryToken({
+      inventoryId: "slack-recast-broad-trade",
+      owner: player,
+      canonicalKey: broadCanonical,
+      setKey: setA,
+      tier: 1,
+      tradeInEligible: true,
+      tierPoolEligible: false
+    });
+    const broadProof = await createInventoryToken({
+      inventoryId: "slack-recast-broad-proof",
+      owner: player,
+      canonicalKey: broadCanonical,
+      setKey: setA,
+      tier: 1,
+      tradeInEligible: false,
+      tierPoolEligible: false
+    });
+
+    const poolKey = await tierPool.poolKeyFor(1, ethers.ZeroHash);
+    const initialPool = Array.from(await tierPool.getPoolTokens(poolKey)) as bigint[];
+    expect(initialPool).to.deep.equal([
+      sameCanonicalOutput,
+      tier1OutputA,
+      tier1OutputB,
+      tier1OutputC
+    ]);
+
+    const guidedClaimId = await forge.nextClaimId();
+    await forge
+      .connect(player)
+      .craft(
+        RecipeKind.GuidedRecast,
+        0n,
+        [tradeA1],
+        [proofA1],
+        ethers.id("slack-guided-first")
+      );
+    const broadClaimId = await forge.nextClaimId();
+    await forge
+      .connect(player)
+      .craft(
+        RecipeKind.Recast,
+        0n,
+        [broadTrade],
+        [broadProof],
+        ethers.id("slack-broad-second")
+      );
+
+    await makeClaimRandomnessReady(
+      fixture,
+      guidedClaimId,
+      ethers.id("slack-guided-ready-first")
+    );
+    const broadClaim = await forge.getClaim(broadClaimId);
+    const providerAddress = await randomnessProvider.getAddress();
+    const broadSeed = findSeedForModulo(
+      broadClaim.requestId,
+      providerAddress,
+      4n,
+      1n,
+      "slack-broad-adversarial"
+    );
+    await makeClaimRandomnessReady(fixture, broadClaimId, broadSeed);
+    await forge.connect(fixture.other).reveal(broadClaimId);
+
+    expect((await forge.getClaim(broadClaimId)).outputTokenId).to.equal(tier1OutputA);
+    await forge.connect(fixture.other).reveal(guidedClaimId);
+    const guidedCandidates = Array.from(
+      await forge.getClaimCandidates(guidedClaimId)
+    ) as bigint[];
+    expect(guidedCandidates).to.have.members([tier1OutputB, tier1OutputC]);
+    await forge.connect(player).selectCandidate(guidedClaimId, 0n, player.address);
+
+    expect((await forge.getClaim(guidedClaimId)).status).to.equal(ClaimStatus.Settled);
+    expect(await itemToken.balanceOf(player.address, tier1OutputA)).to.equal(1n);
+  });
+
+  it("protects an earlier Recast across both draws of a later Guided Recast", async function () {
+    const fixture = await deployVaultForgeFixture();
+    const {
+      forge,
+      player,
+      poolAdmin,
+      itemToken,
+      collectiblePolicy,
+      randomnessProvider,
+      tierPool,
+      setA,
+      canonicalTradeA,
+      tradeA1,
+      proofA1,
+      sameCanonicalOutput,
+      tier1OutputA,
+      tier1OutputB,
+      tier1OutputC,
+      createInventoryToken
+    } = fixture;
+
+    await tierPool.connect(poolAdmin).withdrawAvailable(tier1OutputB, poolAdmin.address);
+    await tierPool.connect(poolAdmin).withdrawAvailable(tier1OutputC, poolAdmin.address);
+    const secondSameCanonicalOutput = await createInventoryToken({
+      inventoryId: "reverse-guided-same-canonical-output",
+      owner: poolAdmin,
+      canonicalKey: canonicalTradeA,
+      setKey: setA,
+      tier: 1,
+      tradeInEligible: false,
+      tierPoolEligible: true
+    });
+    await tierPool.connect(poolAdmin).deposit(secondSameCanonicalOutput, false);
+
+    const broadCanonical = ethers.id("reverse-guided-broad-canonical");
+    const broadTrade = await createInventoryToken({
+      inventoryId: "reverse-guided-broad-trade",
+      owner: player,
+      canonicalKey: broadCanonical,
+      setKey: setA,
+      tier: 1,
+      tradeInEligible: true,
+      tierPoolEligible: false
+    });
+    const broadProof = await createInventoryToken({
+      inventoryId: "reverse-guided-broad-proof",
+      owner: player,
+      canonicalKey: broadCanonical,
+      setKey: setA,
+      tier: 1,
+      tradeInEligible: false,
+      tierPoolEligible: false
+    });
+
+    const poolKey = await tierPool.poolKeyFor(1, ethers.ZeroHash);
+    const initialPool = Array.from(await tierPool.getPoolTokens(poolKey)) as bigint[];
+    expect(initialPool).to.deep.equal([
+      sameCanonicalOutput,
+      tier1OutputA,
+      secondSameCanonicalOutput
+    ]);
+
+    const recastClaimId = await forge.nextClaimId();
+    await forge
+      .connect(player)
+      .craft(RecipeKind.Recast, 0n, [tradeA1], [proofA1], ethers.id("reverse-recast-first"));
+    const guidedClaimId = await forge.nextClaimId();
+    await forge
+      .connect(player)
+      .craft(
+        RecipeKind.GuidedRecast,
+        0n,
+        [broadTrade],
+        [broadProof],
+        ethers.id("reverse-guided-second")
+      );
+
+    await makeClaimRandomnessReady(
+      fixture,
+      recastClaimId,
+      ethers.id("reverse-recast-ready-first")
+    );
+    const guidedClaim = await forge.getClaim(guidedClaimId);
+    const providerAddress = await randomnessProvider.getAddress();
+    const guidedSeed = findSeedForModulo(
+      guidedClaim.requestId,
+      providerAddress,
+      3n,
+      1n,
+      "reverse-guided-adversarial"
+    );
+    const guidedRandomness = randomnessFor(guidedSeed, guidedClaim.requestId, providerAddress);
+    expect(initialPool[Number(guidedRandomness % 3n)]).to.equal(tier1OutputA);
+    await makeClaimRandomnessReady(fixture, guidedClaimId, guidedSeed);
+    await forge.connect(fixture.other).reveal(guidedClaimId);
+
+    const guidedCandidates = Array.from(
+      await forge.getClaimCandidates(guidedClaimId)
+    ) as bigint[];
+    const safeFirstCandidates = [sameCanonicalOutput, secondSameCanonicalOutput];
+    expect(guidedCandidates[0]).to.equal(
+      safeFirstCandidates[Number(guidedRandomness % 2n)]
+    );
+    expect(guidedCandidates).to.have.members([
+      sameCanonicalOutput,
+      secondSameCanonicalOutput
+    ]);
+    for (const candidate of guidedCandidates) {
+      expect((await collectiblePolicy.getTokenPolicy(candidate)).canonicalKey).to.equal(
+        canonicalTradeA
+      );
+    }
+    await forge.connect(player).selectCandidate(guidedClaimId, 0n, player.address);
+    await forge.connect(fixture.other).reveal(recastClaimId);
+
+    const settledRecastClaim = await forge.getClaim(recastClaimId);
+    expect(settledRecastClaim.status).to.equal(ClaimStatus.Settled);
+    expect(settledRecastClaim.outputTokenId).to.equal(tier1OutputA);
+    expect(await itemToken.balanceOf(player.address, tier1OutputA)).to.equal(1n);
+    expect((await forge.getClaim(guidedClaimId)).status).to.equal(ClaimStatus.Settled);
+  });
+
+  it("removes a constrained eligibility obligation exactly when its claim is cancelled", async function () {
+    const fixture = await deployVaultForgeFixture();
+    const {
+      forge,
+      player,
+      poolAdmin,
+      itemToken,
+      randomnessProvider,
+      tierPool,
+      dustLedger,
+      setA,
+      tradeA1,
+      proofA1,
+      sameCanonicalOutput,
+      tier1OutputA,
+      tier1OutputB,
+      tier1OutputC,
+      createInventoryToken
+    } = fixture;
+    const broadCanonical = ethers.id("cancelled-obligation-broad-canonical");
+    const broadTrade = await createInventoryToken({
+      inventoryId: "cancelled-obligation-broad-trade",
+      owner: player,
+      canonicalKey: broadCanonical,
+      setKey: setA,
+      tier: 1,
+      tradeInEligible: true,
+      tierPoolEligible: false
+    });
+    const broadProof = await createInventoryToken({
+      inventoryId: "cancelled-obligation-broad-proof",
+      owner: player,
+      canonicalKey: broadCanonical,
+      setKey: setA,
+      tier: 1,
+      tradeInEligible: false,
+      tierPoolEligible: false
+    });
+
+    const poolKey = await tierPool.poolKeyFor(1, ethers.ZeroHash);
+    await tierPool.connect(poolAdmin).withdrawAvailable(tier1OutputC, poolAdmin.address);
+    const initialPool = Array.from(await tierPool.getPoolTokens(poolKey)) as bigint[];
+    const dustBefore = await dustBalances(dustLedger, player.address);
+    expect(initialPool).to.deep.equal([sameCanonicalOutput, tier1OutputA, tier1OutputB]);
+
+    const cancelledClaimId = await forge.nextClaimId();
+    await forge
+      .connect(player)
+      .craft(
+        RecipeKind.GuidedRecast,
+        0n,
+        [tradeA1],
+        [proofA1],
+        ethers.id("cancelled-constrained-obligation")
+      );
+    const pending = await forge.getClaim(cancelledClaimId);
+    await ethers.provider.send("evm_setNextBlockTimestamp", [
+      Number(pending.createdAt + (await forge.RANDOMNESS_TIMEOUT()) + 1n)
+    ]);
+    await forge.connect(fixture.other).cancelExpired(cancelledClaimId);
+
+    expect(Array.from(await tierPool.getPoolTokens(poolKey))).to.deep.equal(initialPool);
+    expect((await tierPool.pools(poolKey)).reservedOptions).to.equal(0n);
+    expect(await tierPool.availableCount(1, ethers.ZeroHash)).to.equal(3n);
+    expect((await tierPool.reservations(cancelledClaimId)).exists).to.equal(false);
+    expect(await itemToken.balanceOf(player.address, tradeA1)).to.equal(1n);
+    expect(await dustBalances(dustLedger, player.address)).to.deep.equal(dustBefore);
+
+    const broadClaimId = await forge.nextClaimId();
+    await forge
+      .connect(player)
+      .craft(
+        RecipeKind.Recast,
+        0n,
+        [broadTrade],
+        [broadProof],
+        ethers.id("after-cancelled-obligation")
+      );
+    const broadClaim = await forge.getClaim(broadClaimId);
+    const providerAddress = await randomnessProvider.getAddress();
+    const broadSeed = findSeedForModulo(
+      broadClaim.requestId,
+      providerAddress,
+      3n,
+      1n,
+      "after-cancelled-obligation"
+    );
+    await makeClaimRandomnessReady(fixture, broadClaimId, broadSeed);
+    await forge.connect(fixture.other).reveal(broadClaimId);
+
+    expect((await forge.getClaim(broadClaimId)).outputTokenId).to.equal(tier1OutputA);
+  });
+
+  it("enforces the strict cancellation boundary and pays an exact one-time refund", async function () {
+    const fixture = await deployVaultForgeFixture();
+    const { forge, recipeAdmin, player, other, tradeA1, proofA1, dustLedger } = fixture;
+    const fee = 43n;
+    const dustBefore = await dustBalances(dustLedger, player.address);
+
+    await forge
+      .connect(recipeAdmin)
+      .configureRecipe(RecipeKind.Recast, [10n, 2n, 0n, 0n], fee, 100n, 20n, true);
+    const claimId = await forge.nextClaimId();
+    await forge
+      .connect(player)
+      .craft(RecipeKind.Recast, 0n, [tradeA1], [proofA1], ethers.id("strict-timeout"), {
+        value: fee
+      });
+
+    const pending = await forge.getClaim(claimId);
+    const availableAt = pending.createdAt + (await forge.RANDOMNESS_TIMEOUT());
+    await ethers.provider.send("evm_setNextBlockTimestamp", [Number(availableAt)]);
+    await expect(forge.connect(other).cancelExpired(claimId))
+      .to.be.revertedWithCustomError(forge, "RandomnessTimeoutNotReached")
+      .withArgs(claimId, availableAt);
+    expect(await forge.refundCredit(player.address)).to.equal(0n);
+
+    await ethers.provider.send("evm_setNextBlockTimestamp", [Number(availableAt + 1n)]);
+    await forge.connect(other).cancelExpired(claimId);
+    expect(await dustBalances(dustLedger, player.address)).to.deep.equal(dustBefore);
+    expect(await forge.refundCredit(player.address)).to.equal(fee);
+    expect(await ethers.provider.getBalance(await forge.getAddress())).to.equal(fee);
+    await expect(forge.connect(other).cancelExpired(claimId))
+      .to.be.revertedWithCustomError(forge, "InvalidClaimStatus")
+      .withArgs(claimId, ClaimStatus.PendingRandomness, ClaimStatus.Cancelled);
+
+    await expect(forge.connect(player).withdrawRefund(other.address)).to.changeEtherBalances(
+      [forge, other],
+      [-fee, fee]
+    );
+    expect(await forge.refundCredit(player.address)).to.equal(0n);
+    await expect(forge.connect(player).withdrawRefund(other.address))
+      .to.be.revertedWithCustomError(forge, "RefundUnavailable")
+      .withArgs(player.address);
+    await expectDustAccountingConserved(dustLedger, player.address);
+  });
+
+  it("rejects randomness and settlement replays while preserving permissionless settlement", async function () {
+    const fixture = await deployVaultForgeFixture();
+    const {
+      forge,
+      player,
+      other,
+      revealer,
+      randomnessProvider,
+      itemToken,
+      tradeA1,
+      proofA1
+    } = fixture;
+    const claimId = await forge.nextClaimId();
+    await forge
+      .connect(player)
+      .craft(RecipeKind.Recast, 0n, [tradeA1], [proofA1], ethers.id("randomness-replay"));
+    const pending = await forge.getClaim(claimId);
+
+    await expect(forge.connect(other).reveal(claimId))
+      .to.be.revertedWithCustomError(forge, "RandomnessNotReady")
+      .withArgs(claimId);
+
+    const seed = ethers.id("randomness-replay-seed");
+    const wrongSeed = ethers.id("randomness-replay-wrong-seed");
+    await randomnessProvider
+      .connect(revealer)
+      .commitRandomness(pending.requestId, commitmentFor(seed));
+    await expect(
+      randomnessProvider
+        .connect(revealer)
+        .commitRandomness(pending.requestId, commitmentFor(wrongSeed))
+    )
+      .to.be.revertedWithCustomError(randomnessProvider, "RandomnessAlreadyCommitted")
+      .withArgs(pending.requestId);
+    await expect(randomnessProvider.connect(revealer).revealRandomness(pending.requestId, wrongSeed))
+      .to.be.revertedWithCustomError(randomnessProvider, "RandomnessSeedMismatch")
+      .withArgs(pending.requestId);
+    await randomnessProvider.connect(revealer).revealRandomness(pending.requestId, seed);
+    await expect(randomnessProvider.connect(revealer).revealRandomness(pending.requestId, seed))
+      .to.be.revertedWithCustomError(randomnessProvider, "RandomnessAlreadyRevealed")
+      .withArgs(pending.requestId);
+
+    const availableAt = pending.createdAt + (await forge.RANDOMNESS_TIMEOUT()) + 1n;
+    await ethers.provider.send("evm_setNextBlockTimestamp", [Number(availableAt)]);
+    await expect(forge.connect(other).cancelExpired(claimId))
+      .to.be.revertedWithCustomError(forge, "RandomnessAlreadyReady")
+      .withArgs(claimId);
+
+    await forge.connect(other).reveal(claimId);
+    const settled = await forge.getClaim(claimId);
+    expect(settled.status).to.equal(ClaimStatus.Settled);
+    expect(await itemToken.balanceOf(player.address, settled.outputTokenId)).to.equal(1n);
+    await expect(forge.connect(other).reveal(claimId))
+      .to.be.revertedWithCustomError(forge, "InvalidClaimStatus")
+      .withArgs(claimId, ClaimStatus.PendingRandomness, ClaimStatus.Settled);
+    await expect(forge.connect(other).cancelExpired(claimId))
+      .to.be.revertedWithCustomError(forge, "InvalidClaimStatus")
+      .withArgs(claimId, ClaimStatus.PendingRandomness, ClaimStatus.Settled);
+  });
+
+  it("enforces Forge and pool roles while keeping expired cancellation available during pauses", async function () {
+    const fixture = await deployVaultForgeFixture();
+    const {
+      forge,
+      tierPool,
+      deployer,
+      other,
+      player,
+      tier1OutputA,
+      tradeA1,
+      proofA1,
+      dustLedger
+    } = fixture;
+    const dustBefore = await dustBalances(dustLedger, player.address);
+
+    await expect(
+      forge
+        .connect(other)
+        .configureRecipe(RecipeKind.Recast, [10n, 2n, 0n, 0n], 0n, 100n, 20n, true)
+    )
+      .to.be.revertedWithCustomError(forge, "AccessControlUnauthorizedAccount")
+      .withArgs(other.address, await forge.RECIPE_ADMIN_ROLE());
+    await expect(forge.connect(other).pause())
+      .to.be.revertedWithCustomError(forge, "AccessControlUnauthorizedAccount")
+      .withArgs(other.address, await forge.PAUSER_ROLE());
+    await expect(tierPool.connect(other).withdrawAvailable(tier1OutputA, other.address))
+      .to.be.revertedWithCustomError(tierPool, "AccessControlUnauthorizedAccount")
+      .withArgs(other.address, await tierPool.POOL_ADMIN_ROLE());
+    await expect(
+      tierPool.connect(other).reserveClaim(99n, 1, ethers.ZeroHash, 1, ethers.ZeroHash)
+    )
+      .to.be.revertedWithCustomError(tierPool, "UnauthorizedForge")
+      .withArgs(other.address);
+
+    await forge.connect(deployer).grantRole(await forge.PAUSER_ROLE(), deployer.address);
+    await tierPool.connect(deployer).grantRole(await tierPool.PAUSER_ROLE(), deployer.address);
+    await forge.connect(deployer).pause();
+    await expect(
+      forge
+        .connect(player)
+        .craft(RecipeKind.Recast, 0n, [tradeA1], [proofA1], ethers.id("forge-paused"))
+    ).to.be.revertedWithCustomError(forge, "EnforcedPause");
+    await expect(
+      forge.connect(player).exchangeDust(DustKind.Echo, DustKind.Prism)
+    ).to.be.revertedWithCustomError(forge, "EnforcedPause");
+    await forge.connect(deployer).unpause();
+
+    await tierPool.connect(deployer).pause();
+    await expect(
+      forge
+        .connect(player)
+        .craft(RecipeKind.Recast, 0n, [tradeA1], [proofA1], ethers.id("pool-paused"))
+    ).to.be.revertedWithCustomError(tierPool, "EnforcedPause");
+    expect(await forge.nextClaimId()).to.equal(1n);
+    expect(await dustBalances(dustLedger, player.address)).to.deep.equal(dustBefore);
+    await tierPool.connect(deployer).unpause();
+
+    const claimId = await forge.nextClaimId();
+    await forge
+      .connect(player)
+      .craft(RecipeKind.Recast, 0n, [tradeA1], [proofA1], ethers.id("paused-cancellation"));
+    const pending = await forge.getClaim(claimId);
+    await forge.connect(deployer).pause();
+    await tierPool.connect(deployer).pause();
+    await ethers.provider.send("evm_setNextBlockTimestamp", [
+      Number(pending.createdAt + (await forge.RANDOMNESS_TIMEOUT()) + 1n)
+    ]);
+    await forge.connect(other).cancelExpired(claimId);
+
+    expect((await forge.getClaim(claimId)).status).to.equal(ClaimStatus.Cancelled);
+    expect(await forge.paused()).to.equal(true);
+    expect(await tierPool.paused()).to.equal(true);
+    expect(await dustBalances(dustLedger, player.address)).to.deep.equal(dustBefore);
+    expect((await tierPool.reservations(claimId)).exists).to.equal(false);
+  });
+
+  it("conserves Dust accounting through a bounded exchange and cancellation simulation", async function () {
+    const fixture = await deployVaultForgeFixture();
+    const {
+      forge,
+      recipeAdmin,
+      player,
+      other,
+      dustLedger,
+      tierPool,
+      itemToken,
+      tradeA1,
+      proofA1,
+      treasury
+    } = fixture;
+    const model = await dustBalances(dustLedger, player.address);
+    const exchanges = [
+      [DustKind.Echo, DustKind.Prism],
+      [DustKind.Prism, DustKind.Star],
+      [DustKind.Star, DustKind.Echo],
+      [DustKind.Echo, DustKind.Star],
+      [DustKind.Star, DustKind.Prism],
+      [DustKind.Prism, DustKind.Echo],
+      [DustKind.Echo, DustKind.Prism],
+      [DustKind.Prism, DustKind.Star],
+      [DustKind.Star, DustKind.Echo]
+    ] as const;
+
+    for (const [fromKind, toKind] of exchanges) {
+      await forge.connect(player).exchangeDust(fromKind, toKind);
+      const fromIndex = Number(fromKind);
+      const toIndex = Number(toKind);
+      model[Number(DustKind.Magic)] = model[Number(DustKind.Magic)]! - 1n;
+      model[fromIndex] = model[fromIndex]! - 3n;
+      model[toIndex] = model[toIndex]! + 1n;
+      expect(await dustBalances(dustLedger, player.address)).to.deep.equal(model);
+      await expectDustAccountingConserved(dustLedger, player.address);
+    }
+
+    const nonceAfterExchanges = BigInt(exchanges.length);
+    await expect(forge.connect(player).exchangeDust(DustKind.Echo, DustKind.Echo)).to.be.revertedWithCustomError(
+      forge,
+      "InvalidDustExchange"
+    );
+    expect(await forge.dustExchangeNonces(player.address)).to.equal(nonceAfterExchanges);
+    expect(await dustBalances(dustLedger, player.address)).to.deep.equal(model);
+
+    const fee = 7n;
+    const cancellationCount = 3;
+    const poolCountBefore = await tierPool.availableCount(1, ethers.ZeroHash);
+    const contextIds = new Set<string>();
+    await forge
+      .connect(recipeAdmin)
+      .configureRecipe(RecipeKind.Recast, [10n, 2n, 0n, 0n], fee, 100n, 20n, true);
+
+    for (let iteration = 0; iteration < cancellationCount; iteration++) {
+      const claimId = await forge.nextClaimId();
+      await forge
+        .connect(player)
+        .craft(
+          RecipeKind.Recast,
+          0n,
+          [tradeA1],
+          [proofA1],
+          ethers.id(`bounded-cancel-${iteration}`),
+          { value: fee }
+        );
+      model[Number(DustKind.Magic)] = model[Number(DustKind.Magic)]! - 10n;
+      model[Number(DustKind.Echo)] = model[Number(DustKind.Echo)]! - 2n;
+
+      const spendContext = ethers.keccak256(
+        abiCoder.encode(
+          ["string", "address", "uint256"],
+          ["VAULT_FORGE_SPEND", await forge.getAddress(), claimId]
+        )
+      );
+      expect(contextIds.has(spendContext)).to.equal(false);
+      contextIds.add(spendContext);
+      expect(await dustLedger.usedSpendContexts(spendContext)).to.equal(true);
+      expect(await dustBalances(dustLedger, player.address)).to.deep.equal(model);
+      await expectDustAccountingConserved(dustLedger, player.address);
+
+      const pending = await forge.getClaim(claimId);
+      await ethers.provider.send("evm_setNextBlockTimestamp", [
+        Number(pending.createdAt + (await forge.RANDOMNESS_TIMEOUT()) + 1n)
+      ]);
+      await forge.connect(other).cancelExpired(claimId);
+      model[Number(DustKind.Magic)] = model[Number(DustKind.Magic)]! + 10n;
+      model[Number(DustKind.Echo)] = model[Number(DustKind.Echo)]! + 2n;
+
+      const restoreContext = ethers.keccak256(
+        abiCoder.encode(
+          ["string", "address", "uint256"],
+          ["VAULT_FORGE_REFUND", await forge.getAddress(), claimId]
+        )
+      );
+      expect(contextIds.has(restoreContext)).to.equal(false);
+      contextIds.add(restoreContext);
+      expect(await dustLedger.usedRestoreContexts(restoreContext)).to.equal(true);
+      expect(await dustBalances(dustLedger, player.address)).to.deep.equal(model);
+      await expectDustAccountingConserved(dustLedger, player.address);
+      expect(await forge.refundCredit(player.address)).to.equal(fee * BigInt(iteration + 1));
+    }
+
+    const totalRefund = fee * BigInt(cancellationCount);
+    expect(contextIds.size).to.equal(cancellationCount * 2);
+    expect(await forge.nextClaimId()).to.equal(BigInt(cancellationCount + 1));
+    expect(await forge.totalClaimsByRecipe(RecipeKind.Recast)).to.equal(0n);
+    expect(await forge.walletClaimsByRecipe(RecipeKind.Recast, player.address)).to.equal(0n);
+    expect(await tierPool.availableCount(1, ethers.ZeroHash)).to.equal(poolCountBefore);
+    expect(await itemToken.balanceOf(player.address, tradeA1)).to.equal(1n);
+    expect(await forge.treasuryFeesCredit(treasury.address)).to.equal(0n);
+    expect(await ethers.provider.getBalance(await forge.getAddress())).to.equal(totalRefund);
+
+    await expect(forge.connect(player).withdrawRefund(other.address)).to.changeEtherBalances(
+      [forge, other],
+      [-totalRefund, totalRefund]
+    );
+    expect(await ethers.provider.getBalance(await forge.getAddress())).to.equal(0n);
     expect(await forge.refundCredit(player.address)).to.equal(0n);
   });
 });

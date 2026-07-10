@@ -3,19 +3,19 @@ import { MarketBoard } from "../../components/market-board";
 
 export default function MarketPage() {
   return (
-    <AppShell>
+    <AppShell activePath="/market">
       <main className="command-center route-page">
         <section className="panel route-hero" aria-labelledby="market-title">
           <div className="panel-header">
             <div>
-              <span className="eyebrow">Marketplace</span>
-              <h1 id="market-title">Fixed-price market</h1>
+              <span className="eyebrow">Peer-to-peer marketplace</span>
+              <h1 id="market-title">Vault Market</h1>
             </div>
             <span className="chain-pill">Fees visible</span>
           </div>
           <p>
-            Browse vault-backed listings with seller identity, ask price, buyback floor, visible fees, and escrow
-            details before sending a testnet write.
+            Compare vault-backed listings by price, buyback floor, Forge Tier, and trade-in eligibility. Market escrow
+            never changes a card's disclosed tier or grants hidden Forge advantages.
           </p>
         </section>
         <MarketBoard />

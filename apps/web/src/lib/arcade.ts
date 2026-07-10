@@ -3,5 +3,5 @@ export const signalRun = {
   streak: 7,
   xp: 1840,
   recipeProgressPercent: 64,
-  disclosure: "Signal Run does not change pull odds or guarantee item value; XP and streaks are cosmetic."
+  disclosure: "Signal Run does not change pull odds, Dust rewards, or card tier; XP and streaks unlock cosmetic profile marks only."
 };

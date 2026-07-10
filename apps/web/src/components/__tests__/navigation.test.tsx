@@ -11,9 +11,11 @@ describe("app navigation", () => {
 
     const routeNav = screen.getByRole("navigation", { name: /Core routes/i });
 
-    for (const label of ["Home", "Vault", "Market", "Forge", "Redeem", "Admin"]) {
+    for (const label of ["Gacha", "Vault", "Market", "Forge", "Redeem", "Admin"]) {
       expect(within(routeNav).getByRole("link", { name: new RegExp(label, "i") })).toBeInTheDocument();
     }
+
+    expect(within(routeNav).getByRole("link", { name: /Gacha/i })).toHaveAttribute("aria-current", "page");
   });
 
   it("frames the app like a premium vault market", () => {

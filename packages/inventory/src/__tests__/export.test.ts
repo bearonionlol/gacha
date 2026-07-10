@@ -128,6 +128,19 @@ describe("inventory exports", () => {
     expect(csv).toContain('"Front is clean.\nBack has a print line."');
   });
 
+  it("neutralizes spreadsheet formulas in exported text fields", () => {
+    const csv = exportInventoryAsCsv([
+      {
+        ...item,
+        cardName: '=HYPERLINK("https://example.test","open")',
+        conditionNotes: "  +SUM(1,1)"
+      }
+    ]);
+
+    expect(csv).toContain('"\'=HYPERLINK(""https://example.test"",""open"")"');
+    expect(csv).toContain('"\'  +SUM(1,1)"');
+  });
+
   it("rejects invalid inventory before export", () => {
     expect(() => exportInventoryAsJson([{ ...item, marketEstimateCents: -1 }])).toThrow();
     expect(() => exportInventoryAsCsv([{ ...item, photoHash: "not-a-hash" }])).toThrow();

@@ -39,4 +39,54 @@ describe("contract registry helpers", () => {
     expect(registry.status.readiness).toBe("demo");
     expect(registry.contracts).toBe(null);
   });
+
+  it("keeps deployed base actions available while Vault Forge V4 is pending", () => {
+    const baseOnlyRegistry = {
+      ...completeRegistry,
+      contracts: Object.fromEntries(
+        Object.entries(completeRegistry.contracts).filter(([name]) =>
+          [
+            "InventoryRegistry",
+            "ItemToken",
+            "CommitRevealRandomnessProvider",
+            "PackSale",
+            "Marketplace",
+            "BuybackVault",
+            "Forge",
+            "RedemptionRegistry"
+          ].includes(name)
+        )
+      )
+    };
+
+    const registry = getReadyContractRegistry(baseOnlyRegistry);
+
+    expect(registry.status.readiness).toBe("incomplete");
+    expect(registry.contracts?.PackSale).toBe(completeRegistry.contracts.PackSale);
+    expect(registry.contracts?.Marketplace).toBe(completeRegistry.contracts.Marketplace);
+  });
+
+  it("keeps base actions unavailable when a base contract is missing", () => {
+    const contracts = Object.fromEntries(
+      Object.entries(completeRegistry.contracts).filter(([name]) => name !== "PackSale")
+    );
+    const registry = getReadyContractRegistry({ ...completeRegistry, contracts });
+
+    expect(registry.status.readiness).toBe("incomplete");
+    expect(registry.contracts).toBe(null);
+  });
+
+  it("keeps base actions unavailable for zero or duplicated addresses", () => {
+    const zeroRegistry = getReadyContractRegistry({
+      ...completeRegistry,
+      contracts: { ...completeRegistry.contracts, ItemToken: "0x0000000000000000000000000000000000000000" }
+    });
+    const duplicateRegistry = getReadyContractRegistry({
+      ...completeRegistry,
+      contracts: { ...completeRegistry.contracts, ItemToken: completeRegistry.contracts.InventoryRegistry }
+    });
+
+    expect(zeroRegistry.contracts).toBe(null);
+    expect(duplicateRegistry.contracts).toBe(null);
+  });
 });

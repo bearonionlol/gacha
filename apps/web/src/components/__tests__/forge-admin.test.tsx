@@ -20,9 +20,12 @@ describe("forge and admin routes", () => {
   it("renders admin lifecycle, required fields, and export controls", () => {
     render(<AdminInventoryPage />);
 
-    expect(screen.getByText(/Inventory Intake/i)).toBeInTheDocument();
+    expect(screen.getByText(/Inventory & Pool Intake/i)).toBeInTheDocument();
     expect(screen.getByText(/inventoryId/i)).toBeInTheDocument();
     expect(screen.getByText(/custodyStatus/i)).toBeInTheDocument();
+    expect(screen.getByText(/canonicalCollectibleKey/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/forgeTier/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/tierPoolEligible/i)).toBeInTheDocument();
     expect(screen.getByRole("table", { name: /Inventory intake records/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Export JSON/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Export CSV/i })).toBeInTheDocument();

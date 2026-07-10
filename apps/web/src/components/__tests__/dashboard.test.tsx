@@ -18,7 +18,7 @@ describe("dashboard", () => {
 
     expect(screen.getAllByText(/Vaulted physical card/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Fire shards/i)).toBeInTheDocument();
-    expect(screen.getByText("Magic Dust")).toBeInTheDocument();
+    expect(screen.getAllByText("Magic Dust").length).toBeGreaterThan(0);
     expect(screen.getByText(/50% Echo, 35% Prism, and 15% Star/i)).toBeInTheDocument();
     expect(screen.getByText(/randomness adapter is operator-controlled/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Keep in vault/i })).toHaveAttribute("href", "/vault");
@@ -30,6 +30,7 @@ describe("dashboard", () => {
 
     expect(screen.getByText(/Signal Run/i)).toBeInTheDocument();
     expect(screen.getByText(/does not change pull odds/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ascension prep/i)).toBeInTheDocument();
   });
 
   it("shows deployed registry readiness when a testnet registry is provided", () => {
@@ -78,6 +79,29 @@ describe("dashboard", () => {
     expect(screen.getAllByText(/0\.01 ETH/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Wallet action/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText(/Phase 4B/i)).not.toBeInTheDocument();
+  });
+
+  it("pauses new paid pulls when Vault Forge V4 is not deployed", async () => {
+    process.env.NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY = JSON.stringify({
+      network: "robinhoodTestnet",
+      chainId: 46630,
+      contracts: {
+        InventoryRegistry: "0x0000000000000000000000000000000000000001",
+        ItemToken: "0x0000000000000000000000000000000000000002",
+        CommitRevealRandomnessProvider: "0x0000000000000000000000000000000000000003",
+        PackSale: "0x0000000000000000000000000000000000000004",
+        Marketplace: "0x0000000000000000000000000000000000000005",
+        BuybackVault: "0x0000000000000000000000000000000000000006",
+        Forge: "0x0000000000000000000000000000000000000007",
+        RedemptionRegistry: "0x0000000000000000000000000000000000000008"
+      }
+    });
+
+    render(await HomePage());
+
+    expect(screen.getByText(/New pulls are paused until PackSale and Vault Forge V4 are deployed together/i)).toBeInTheDocument();
+    expect(screen.getByText(/Existing purchases can still be revealed/i)).toBeInTheDocument();
+    expect(screen.getByText(/Reveal purchase on testnet/i)).toBeInTheDocument();
   });
 
   it("shows Phase 4C pack reveal operations on the dashboard", async () => {

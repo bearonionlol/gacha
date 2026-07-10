@@ -8,6 +8,7 @@
     "clean": "hardhat clean",
     "test": "hardhat test",
     "typecheck": "tsc --noEmit",
+    "local": "ts-node scripts/local.ts",
     "deploy:testnet": "hardhat run scripts/deploy.ts --network robinhoodTestnet",
     "deploy:mainnet": "hardhat run scripts/deploy.ts --network robinhoodMainnet",
     "seed:testnet": "hardhat run scripts/seed.ts --network robinhoodTestnet",

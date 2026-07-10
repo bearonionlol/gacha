@@ -67,23 +67,13 @@ Typecheck every workspace package:
 pnpm -r typecheck
 ```
 
-Deploy to a local Hardhat node:
+Run the complete contract journey against an ephemeral local Hardhat node:
 
 ```bash
-pnpm --filter @gacha/contracts exec hardhat run scripts/deploy.ts --network localhost
+pnpm --filter @gacha/contracts local
 ```
 
-Seed a local deployment:
-
-```bash
-pnpm --filter @gacha/contracts exec hardhat run scripts/seed.ts --network localhost
-```
-
-Smoke-check a local deployment:
-
-```bash
-pnpm --filter @gacha/contracts exec hardhat run scripts/smoke.ts --network localhost
-```
+The command requires `127.0.0.1:8545` to be free. It acquires an exclusive repository lock, starts a Hardhat node, verifies a readiness signal from that child process, deploys and validates all fifteen contracts, seeds the sample state, runs smoke, runs the one-shot collector rehearsal, and runs smoke again. Success, stage failure, `SIGINT`, and `SIGTERM` all stop the node, release the lock, and remove the generated `deployments/localhost.json`; if that file existed before the command, its original contents and mode are restored instead. No deployer key or remote RPC URL is required.
 
 Deploy to Robinhood testnet:
 
@@ -144,7 +134,10 @@ Build and verify the web app:
 pnpm --filter @gacha/web test
 pnpm --filter @gacha/web typecheck
 pnpm --filter @gacha/web build
+pnpm --filter @gacha/web test:e2e
 ```
+
+Browser tests run the complete Gacha-to-redemption journey plus route, image, overflow, and deployment-diagnostic checks in desktop Chromium and Pixel 7 emulation. CI runs the same suite against the production Next.js build.
 
 The app runs in deterministic demo mode when no deployment registry is present. After Robinhood testnet deployment, review `deployments/robinhoodTestnet.json`; the app deployment adapter expects Robinhood chain ID `46630`, the base protocol addresses, and the VaultForge V4 addresses used by `/forge`. The `/admin/inventory` route includes a public testnet readiness panel that checks the deployment registry, public RPC URL, chain mode, operator controls, and mainnet cutover gate.
 

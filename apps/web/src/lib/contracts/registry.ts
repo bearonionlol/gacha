@@ -1,4 +1,4 @@
-import type { Address } from "viem";
+import { isAddress, zeroAddress, type Address } from "viem";
 import {
   type DeploymentRegistrySnapshot,
   type DeploymentStatus,
@@ -18,7 +18,16 @@ export type ReadyContractRegistry = {
 export function getReadyContractRegistry(snapshot: DeploymentRegistrySnapshot | null): ReadyContractRegistry {
   const status = resolveDeploymentStatus(snapshot);
 
-  if (status.readiness !== "ready" || snapshot?.contracts === undefined) {
+  if (status.mode === "demo" || snapshot?.contracts === undefined) {
+    return { status, chainId: status.chainId, contracts: null };
+  }
+
+  const baseAddresses = requiredProtocolContracts.map((name) => snapshot.contracts?.[name] ?? "");
+  const hasReadyBaseProtocol =
+    baseAddresses.every((address) => isAddress(address) && address.toLowerCase() !== zeroAddress) &&
+    new Set(baseAddresses.map((address) => address.toLowerCase())).size === requiredProtocolContracts.length;
+
+  if (!hasReadyBaseProtocol) {
     return { status, chainId: status.chainId, contracts: null };
   }
 

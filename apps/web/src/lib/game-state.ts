@@ -7,14 +7,14 @@ const redemptionCard =
 
 export const activeDrop = {
   id: "drop-rht-001",
-  title: "Vault Signal Drop",
+  title: "Founder's Vault Capsule",
   chainMode: "Robinhood Chain Testnet",
   packPriceCents: 900,
   testnetPriceLabel: "0.01 ETH",
   totalSupply: 1,
   remainingSupply: 1,
   inventoryBackedCount: 1,
-  randomnessDisclosure: "Every seeded testnet pack contains one vaulted physical card, the published starter-material bundle, and 100 Magic Dust. It also rolls two 10-Dust specialty rewards independently: 50% Echo, 35% Prism, and 15% Star. The current randomness adapter is operator-controlled and testnet-only.",
+  randomnessDisclosure: "Every seeded testnet pull contains one vaulted physical card, the published starter-material bundle, and 100 Magic Dust. It also rolls two independent 10-Dust specialty rewards: 50% Echo, 35% Prism, and 15% Star. Arcade play and Forge progress never change these odds. The current randomness adapter is operator-controlled and testnet-only.",
   guarantees: [
     { label: "Vaulted physical card", amount: "1" },
     { label: "Fire shards", amount: "3" },
@@ -39,6 +39,10 @@ export const marketListings = collectibleCards.map((card, index) => ({
   seller: index === 0 ? "Vault Operator" : "Sample Vault Seller",
   askCents: Math.round(card.estimateCents * 1.12),
   buybackCents: card.buybackCents,
+  forgeTier: card.forgeTier,
+  tradeInEligible: card.tradeInEligible,
+  forgeSetKey: card.forgeSetKey,
+  grailTier: card.grailTier,
   feeBps: 250,
   escrowDisclosure: "Escrow is modeled in demo mode; no blockchain write is submitted."
 }));
@@ -71,9 +75,9 @@ export const redemptionRequests = [
     id: "redeem-001",
     cardId: redemptionCard?.id ?? "sample-graded-card",
     title: redemptionCard?.title ?? "Pokemon TCG Lugia V Alternate Art",
-    status: "reviewing",
+    status: "approved",
     requestedAt: "2026-07-09T00:00:00.000Z",
-    steps: ["Requested", "Vault review", "Shipping quote", "Completed"]
+    steps: ["Requested", "Approved", "Packed", "Shipped", "Completed"]
   }
 ];
 
@@ -93,7 +97,7 @@ const activityEvents: ProtocolActivityEvent[] = [
   {
     id: "activity-forge-submit",
     type: "FORGE_CRAFTED",
-    detail: "Fire Signal Upgrade recipe #1 queued for wallet confirmation.",
+    detail: "Recast Seal pattern verified with protected Anchor custody.",
     txHash: "0xfeed0001",
     createdAt: "2026-07-09T00:02:00.000Z"
   }

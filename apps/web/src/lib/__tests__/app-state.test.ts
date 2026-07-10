@@ -8,6 +8,9 @@ describe("Phase 3 app state", () => {
     expect(collectibleCards.map((card) => card.title)).toContain("Pokemon TCG Charizard ex");
     expect(vaultStats.totalItems).toBeGreaterThanOrEqual(3);
     expect(vaultStats.marketValueCents).toBeGreaterThan(0);
+    expect(vaultStats.tierPoolEligibleCount).toBeGreaterThan(0);
+    expect(collectibleCards[0]?.forgeTier).toBe(2);
+    expect(collectibleCards[0]?.tradeInEligible).toBe(true);
   });
 
   it("uses demo deployment status when no registry is present", () => {
@@ -91,6 +94,34 @@ describe("Phase 3 app state", () => {
     expect(status.message).toMatch(/invalid contract addresses/i);
   });
 
+  it("downgrades registries that reuse an address for multiple contracts", () => {
+    const duplicateAddress = "0x0000000000000000000000000000000000000001";
+    const status = resolveDeploymentStatus({
+      network: "robinhoodTestnet",
+      chainId: 46630,
+      contracts: {
+        InventoryRegistry: duplicateAddress,
+        ItemToken: duplicateAddress,
+        CommitRevealRandomnessProvider: "0x0000000000000000000000000000000000000003",
+        PackSale: "0x0000000000000000000000000000000000000004",
+        Marketplace: "0x0000000000000000000000000000000000000005",
+        BuybackVault: "0x0000000000000000000000000000000000000006",
+        Forge: "0x0000000000000000000000000000000000000007",
+        RedemptionRegistry: "0x0000000000000000000000000000000000000008",
+        DustLedger: "0x0000000000000000000000000000000000000009",
+        DustRewardPolicy: "0x000000000000000000000000000000000000000a",
+        CollectibleForgePolicy: "0x000000000000000000000000000000000000000b",
+        TradeInVault: "0x000000000000000000000000000000000000000c",
+        TierPool: "0x000000000000000000000000000000000000000d",
+        VaultPassport: "0x000000000000000000000000000000000000000e",
+        VaultForge: "0x000000000000000000000000000000000000000f"
+      }
+    });
+
+    expect(status.readiness).toBe("incomplete");
+    expect(status.message).toMatch(/addresses are reused/i);
+  });
+
   it("does not coerce unsupported deployment chain IDs to Robinhood testnet", () => {
     const status = resolveDeploymentStatus({
       network: "localhost",
@@ -113,6 +144,8 @@ describe("Phase 3 app state", () => {
 
   it("creates market listings from inventory-backed cards", () => {
     expect(marketListings[0]?.seller).toMatch(/vault/i);
+    expect(marketListings[0]?.forgeTier).toBe(2);
+    expect(marketListings[0]?.tradeInEligible).toBe(true);
     expect(activeDrop.guarantees.some((row) => row.label === "Vaulted physical card")).toBe(true);
     expect(activeDrop.guarantees.some((row) => row.label === "Fire shards" && row.amount === "3")).toBe(true);
   });

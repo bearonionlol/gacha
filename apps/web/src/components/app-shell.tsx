@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import {
   Boxes,
+  CircleDot,
   Gem,
   Hammer,
-  LayoutDashboard,
   ShieldCheck,
   Store,
   WalletCards
@@ -11,7 +11,7 @@ import {
 import { WalletConnectPanel } from "./wallet-connect-panel";
 
 const navItems = [
-  { label: "Home", href: "/", icon: LayoutDashboard },
+  { label: "Gacha", href: "/", icon: CircleDot },
   { label: "Vault", href: "/vault", icon: WalletCards },
   { label: "Market", href: "/market", icon: Store },
   { label: "Forge", href: "/forge", icon: Hammer },
@@ -20,10 +20,11 @@ const navItems = [
 ];
 
 type AppShellProps = {
+  activePath?: string;
   children: ReactNode;
 };
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ activePath = "/", children }: AppShellProps) {
   return (
     <div className="app-shell">
       <aside className="shell-sidebar" aria-label="Application navigation">
@@ -39,7 +40,12 @@ export function AppShell({ children }: AppShellProps) {
 
         <nav className="primary-nav" aria-label="Core routes">
           {navItems.map(({ label, href, icon: Icon }) => (
-            <a key={href} href={href} className="nav-link">
+            <a
+              aria-current={activePath === href ? "page" : undefined}
+              key={href}
+              href={href}
+              className={activePath === href ? "nav-link active" : "nav-link"}
+            >
               <Icon size={17} aria-hidden="true" />
               <span>{label}</span>
             </a>
@@ -52,8 +58,9 @@ export function AppShell({ children }: AppShellProps) {
       <div className="shell-content">
         {children}
         <footer className="shell-footer">
-          Robinhood Chain testnet build. Resale descriptors identify collector inventory only; no official affiliation
-          or endorsement is implied.
+          Robinhood Chain testnet build. Pull contents, Dust rewards, fees, and Vault Ascension rules are published
+          before wallet confirmation. Resale descriptors identify collector inventory only; no official affiliation or
+          endorsement is implied.
         </footer>
       </div>
     </div>

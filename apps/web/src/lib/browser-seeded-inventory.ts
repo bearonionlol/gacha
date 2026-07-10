@@ -1,33 +1,6 @@
-export type BrowserSeededInventoryItem = {
-  inventoryId: string;
-  brand: "pokemon" | "one_piece" | "other";
-  category: "raw_card" | "graded_card" | "sealed_product" | "promo" | "slab" | "box" | "accessory";
-  cardName: string;
-  setName: string;
-  cardNumber: string;
-  language: string;
-  edition: string;
-  variant: string;
-  rawConditionEstimate: string;
-  conditionNotes: string;
-  gradingCompany: string | null;
-  grade: string | null;
-  certNumber: string | null;
-  certUrl: string | null;
-  photoUrls: string[];
-  photoHash: string;
-  vaultLocationLabel: string;
-  custodyStatus: string;
-  redeemable: boolean;
-  marketEstimateCents: number;
-  buybackQuoteCents: number;
-  grailTier: "none" | "minor" | "major" | "grail";
-  craftingTags: string[];
-  dropEligibility: boolean;
-  legalDisclaimer: string;
-  createdAt: string;
-  updatedAt: string;
-};
+import type { InventoryItem } from "@gacha/inventory";
+
+export type BrowserSeededInventoryItem = InventoryItem;
 
 export const browserInventoryStatuses = [
   "draft",
@@ -74,6 +47,11 @@ export const browserSeededInventory: BrowserSeededInventoryItem[] = [
     marketEstimateCents: 4500,
     buybackQuoteCents: 3000,
     grailTier: "major",
+    canonicalCollectibleKey: "pokemon:obsidian-flames:charizard-ex:125-197:double-rare",
+    forgeTier: 2,
+    tradeInEligible: true,
+    tierPoolEligible: true,
+    forgeSetKey: "pokemon:obsidian-flames",
     craftingTags: ["fire", "charizard", "pokemon_raw"],
     dropEligibility: true,
     legalDisclaimer,
@@ -107,6 +85,11 @@ export const browserSeededInventory: BrowserSeededInventoryItem[] = [
     marketEstimateCents: 15000,
     buybackQuoteCents: 10000,
     grailTier: "major",
+    canonicalCollectibleKey: "one-piece:romance-dawn:monkey-d-luffy:op01-024:parallel-art",
+    forgeTier: 3,
+    tradeInEligible: false,
+    tierPoolEligible: true,
+    forgeSetKey: "one-piece:romance-dawn",
     craftingTags: ["straw_hat", "one_piece_raw", "parallel"],
     dropEligibility: true,
     legalDisclaimer,
@@ -140,6 +123,11 @@ export const browserSeededInventory: BrowserSeededInventoryItem[] = [
     marketEstimateCents: 32500,
     buybackQuoteCents: 24000,
     grailTier: "grail",
+    canonicalCollectibleKey: "pokemon:silver-tempest:lugia-v:186-195:alternate-art",
+    forgeTier: 4,
+    tradeInEligible: false,
+    tierPoolEligible: true,
+    forgeSetKey: "pokemon:silver-tempest",
     craftingTags: ["lugia", "pokemon_graded", "alternate_art"],
     dropEligibility: true,
     legalDisclaimer,

@@ -1,4 +1,5 @@
-import { BadgeDollarSign, HandCoins, LockKeyhole, PercentCircle, Store } from "lucide-react";
+import Link from "next/link";
+import { BadgeDollarSign, Hammer, HandCoins, LockKeyhole, PercentCircle, Store } from "lucide-react";
 import { BuybackPanel, MarketplaceListPanel, MarketplaceTradePanel } from "./testnet-write-panels";
 import { formatCents } from "../lib/format";
 import { marketListings } from "../lib/game-state";
@@ -31,6 +32,14 @@ export function MarketBoard() {
                 <h3>{listing.title}</h3>
               </div>
               <Store size={18} aria-hidden="true" />
+            </div>
+
+            <div className="listing-forge-strip">
+              <span>
+                <Hammer size={14} aria-hidden="true" />
+                Forge Tier {listing.forgeTier ?? "-"}
+              </span>
+              <strong>{listing.tradeInEligible ? "Duplicate trade-in eligible" : "Anchor / collection hold"}</strong>
             </div>
 
             <dl className="detail-grid">
@@ -84,6 +93,10 @@ export function MarketBoard() {
               {listing.escrowDisclosure ?? marketplaceDisclosure} Seller receives{" "}
               {formatCents(listing.sellerReceivesCents)} after a {listing.feeBps} bps protocol fee.
             </p>
+            <Link className="secondary-action listing-forge-action" href="/forge">
+              <Hammer size={15} aria-hidden="true" />
+              Review in Vault Ascension
+            </Link>
           </article>
         ))}
       </div>
