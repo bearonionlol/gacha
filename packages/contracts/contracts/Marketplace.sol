@@ -9,6 +9,7 @@ import {ItemToken} from "./ItemToken.sol";
 
 contract Marketplace is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     bytes32 public constant MARKET_ADMIN_ROLE = keccak256("MARKET_ADMIN_ROLE");
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     uint96 public constant MAX_FEE_BPS = 1000;
     uint96 public constant FEE_DENOMINATOR = 10_000;
 
@@ -160,11 +161,11 @@ contract Marketplace is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder 
         emit TreasuryUpdated(treasury_);
     }
 
-    function pause() external onlyRole(MARKET_ADMIN_ROLE) {
+    function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
-    function unpause() external onlyRole(MARKET_ADMIN_ROLE) {
+    function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
 

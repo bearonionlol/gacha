@@ -1,20 +1,30 @@
 import { signalRun } from "./arcade";
 import { buildActivityTimeline, type ProtocolActivityEvent } from "./activity-index";
 import { collectibleCards, vaultStats } from "./inventory";
+import { loadChainContextFromEnv } from "./deployments";
+import { protocolWriteConfig } from "./contracts/transaction-config";
 
+const chainContext = loadChainContextFromEnv();
 const redemptionCard =
   collectibleCards.find((card) => card.id === "inv-sample-graded-001") ?? collectibleCards[0];
 
 export const activeDrop = {
   id: "drop-rht-001",
   title: "Founder's Vault Capsule",
-  chainMode: "Robinhood Chain Testnet",
+  chainMode: chainContext.chainName,
+  environmentLabel: chainContext.environmentLabel,
+  isIllustrative: chainContext.isDemo,
   packPriceCents: 900,
-  testnetPriceLabel: "0.01 ETH",
+  priceLabel: protocolWriteConfig.pack.displayValue,
+  testnetPriceLabel: protocolWriteConfig.pack.displayValue,
   totalSupply: 1,
   remainingSupply: 1,
   inventoryBackedCount: 1,
-  randomnessDisclosure: "Every seeded testnet pull contains one vaulted physical card, the published starter-material bundle, and 100 Magic Dust. It also rolls two independent 10-Dust specialty rewards: 50% Echo, 35% Prism, and 15% Star. Arcade play and Forge progress never change these odds. The current randomness adapter is operator-controlled and testnet-only.",
+  randomnessDisclosure: chainContext.isDemo
+    ? "Illustrative demo pull: one vault-backed card, the displayed starter materials, and 100 Magic Dust. Two independent specialty rolls each use the published distribution: 50% Echo, 35% Prism, and 15% Star. Demo interactions do not submit transactions."
+    : chainContext.isMainnet
+      ? "Each settled pull contains one vault-backed card, the displayed starter materials, and 100 Magic Dust. Two independent specialty rolls each use the published distribution: 50% Echo, 35% Prism, and 15% Star. Arcade and Forge activity never change these odds. Mainnet purchases remain locked unless the registry identifies a valid pinned randomness coordinator."
+      : "Each testnet pull contains one vault-backed card, the displayed starter materials, and 100 Magic Dust. Two independent specialty rolls each use the published distribution: 50% Echo, 35% Prism, and 15% Star. Test assets have no monetary value, and arcade or Forge activity never changes these odds.",
   guarantees: [
     { label: "Vaulted physical card", amount: "1" },
     { label: "Fire shards", amount: "3" },
@@ -36,7 +46,7 @@ export const marketListings = collectibleCards.map((card, index) => ({
   id: `listing-${card.id}`,
   cardId: card.id,
   title: card.title,
-  seller: index === 0 ? "Vault Operator" : "Sample Vault Seller",
+  seller: index === 0 ? "Vault Operator" : chainContext.isDemo ? "Demo Vault Seller" : "Vault Seller",
   askCents: Math.round(card.estimateCents * 1.12),
   buybackCents: card.buybackCents,
   forgeTier: card.forgeTier,
@@ -44,7 +54,9 @@ export const marketListings = collectibleCards.map((card, index) => ({
   forgeSetKey: card.forgeSetKey,
   grailTier: card.grailTier,
   feeBps: 250,
-  escrowDisclosure: "Escrow is modeled in demo mode; no blockchain write is submitted."
+  escrowDisclosure: chainContext.isDemo
+    ? "Illustrative escrow state only; no blockchain write is submitted in demo mode."
+    : "The token remains in contract escrow until sale or cancellation."
 }));
 
 export const forgeRecipes = [
@@ -85,7 +97,9 @@ const activityEvents: ProtocolActivityEvent[] = [
   {
     id: "activity-drop-ready",
     type: "INVENTORY_VERIFIED",
-    detail: `${vaultStats.totalItems} vault items eligible for deterministic demo drops.`,
+    detail: chainContext.isDemo
+      ? `${vaultStats.totalItems} illustrative vault items loaded for the demo collection.`
+      : `${vaultStats.totalItems} vault items available in the current collection view.`,
     createdAt: "2026-07-09T00:00:00.000Z"
   },
   {

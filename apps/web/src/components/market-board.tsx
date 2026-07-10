@@ -4,24 +4,29 @@ import { BuybackPanel, MarketplaceListPanel, MarketplaceTradePanel } from "./tes
 import { formatCents } from "../lib/format";
 import { marketListings } from "../lib/game-state";
 import { enrichMarketListings } from "../lib/marketplace";
+import { loadChainContextFromEnv } from "../lib/deployments";
 
 const marketplaceDisclosure =
   "Listings are escrowed until sale or cancellation. Seller proceeds are net of protocol fee.";
 
 export function MarketBoard() {
   const enrichedListings = enrichMarketListings(marketListings);
+  const chainContext = loadChainContextFromEnv();
 
   return (
     <section className="portfolio-section" aria-labelledby="market-board-title">
       <div className="section-heading-row">
         <div>
-          <span className="eyebrow">Listing board</span>
-          <h2 id="market-board-title">Inventory-backed asks</h2>
+          <span className="eyebrow">Price comparison</span>
+          <h2 id="market-board-title">Collection references</h2>
         </div>
-        <span className="chain-pill">Pricing reference</span>
+        <span className="chain-pill">{chainContext.isDemo ? "Illustrative" : "Preview records"}</span>
       </div>
 
-      <p className="disclosure">{marketplaceDisclosure}</p>
+      <p className="disclosure">
+        {chainContext.isDemo ? "These asks are illustrative demo records. " : "These collection cards are pricing references; load a listing ID below for executable on-chain terms. "}
+        {marketplaceDisclosure} Prices and buyback quotes do not guarantee liquidity or future value.
+      </p>
 
       <div className="market-listings">
         {enrichedListings.map((listing) => (
@@ -104,10 +109,10 @@ export function MarketBoard() {
       <section className="market-operations" aria-labelledby="market-operations-title">
         <div className="section-heading-row">
           <div>
-            <span className="eyebrow">Testnet escrow</span>
+            <span className="eyebrow">On-chain escrow</span>
             <h2 id="market-operations-title">Market order ticket</h2>
           </div>
-          <span className="chain-pill">Live contracts</span>
+          <span className={`chain-pill mode-${chainContext.mode}`}>{chainContext.environmentLabel}</span>
         </div>
         <div className="market-ops-grid">
           <MarketplaceListPanel inputId="market-token-id" />

@@ -1,0 +1,877 @@
+.console {
+  display: grid;
+  gap: 16px;
+}
+
+.modeBanner,
+.notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 13px 15px;
+}
+
+.modeBanner > span:first-child {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-3);
+}
+
+.modeBanner strong,
+.modeBanner small {
+  display: block;
+}
+
+.modeBanner small {
+  margin-top: 3px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.productionMode {
+  border-left-color: var(--green);
+}
+
+.productionMode > span:first-child {
+  color: var(--green);
+}
+
+.demoMode {
+  border-left-color: var(--warm);
+}
+
+.demoMode > span:first-child {
+  color: var(--warm);
+}
+
+.sessionIdentity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sessionIdentity code,
+.sessionIdentity span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.sessionIdentity span {
+  color: var(--green);
+  text-transform: capitalize;
+}
+
+.sessionIdentity button,
+.iconButton,
+.pagination button {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.sessionIdentity button:hover,
+.sessionIdentity button:focus-visible,
+.iconButton:hover,
+.iconButton:focus-visible,
+.pagination button:hover,
+.pagination button:focus-visible {
+  border-color: var(--green-line);
+  color: var(--green);
+}
+
+.notice {
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 11px 13px;
+}
+
+.noticeSuccess {
+  border-left-color: var(--green);
+  color: var(--green);
+}
+
+.noticeError {
+  border-left-color: var(--danger);
+  color: var(--danger);
+}
+
+.notice span {
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.loadingPanel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 130px;
+  color: var(--muted);
+}
+
+.authPanel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(210px, auto);
+  align-items: center;
+  gap: 20px;
+  min-height: 180px;
+}
+
+.authMark {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border: 1px solid var(--green-line);
+  border-radius: 8px;
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.authCopy h2 {
+  margin: 4px 0 0;
+}
+
+.authCopy p,
+.bulkPanel p,
+.auditPanel > p,
+.exportPanel p,
+.queueSection p,
+.lifecycleSection p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.securityPoints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.securityPoints span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 8px;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.authAction {
+  display: grid;
+  justify-items: stretch;
+  gap: 8px;
+}
+
+.errorText {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.toolbar form {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(130px, 0.35fr) minmax(150px, 0.4fr) auto;
+  align-items: flex-end;
+  gap: 10px;
+  flex: 1 1 auto;
+}
+
+.toolbar label,
+.payloadField,
+.editorForm label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--faint);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.toolbar input,
+.toolbar select,
+.payloadField textarea,
+.editorForm input,
+.editorForm select,
+.editorForm textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  outline: 0;
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 10px 11px;
+  font: inherit;
+  letter-spacing: 0;
+}
+
+.toolbar input:focus,
+.toolbar select:focus,
+.payloadField textarea:focus,
+.editorForm input:focus,
+.editorForm select:focus,
+.editorForm textarea:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px var(--green-soft);
+}
+
+.searchField {
+  position: relative;
+}
+
+.searchField svg {
+  position: absolute;
+  left: 11px;
+  bottom: 11px;
+  color: var(--faint);
+}
+
+.searchField input {
+  padding-left: 36px;
+}
+
+.toolbarActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbarActions :global(.primary-action):disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.recordsPanel,
+.editorPanel,
+.reconciliation,
+.bulkPanel,
+.auditPanel,
+.exportPanel,
+.schemaPanel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.recordsTable {
+  min-width: 720px;
+}
+
+.recordsTable td {
+  vertical-align: middle;
+}
+
+.recordsTable td small,
+.recordsTable td strong,
+.recordsTable td code {
+  display: block;
+}
+
+.recordsTable td small {
+  margin-top: 4px;
+  color: var(--faint);
+  font-size: 0.72rem;
+}
+
+.selectedRow td {
+  background: var(--green-soft);
+}
+
+.selectedRow td:first-child {
+  box-shadow: inset 3px 0 var(--green);
+}
+
+.itemButton {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.itemButton:hover strong,
+.itemButton:focus-visible strong {
+  color: var(--green);
+}
+
+.itemButton:focus-visible {
+  outline: 2px solid var(--green-line);
+  outline-offset: 4px;
+}
+
+.statusBadge {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-3);
+  padding: 5px 7px;
+  color: var(--green);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.68rem;
+  text-transform: capitalize;
+}
+
+.emptyState,
+.editorEmpty {
+  display: grid;
+  min-height: 210px;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: var(--faint);
+  text-align: center;
+}
+
+.emptyState strong,
+.editorEmpty strong {
+  color: var(--text);
+}
+
+.emptyState span,
+.editorEmpty span {
+  max-width: 330px;
+  line-height: 1.45;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--faint);
+  font-size: 0.75rem;
+}
+
+.pagination > div {
+  display: flex;
+  gap: 7px;
+}
+
+.pagination button:disabled,
+.iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.editorPanel {
+  position: sticky;
+  top: 14px;
+  max-height: min(680px, calc(100vh - 28px));
+  overflow-y: auto;
+}
+
+.editorHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 13px;
+}
+
+.editorHeader h2 {
+  margin: 4px 0 0;
+  font-size: 1.12rem;
+}
+
+.editorHeader code {
+  display: block;
+  margin-top: 6px;
+  color: var(--faint);
+  font-size: 0.68rem;
+  overflow-wrap: anywhere;
+}
+
+.indexedNotice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  border: 1px solid var(--green-line);
+  border-radius: 8px;
+  background: var(--green-soft);
+  padding: 10px;
+  color: var(--green);
+}
+
+.indexedNotice strong,
+.indexedNotice span {
+  display: block;
+}
+
+.indexedNotice span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.editorForm {
+  display: grid;
+  gap: 13px;
+}
+
+.editorForm fieldset {
+  display: grid;
+  gap: 11px;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.editorForm legend {
+  padding: 0 5px;
+  color: var(--green);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.editorForm fieldset:disabled {
+  opacity: 0.72;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.spanTwo {
+  grid-column: span 2;
+}
+
+.editorForm textarea {
+  resize: vertical;
+}
+
+.checkGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.checkGrid label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 9px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: none;
+}
+
+.checkGrid input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--green);
+}
+
+.editorActions,
+.queueActions,
+.lifecycleCurrent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.dangerButton,
+.queueActions button,
+.lifecycleCurrent button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  padding: 8px 11px;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.dangerButton {
+  border-color: rgba(255, 90, 95, 0.44);
+  color: var(--danger);
+}
+
+.queueActions button:hover,
+.queueActions button:focus-visible,
+.lifecycleCurrent button:hover,
+.lifecycleCurrent button:focus-visible {
+  border-color: var(--green-line);
+  color: var(--green);
+}
+
+.queueActions button:disabled,
+.lifecycleCurrent button:disabled,
+.dangerButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.lifecycleSection,
+.queueSection {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 13px;
+}
+
+.lifecycleSection h3,
+.queueSection h3 {
+  margin: 3px 0 0;
+  font-size: 0.92rem;
+}
+
+.lifecycleCurrent > span {
+  border: 1px solid var(--green-line);
+  border-radius: 999px;
+  background: var(--green-soft);
+  padding: 7px 9px;
+  color: var(--green);
+  font-size: 0.72rem;
+  text-transform: capitalize;
+}
+
+.queueSection {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--green-line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 12px;
+}
+
+.reconciliation dl {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.reconciliation dl div {
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--green-line);
+  background: var(--surface-2);
+  padding: 10px;
+}
+
+.reconciliation dt {
+  color: var(--faint);
+  font-size: 0.66rem;
+  text-transform: capitalize;
+}
+
+.reconciliation dd {
+  margin: 5px 0 0;
+  color: var(--text);
+  font-size: 1.04rem;
+  font-weight: 800;
+}
+
+.reconciliation ul,
+.schemaPanel ul,
+.auditList,
+.operationList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reconciliation li {
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  background: var(--surface-2);
+  padding: 9px 10px;
+}
+
+.reconciliation li strong,
+.reconciliation li small {
+  display: block;
+}
+
+.reconciliation li small {
+  margin-top: 3px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.issueError {
+  border-left-color: var(--danger) !important;
+}
+
+.issueWarning {
+  border-left-color: var(--warm) !important;
+}
+
+.clearState {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--green);
+}
+
+.supportGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+.bulkPanel,
+.auditPanel {
+  min-height: 100%;
+}
+
+.filePicker {
+  position: relative;
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.filePicker:hover,
+.filePicker:focus-within {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.filePicker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.auditInventoryId {
+  color: var(--faint);
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.auditList li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  border-left: 2px solid var(--green-line);
+  padding: 7px 9px;
+  color: var(--green);
+}
+
+.auditList strong,
+.auditList small {
+  display: block;
+}
+
+.auditList strong {
+  color: var(--text);
+  font-size: 0.8rem;
+  text-transform: capitalize;
+}
+
+.auditList small {
+  margin-top: 3px;
+  color: var(--faint);
+  font-size: 0.68rem;
+}
+
+.operationList {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.operationList li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  border: 1px solid var(--green-line);
+  border-radius: 8px;
+  background: var(--green-soft);
+  padding: 9px;
+}
+
+.operationList strong {
+  text-transform: capitalize;
+}
+
+.operationList span {
+  color: var(--green);
+  font-size: 0.72rem;
+}
+
+.operationList code {
+  grid-column: 1 / -1;
+  color: var(--faint);
+  font-size: 0.66rem;
+  overflow-wrap: anywhere;
+}
+
+.schemaPanel ul {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.schemaPanel li {
+  border-bottom: 1px solid var(--line);
+  padding: 7px 4px;
+}
+
+.schemaPanel code {
+  color: var(--green);
+  font-size: 0.72rem;
+}
+
+.legacyDiagnostics {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.legacyDiagnostics > summary {
+  cursor: pointer;
+  padding: 13px 15px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.legacyDiagnostics > div {
+  display: grid;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  padding: 16px;
+}
+
+.spin {
+  animation: admin-spin 0.85s linear infinite;
+}
+
+@keyframes admin-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1100px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .editorPanel {
+    position: static;
+    max-height: none;
+  }
+
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .toolbarActions {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 760px) {
+  .modeBanner,
+  .authPanel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .modeBanner > span:first-child {
+    display: none;
+  }
+
+  .sessionIdentity {
+    flex-wrap: wrap;
+  }
+
+  .authMark {
+    width: 44px;
+    height: 44px;
+  }
+
+  .toolbar form,
+  .supportGrid,
+  .reconciliation dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .formGrid,
+  .checkGrid,
+  .schemaPanel ul {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .spanTwo {
+    grid-column: span 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}

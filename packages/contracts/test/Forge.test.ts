@@ -884,6 +884,7 @@ describe("Forge", function () {
     const fixture = await deployProtocolFixture();
     const { forge, recipeAdmin, other } = fixture;
     const role = await forge.RECIPE_ADMIN_ROLE();
+    const pauserRole = await forge.PAUSER_ROLE();
     const recipeId = await createRecipe(fixture);
 
     await expect(forge.connect(other).createRecipe(recipeParams()))
@@ -896,13 +897,13 @@ describe("Forge", function () {
 
     await expect(forge.connect(other).pause())
       .to.be.revertedWithCustomError(forge, "AccessControlUnauthorizedAccount")
-      .withArgs(other.address, role);
+      .withArgs(other.address, pauserRole);
 
     await forge.connect(recipeAdmin).pause();
 
     await expect(forge.connect(other).unpause())
       .to.be.revertedWithCustomError(forge, "AccessControlUnauthorizedAccount")
-      .withArgs(other.address, role);
+      .withArgs(other.address, pauserRole);
   });
 
   it("lets a separate reviewer grant a bounded manual-review craft allowance", async function () {

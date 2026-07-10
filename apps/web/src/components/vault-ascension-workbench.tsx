@@ -19,6 +19,7 @@ import {
   X,
   type LucideIcon
 } from "lucide-react";
+import { loadChainContextFromEnv } from "../lib/deployments";
 
 type DustId = "magic" | "echo" | "prism" | "star";
 type SpecialtyDustId = Exclude<DustId, "magic">;
@@ -246,6 +247,9 @@ function calculateDustSpend(
 }
 
 export function VaultAscensionWorkbench() {
+  const chainContext = useMemo(() => loadChainContextFromEnv({
+    NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY: process.env.NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY
+  }), []);
   const [selectedRecipeId, setSelectedRecipeId] = useState(blueprints[0]!.id);
   const [anchorId, setAnchorId] = useState(anchorCards[0]!.id);
   const [grid, setGrid] = useState<PlacedItem[]>(Array(9).fill(null));
@@ -440,9 +444,9 @@ export function VaultAscensionWorkbench() {
     <section className="vault-ascension-workbench" aria-label="Vault Ascension workbench">
       <header className="va-command-bar">
         <div>
-          <span className="eyebrow">Vault Forge / Ascension V4</span>
+          <span className="eyebrow">Practice Forge / Ascension</span>
           <h2>Vault Ascension</h2>
-          <p>Lab previews use sample balances. Nothing moves until you submit through the live panel.</p>
+          <p>Practice with illustrative balances, then review the live settlement separately. Nothing moves from this lab.</p>
         </div>
         <div className="va-mode-control" role="group" aria-label="Forge environment">
           <button aria-pressed="true" className="active" type="button">
@@ -457,13 +461,19 @@ export function VaultAscensionWorkbench() {
             <Hammer size={15} aria-hidden="true" />
             Live
           </button>
-          <span>Testnet settlement below</span>
+          <span>{chainContext.environmentLabel} settlement below</span>
         </div>
       </header>
 
+      <ol className="va-flow-steps" aria-label="Forge recipe steps">
+        <li><span>1</span><strong>Choose a recipe</strong><small>Read its exact result and pool rule.</small></li>
+        <li><span>2</span><strong>Match the seal</strong><small>Click or drag Dust and eligible duplicates.</small></li>
+        <li><span>3</span><strong>Review settlement</strong><small>Confirm every spent, transferred, and retained input.</small></li>
+      </ol>
+
       <section className="va-dust-bank" aria-labelledby="va-dust-bank-title">
         <div className="va-section-label">
-          <span className="eyebrow" id="va-dust-bank-title">Wallet points</span>
+          <span className="eyebrow" id="va-dust-bank-title">Practice balances</span>
           <strong>Dust satchel</strong>
         </div>
         <div className="va-dust-balances">

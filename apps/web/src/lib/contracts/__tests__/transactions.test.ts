@@ -5,9 +5,11 @@ import {
   createWriteRequest,
   formatTransactionHash,
   getTransactionErrorMessage,
+  resolveConfiguredRpcUrl,
   waitForTransactionReceipt
 } from "../transactions";
 import { robinhoodTestnetChainId } from "../wallet";
+import { resolveChainContext } from "../../deployments";
 
 const contracts = {
   InventoryRegistry: "0x32657A9d0AFe229E132dA8610a23D6d32d22C4Ee" as Address,
@@ -33,6 +35,21 @@ describe("transaction helpers", () => {
     expect(request.functionName).toBe("purchase");
     expect(request.args).toEqual([1n]);
     expect(request.value).toBe(10_000_000_000_000_000n);
+  });
+
+  it("builds an allowlisted pack purchase without falling back to the public function", () => {
+    const proof = [`0x${"ab".repeat(32)}` as const];
+    const request = createWriteRequest({
+      kind: "packPurchaseAllowlisted",
+      allowlistProof: proof,
+      contracts,
+      dropId: 4n,
+      value: 20_000_000_000_000_000n
+    });
+
+    expect(request.functionName).toBe("purchaseAllowlisted");
+    expect(request.args).toEqual([4n, proof]);
+    expect(request.value).toBe(20_000_000_000_000_000n);
   });
 
   it("builds marketplace approval and list requests", () => {
@@ -149,9 +166,7 @@ describe("transaction helpers", () => {
 
   it("sanitizes common wallet errors", () => {
     expect(getTransactionErrorMessage(Object.assign(new Error("rejected"), { code: 4001 }))).toMatch(/rejected/i);
-    expect(getTransactionErrorMessage(new Error("insufficient funds for gas * price + value"))).toMatch(
-      /enough testnet ETH/i
-    );
+    expect(getTransactionErrorMessage(new Error("insufficient funds for gas * price + value"))).toMatch(/enough ETH/i);
     expect(getTransactionErrorMessage({})).toMatch(/failed/i);
   });
 
@@ -160,6 +175,12 @@ describe("transaction helpers", () => {
 
     expect(formatTransactionHash(hash)).toBe("0x1234...cdef");
     expect(buildExplorerTxUrl(hash)).toContain(hash);
+    expect(buildExplorerTxUrl(hash, resolveChainContext({ network: "robinhoodMainnet", chainId: 4663, contracts: {} })))
+      .toContain("robinhoodchain.blockscout.com");
+    expect(resolveConfiguredRpcUrl(
+      resolveChainContext({ network: "robinhoodMainnet", chainId: 4663, contracts: {} }),
+      "https://rpc.testnet.chain.robinhood.com"
+    )).toBe("https://rpc.mainnet.chain.robinhood.com");
     expect(robinhoodTestnetChainId).toBe(46630);
   });
 
@@ -168,6 +189,10 @@ describe("transaction helpers", () => {
     const client = { waitForTransactionReceipt: vi.fn().mockResolvedValue(receipt) };
 
     await expect(waitForTransactionReceipt(client, "0xabc" as Hash)).resolves.toBe(receipt);
-    expect(client.waitForTransactionReceipt).toHaveBeenCalledWith({ hash: "0xabc", timeout: 60_000 });
+    expect(client.waitForTransactionReceipt).toHaveBeenCalledWith({
+      hash: "0xabc",
+      onReplaced: undefined,
+      timeout: 90_000
+    });
   });
 });

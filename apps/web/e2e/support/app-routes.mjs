@@ -2,10 +2,10 @@ import { expect } from "@playwright/test";
 
 export const appRoutes = {
   gacha: { path: "/", heading: "Vault Gacha", navigationName: "Gacha" },
-  vault: { path: "/vault", heading: "Vault Portfolio", navigationName: "Vault" },
-  forge: { path: "/forge", heading: "Vault Ascension", navigationName: "Forge" },
-  market: { path: "/market", heading: "Vault Market", navigationName: "Market" },
-  redemption: { path: "/redemption", heading: "Redemption Desk", navigationName: "Redeem" },
+  vault: { path: "/vault", heading: "Your Vault", navigationName: "Vault" },
+  forge: { path: "/forge", heading: "The Forge", navigationName: "Forge" },
+  market: { path: "/market", heading: "Marketplace", navigationName: "Market" },
+  redemption: { path: "/redemption", heading: "Physical Redemption", navigationName: "Redeem" },
   admin: { path: "/admin/inventory", heading: "Inventory & Pool Intake", navigationName: "Admin" }
 };
 

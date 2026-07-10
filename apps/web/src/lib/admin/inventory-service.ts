@@ -1,0 +1,198 @@
+import {
+  InventoryItemSchema,
+  InventoryItemsSchema,
+  InventoryNotFoundError,
+  InventoryMutationForbiddenError,
+  createPhotoHash,
+  type InventoryActor,
+  type InventoryItem,
+  type InventoryListQuery,
+  type InventoryOnchainAction,
+  type InventoryOnchainOperation,
+  type InventoryRepository,
+  type InventoryStatus,
+  type VersionedInventoryItem
+} from "@gacha/inventory";
+
+const MAXIMUM_BULK_IMPORT = 200;
+const ONCHAIN_MANAGED_STATUSES = new Set<InventoryStatus>([
+  "tokenized",
+  "user_owned",
+  "listed",
+  "buyback_held",
+  "redemption_pending",
+  "redeemed"
+]);
+
+const asObject = (value: unknown): Record<string, unknown> => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("Inventory input must be an object");
+  }
+  return value as Record<string, unknown>;
+};
+
+const photoUrlsFrom = (value: unknown): string[] => {
+  if (!Array.isArray(value) || value.some((url) => typeof url !== "string")) {
+    throw new Error("photoUrls must be an array of URLs");
+  }
+  return value as string[];
+};
+
+const assertSafeInventoryPolicy = (item: InventoryItem): void => {
+  const eligibilityCustody = new Set<InventoryStatus>(["verified", "vaulted", "drop_ready"]);
+  if ((item.dropEligibility || item.tierPoolEligible) && !eligibilityCustody.has(item.custodyStatus)) {
+    throw new InventoryMutationForbiddenError(
+      "Drop and tier-pool eligibility require verified, vaulted, or drop-ready custody"
+    );
+  }
+  if (item.grailTier === "grail" && item.tradeInEligible) {
+    throw new InventoryMutationForbiddenError("Grail inventory cannot be enabled for trade-in without a separate policy review");
+  }
+  if (item.buybackQuoteCents > item.marketEstimateCents) {
+    throw new InventoryMutationForbiddenError("Buyback quote cannot exceed the market estimate");
+  }
+};
+
+const assertTransitionReadiness = (item: InventoryItem, to: InventoryStatus): void => {
+  if (to === "photographed" && item.photoUrls.length < 2) {
+    throw new InventoryMutationForbiddenError("Front and back custody photos are required before photographed status");
+  }
+  if (to === "verified") {
+    if (item.photoUrls.length < 2 || item.vaultLocationLabel.trim() === "" || item.marketEstimateCents <= 0) {
+      throw new InventoryMutationForbiddenError(
+        "Verification requires front and back photos, a vault location, and a positive market estimate"
+      );
+    }
+    assertSafeInventoryPolicy(item);
+  }
+  if (to === "vaulted" && item.vaultLocationLabel.trim() === "") {
+    throw new InventoryMutationForbiddenError("A vault location is required before vaulted status");
+  }
+  if (to === "drop_ready" && !item.dropEligibility) {
+    throw new InventoryMutationForbiddenError("Drop eligibility must be reviewed before drop-ready status");
+  }
+};
+
+export class AdminInventoryService {
+  constructor(
+    private readonly repository: InventoryRepository,
+    private readonly now: () => Date = () => new Date()
+  ) {}
+
+  list(query?: InventoryListQuery): Promise<VersionedInventoryItem[]> {
+    return this.repository.list(query);
+  }
+
+  count(query?: Omit<InventoryListQuery, "limit" | "offset">): Promise<number> {
+    return this.repository.count(query);
+  }
+
+  get(inventoryId: string): Promise<VersionedInventoryItem | null> {
+    return this.repository.get(inventoryId);
+  }
+
+  audit(inventoryId?: string, limit?: number) {
+    return this.repository.listAudit({ inventoryId, limit });
+  }
+
+  async create(rawItem: unknown, actor: InventoryActor): Promise<VersionedInventoryItem> {
+    const now = this.now().toISOString();
+    const item = this.#prepare(rawItem, { createdAt: now, updatedAt: now }, true);
+    assertSafeInventoryPolicy(item);
+    return this.repository.create(item, actor);
+  }
+
+  async bulkCreate(rawItems: unknown, actor: InventoryActor): Promise<VersionedInventoryItem[]> {
+    if (!Array.isArray(rawItems)) throw new Error("Bulk import items must be an array");
+    if (rawItems.length < 1 || rawItems.length > MAXIMUM_BULK_IMPORT) {
+      throw new Error(`Bulk imports must contain between 1 and ${MAXIMUM_BULK_IMPORT} records`);
+    }
+    const now = this.now().toISOString();
+    const items = InventoryItemsSchema.parse(
+      rawItems.map((item) => this.#prepare(item, { createdAt: now, updatedAt: now }, true))
+    );
+    items.forEach(assertSafeInventoryPolicy);
+    return this.repository.bulkCreate(items, actor);
+  }
+
+  async update(
+    inventoryId: string,
+    rawItem: unknown,
+    expectedRevision: number,
+    actor: InventoryActor
+  ): Promise<VersionedInventoryItem> {
+    const existing = await this.repository.get(inventoryId);
+    if (existing === null) throw new InventoryNotFoundError(inventoryId);
+    const input = asObject(rawItem);
+    if (input.inventoryId !== inventoryId) throw new Error("inventoryId cannot be changed");
+    if (input.custodyStatus !== existing.item.custodyStatus) {
+      throw new InventoryMutationForbiddenError("custodyStatus can only change through a lifecycle transition");
+    }
+    if (ONCHAIN_MANAGED_STATUSES.has(existing.item.custodyStatus)) {
+      throw new InventoryMutationForbiddenError(
+        "Indexed on-chain inventory is read-only in the admin API; reconcile changes from contract events"
+      );
+    }
+    const item = this.#prepare(input, {
+      createdAt: existing.item.createdAt,
+      updatedAt: this.now().toISOString()
+    });
+    assertSafeInventoryPolicy(item);
+    return this.repository.update(item, expectedRevision, actor);
+  }
+
+  async transition(
+    inventoryId: string,
+    to: InventoryStatus,
+    expectedRevision: number,
+    actor: InventoryActor,
+    adminReviewed = false
+  ): Promise<VersionedInventoryItem> {
+    const existing = await this.repository.get(inventoryId);
+    if (existing === null) throw new InventoryNotFoundError(inventoryId);
+    if (ONCHAIN_MANAGED_STATUSES.has(existing.item.custodyStatus) || ONCHAIN_MANAGED_STATUSES.has(to)) {
+      throw new InventoryMutationForbiddenError(
+        "On-chain custody states cannot be set manually; they must be reconciled from indexed contract events"
+      );
+    }
+    assertTransitionReadiness(existing.item, to);
+    assertSafeInventoryPolicy({ ...existing.item, custodyStatus: to });
+    return this.repository.transition(inventoryId, to, expectedRevision, actor, { adminReviewed });
+  }
+
+  queueOnchainOperation(
+    inventoryId: string,
+    action: InventoryOnchainAction,
+    expectedRevision: number,
+    actor: InventoryActor,
+    multisigAddress: string
+  ): Promise<InventoryOnchainOperation> {
+    return this.repository.queueOnchainOperation(inventoryId, action, expectedRevision, actor, multisigAddress);
+  }
+
+  listOnchainOperations(inventoryId?: string, limit?: number): Promise<InventoryOnchainOperation[]> {
+    return this.repository.listOnchainOperations(inventoryId, limit);
+  }
+
+  delete(inventoryId: string, expectedRevision: number, actor: InventoryActor): Promise<void> {
+    return this.repository.delete(inventoryId, expectedRevision, actor);
+  }
+
+  #prepare(
+    rawItem: unknown,
+    timestamps: { createdAt: string; updatedAt: string },
+    forceDraft = false
+  ): InventoryItem {
+    const input = asObject(rawItem);
+    const photoUrls = photoUrlsFrom(input.photoUrls);
+    return InventoryItemSchema.parse({
+      ...input,
+      createdAt: timestamps.createdAt,
+      ...(forceDraft
+        ? { custodyStatus: "draft", dropEligibility: false, tierPoolEligible: false, tradeInEligible: false }
+        : {}),
+      photoHash: createPhotoHash(photoUrls),
+      updatedAt: timestamps.updatedAt
+    });
+  }
+}

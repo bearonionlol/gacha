@@ -9,13 +9,13 @@ export default function RedemptionPage() {
           <div className="panel-header">
             <div>
               <span className="eyebrow">Physical fulfillment</span>
-              <h1 id="redemption-title">Redemption Desk</h1>
+              <h1 id="redemption-title">Physical Redemption</h1>
             </div>
-            <span className="chain-pill">Token escrow + shipping</span>
+            <span className="chain-pill">Tracked custody</span>
           </div>
           <p>
-            Move a redeemable vault token through requested, approved, packed, shipped, and completed custody states.
-            Completion removes that collectible from Vault Ascension eligibility.
+            Exchange an eligible vault token for its physical collectible and follow each custody step from request to
+            delivery. Review shipping requirements before placing the token in redemption escrow.
           </p>
         </section>
         <RedemptionTimeline />

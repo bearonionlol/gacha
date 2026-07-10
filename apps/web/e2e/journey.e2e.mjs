@@ -9,7 +9,7 @@ test("Gacha to redemption works with seeded demo state and no wallet", async ({ 
   const machineStatus = page.locator("#gacha-machine-status");
   await page.getByRole("button", { name: "Try the gacha machine handle" }).click();
   await expect(machineStatus).toContainText("Capsules in motion");
-  await expect(machineStatus).toContainText("Practice capsule dispensed");
+  await expect(machineStatus).toContainText("Preview capsule dispensed");
 
   await page.getByRole("link", { name: "Keep in Vault", exact: true }).click();
   await expectAppRoute(page, appRoutes.vault);
@@ -30,7 +30,7 @@ test("Gacha to redemption works with seeded demo state and no wallet", async ({ 
   await followCoreNavigation(page, appRoutes.market);
   const listing = page.getByRole("article").filter({ hasText: "Pokemon TCG Charizard ex" });
   await expect(listing).toContainText("Duplicate trade-in eligible");
-  await expect(listing).toContainText("Escrow is modeled in demo mode");
+  await expect(listing).toContainText("Illustrative escrow state only");
 
   await followCoreNavigation(page, appRoutes.redemption);
   const lifecycle = page.getByLabel("Redemption lifecycle states");
@@ -40,5 +40,5 @@ test("Gacha to redemption works with seeded demo state and no wallet", async ({ 
   await expect(page.getByRole("article").filter({ hasText: "Pokemon TCG Lugia V Alternate Art" })).toContainText(
     "approved"
   );
-  await expect(page.getByLabel("Wallet connection status")).toContainText("Read only");
+  await expect(page.getByLabel("Wallet connection status")).toContainText("Demo available");
 });

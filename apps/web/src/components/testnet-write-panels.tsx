@@ -1,28 +1,38 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatEther, type Address, type Hex, type TransactionReceipt } from "viem";
-import { getDeploymentDiagnostics, loadDeploymentRegistrySnapshotFromEnv } from "../lib/deployments";
+import {
+  getDeploymentDiagnostics,
+  loadDeploymentRegistrySnapshotFromEnv,
+  resolveChainContext,
+  type ChainContext
+} from "../lib/deployments";
 import { getReadyContractRegistry, type ProtocolContracts } from "../lib/contracts/registry";
 import {
   createPackRevealRequestForPurchase,
+  createPackPurchaseRequest,
   createMarketListRequestForToken,
   createRedemptionAdminRequest,
   createRedemptionRequestForToken,
   extractPackPurchaseId,
+  getPaidActionSafetyBlockReason,
+  parseAllowlistProof,
   parsePositiveActionId,
+  parsePositiveEthAmount,
   parsePositiveTokenId,
+  protocolWriteConfig,
   type RedemptionAdminMode,
-  testnetWriteConfig
 } from "../lib/contracts/transaction-config";
-import { robinhoodTestnetChainId } from "../lib/contracts/wallet";
-import { createRobinhoodPublicClient } from "../lib/contracts/public-client";
+import { readLiveDropSummary, type LiveDropSummary } from "../lib/contracts/live-state";
+import { createConfiguredPublicClient } from "../lib/contracts/transactions";
 import { readMarketplaceListing, type LiveMarketplaceListing } from "../lib/contracts/marketplace-live";
 import { readBuybackQuote, type LiveBuybackQuote } from "../lib/contracts/buyback-live";
 import { KnownInventoryTokenPicker } from "./known-inventory-token-picker";
 import { TransactionActionPanel } from "./transaction-action-panel";
 
 type RegistryPanelState = {
+  chainContext: ChainContext;
   contracts: ProtocolContracts | null;
   fullStackReady: boolean;
   message: string;
@@ -35,57 +45,165 @@ function useClientRegistry(): RegistryPanelState {
     });
     const registry = getReadyContractRegistry(snapshot);
     const diagnostics = getDeploymentDiagnostics(snapshot);
+    const chainContext = resolveChainContext(snapshot);
 
     if (registry.contracts === null) {
-      return { contracts: null, fullStackReady: false, message: registry.status.message };
-    }
-
-    if (registry.chainId !== robinhoodTestnetChainId) {
-      return {
-        contracts: null,
-        fullStackReady: false,
-        message: "This write flow is locked to Robinhood Chain Testnet."
-      };
+      return { chainContext, contracts: null, fullStackReady: false, message: registry.status.message };
     }
 
     return {
+      chainContext,
       contracts: registry.contracts,
-      fullStackReady: diagnostics.fullStackReady,
+      fullStackReady: diagnostics.totalReadyCount === diagnostics.contracts.length,
       message: registry.status.message
     };
   }, []);
 }
 
-export function PackPurchasePanel({ onPurchaseConfirmed }: { onPurchaseConfirmed?: (purchaseId: bigint) => void }) {
+type DropReadState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; summary: LiveDropSummary }
+  | { status: "error" };
+
+export function PackPurchasePanel({
+  onDropSummaryChange,
+  onPurchaseConfirmed
+}: {
+  onDropSummaryChange?: (summary: LiveDropSummary | null) => void;
+  onPurchaseConfirmed?: (purchaseId: bigint) => void;
+}) {
   const registry = useClientRegistry();
+  const client = useMemo(() => createConfiguredPublicClient(registry.chainContext), [registry.chainContext]);
+  const [walletAccount, setWalletAccount] = useState<Address | null>(null);
+  const [dropState, setDropState] = useState<DropReadState>({ status: "idle" });
+  const [allowlistProofInput, setAllowlistProofInput] = useState("");
+  const [refresh, setRefresh] = useState(0);
   const fullStackBlocked = registry.contracts !== null && !registry.fullStackReady;
   const blockedMessage =
     "New pulls are paused until PackSale and Vault Forge V4 are deployed together. Existing purchases can still be revealed.";
+  const liveSummary = dropState.status === "ready" ? dropState.summary : null;
+  const isAllowlisted = liveSummary !== null && !/^0x0{64}$/i.test(liveSummary.allowlistRoot);
+  const allowlistProof = parseAllowlistProof(allowlistProofInput);
+  const purchaseValue = liveSummary?.price ?? protocolWriteConfig.pack.value;
+  const purchaseValueLabel = `${formatEther(purchaseValue)} ETH`;
+  const dropDisabledReason = getDropDisabledReason(
+    dropState,
+    registry.chainContext,
+    fullStackBlocked,
+    isAllowlisted,
+    allowlistProof
+  );
+  const handleAccountChange = useCallback((account: Address) => setWalletAccount(account), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (registry.contracts === null) {
+      setDropState({ status: "idle" });
+      onDropSummaryChange?.(null);
+      return () => { cancelled = true; };
+    }
+
+    setDropState({ status: "loading" });
+    void readLiveDropSummary({
+      account: walletAccount,
+      address: registry.contracts.PackSale,
+      client,
+      dropId: protocolWriteConfig.pack.dropId
+    }).then(
+      (summary) => {
+        if (cancelled) return;
+        setDropState({ status: "ready", summary });
+        onDropSummaryChange?.(summary);
+      },
+      () => {
+        if (cancelled) return;
+        setDropState({ status: "error" });
+        onDropSummaryChange?.(null);
+      }
+    );
+
+    return () => { cancelled = true; };
+  }, [client, onDropSummaryChange, refresh, registry.contracts, walletAccount]);
 
   return (
-    <TransactionActionPanel
+    <div className="transaction-panel-stack pack-purchase-stack">
+      {isAllowlisted ? (
+        <label className="transaction-input-row allowlist-proof-input" htmlFor="pack-allowlist-proof">
+          <span>Allowlist proof</span>
+          <textarea
+            aria-describedby="pack-allowlist-proof-help"
+            id="pack-allowlist-proof"
+            onChange={(event) => setAllowlistProofInput(event.target.value)}
+            placeholder="One bytes32 value per line, or [] for an explicitly empty proof"
+            value={allowlistProofInput}
+          />
+          <small id="pack-allowlist-proof-help">This drop is restricted. The public purchase function will not be used.</small>
+        </label>
+      ) : null}
+      <TransactionActionPanel
+      actionDisabledReason={dropDisabledReason}
+      chainContext={registry.chainContext}
       contracts={fullStackBlocked ? null : registry.contracts}
-      ctaLabel="Reserve pack"
-      description="Calls PackSale.purchase with the exact seeded testnet ETH value."
+      ctaLabel="Reserve capsule"
+      description={isAllowlisted
+        ? "Reserves one allowlisted capsule with the supplied Merkle proof and exact live price. The proof is verified by PackSale."
+        : "Reserves one capsule using the exact live drop price. Pull contents, wallet cap, and remaining inventory are shown before confirmation."}
+      onAccountChange={handleAccountChange}
       onConfirmed={(receipt) => {
         const purchaseId = extractPackPurchaseId(receipt);
         if (purchaseId !== null) onPurchaseConfirmed?.(purchaseId);
+        setRefresh((revision) => revision + 1);
       }}
       registryMessage={fullStackBlocked ? blockedMessage : registry.message}
       summary={[
-        { label: "Function", value: "PackSale.purchase" },
-        { label: "Drop ID", value: testnetWriteConfig.pack.dropId.toString() },
-        { label: "Value", value: testnetWriteConfig.pack.displayValue }
+        { label: "Function", value: isAllowlisted ? "PackSale.purchaseAllowlisted" : "PackSale.purchase" },
+        { label: "Drop ID", value: protocolWriteConfig.pack.dropId.toString() },
+        { label: "Exact price", value: dropState.status === "loading" ? "loading" : purchaseValueLabel },
+        { label: "Remaining", value: liveSummary?.remainingInventory.toString() ?? "preview" },
+        { label: "Wallet cap", value: liveSummary === null ? "preview" : `${liveSummary.purchasesByWallet?.toString() ?? "connect"} / ${liveSummary.maxPerWallet}` }
       ]}
-      title="Reserve pack on testnet"
-      writeRequest={(contracts) => ({
-        kind: "packPurchase",
+      title="Reserve capsule"
+      writeRequest={(contracts) => createPackPurchaseRequest({
+        allowlistProof,
+        allowlistRoot: liveSummary?.allowlistRoot ?? `0x${"0".repeat(64)}`,
         contracts,
-        dropId: testnetWriteConfig.pack.dropId,
-        value: testnetWriteConfig.pack.value
+        dropId: protocolWriteConfig.pack.dropId,
+        value: purchaseValue
       })}
-    />
+      />
+    </div>
   );
+}
+
+function getDropDisabledReason(
+  state: DropReadState,
+  chainContext: ChainContext,
+  fullStackBlocked: boolean,
+  isAllowlisted: boolean,
+  allowlistProof: readonly Hex[] | null
+): string | null {
+  if (fullStackBlocked) return "New pulls are paused until the complete protocol registry is available.";
+  const safetyBlock = getPaidActionSafetyBlockReason(chainContext);
+  if (safetyBlock !== null) return safetyBlock;
+  if (chainContext.isDemo) return null;
+  if (chainContext.isMainnet && !protocolWriteConfig.pack.dropIdIsExplicit) {
+    return "Mainnet drop ID is not explicitly configured. Purchases remain locked.";
+  }
+  if (state.status === "idle" || state.status === "loading") return "Loading the live drop price, supply, and wallet cap.";
+  if (state.status === "error") return "Live drop data could not be verified. Refresh before purchasing.";
+  if (isAllowlisted && allowlistProof === null) {
+    return "This drop requires an explicit valid bytes32 Merkle proof. Enter the proof before purchasing.";
+  }
+
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  if (now < state.summary.startTime) return "This drop has not opened yet.";
+  if (now > state.summary.endTime) return "This drop has ended.";
+  if (state.summary.remainingInventory === 0n || state.summary.sold >= state.summary.maxSupply) return "This drop is sold out.";
+  if (state.summary.purchasesByWallet !== null && state.summary.purchasesByWallet >= state.summary.maxPerWallet) {
+    return "This wallet has reached the published purchase cap.";
+  }
+  return null;
 }
 
 export function PackRevealPanel({ initialPurchaseId = null }: { initialPurchaseId?: bigint | null }) {
@@ -113,14 +231,15 @@ export function PackRevealPanel({ initialPurchaseId = null }: { initialPurchaseI
       <TransactionActionPanel
         actionDisabledReason={purchaseId === null ? "Enter a purchase ID before revealing a pack." : null}
         contracts={registry.contracts}
+        chainContext={registry.chainContext}
         ctaLabel="Reveal purchase"
-        description="Calls PackSale.reveal after testnet randomness is ready."
+        description="Reveals the reserved capsule after its randomness request is ready. A failed early attempt does not change the reserved pull."
         registryMessage={registry.message}
         summary={[
           { label: "Function", value: "PackSale.reveal" },
           { label: "Purchase ID", value: purchaseId?.toString() ?? "required" }
         ]}
-        title="Reveal purchase on testnet"
+        title="Reveal reserved capsule"
         writeRequest={(contracts) => createPackRevealRequestForPurchase(contracts, purchaseId)}
       />
     </div>
@@ -131,18 +250,42 @@ type TokenInputPanelProps = {
   inputId: string;
 };
 
+function MainnetTokenEntryNotice({ purpose }: { purpose: string }) {
+  return (
+    <aside className="known-token-picker" aria-label={`${purpose} token source`}>
+      <div className="transaction-state-row">
+        <div>
+          <span className="eyebrow">Connected Vault</span>
+          <strong>Enter the owned token ID</strong>
+        </div>
+        <span className="chain-pill">Mainnet</span>
+      </div>
+      <p>Use the token ID from the connected wallet's indexed Vault record. The seeded test-inventory scanner is not used on mainnet.</p>
+    </aside>
+  );
+}
+
 export function MarketplaceListPanel({ inputId }: TokenInputPanelProps) {
   const registry = useClientRegistry();
   const [tokenIdInput, setTokenIdInput] = useState("");
+  const [askInput, setAskInput] = useState(formatEther(protocolWriteConfig.market.price));
   const tokenId = parsePositiveTokenId(tokenIdInput);
+  const askPrice = parsePositiveEthAmount(askInput);
+  const listDisabledReason = tokenId === null
+    ? "Enter an owned inventory token ID before listing."
+    : askPrice === null
+      ? "Enter an ask greater than zero with no more than 18 decimal places."
+      : null;
 
   return (
     <div className="transaction-panel-stack">
-      <KnownInventoryTokenPicker
-        contracts={registry.contracts}
-        onSelectTokenId={(selectedTokenId) => setTokenIdInput(selectedTokenId.toString())}
-        registryMessage={registry.message}
-      />
+      {registry.chainContext.isMainnet ? <MainnetTokenEntryNotice purpose="Marketplace" /> : (
+        <KnownInventoryTokenPicker
+          contracts={registry.contracts}
+          onSelectTokenId={(selectedTokenId) => setTokenIdInput(selectedTokenId.toString())}
+          registryMessage={registry.message}
+        />
+      )}
       <label className="transaction-input-row" htmlFor={inputId}>
         <span>Owned inventory token ID</span>
         <input
@@ -154,8 +297,19 @@ export function MarketplaceListPanel({ inputId }: TokenInputPanelProps) {
           value={tokenIdInput}
         />
       </label>
+      <label className="transaction-input-row" htmlFor={`${inputId}-ask`}>
+        <span>Ask price in ETH</span>
+        <input
+          id={`${inputId}-ask`}
+          inputMode="decimal"
+          onChange={(event) => setAskInput(event.target.value)}
+          placeholder="0.015"
+          type="text"
+          value={askInput}
+        />
+      </label>
       <TransactionActionPanel
-        actionDisabledReason={tokenId === null ? "Enter an owned inventory token ID before listing." : null}
+        actionDisabledReason={listDisabledReason}
         approval={{
           ctaLabel: "Approve Marketplace",
           description: "Approves Marketplace as an ERC-1155 operator before escrow listing.",
@@ -166,17 +320,18 @@ export function MarketplaceListPanel({ inputId }: TokenInputPanelProps) {
             approved: true
           })
         }}
+        chainContext={registry.chainContext}
         contracts={registry.contracts}
         ctaLabel="List item"
         description="Calls Marketplace.list for one owned inventory-backed token."
         registryMessage={registry.message}
         summary={[
           { label: "Function", value: "Marketplace.list" },
-          { label: "Amount", value: testnetWriteConfig.market.amount.toString() },
-          { label: "Ask", value: testnetWriteConfig.market.displayPrice }
+          { label: "Amount", value: protocolWriteConfig.market.amount.toString() },
+          { label: "Ask", value: askPrice === null ? "required" : `${formatEther(askPrice)} ETH` }
         ]}
-        title="List item on testnet"
-        writeRequest={(contracts) => createMarketListRequestForToken(contracts, tokenId)}
+        title="Create escrow listing"
+        writeRequest={(contracts) => createMarketListRequestForToken(contracts, tokenId, askPrice ?? 0n)}
       />
     </div>
   );
@@ -191,7 +346,7 @@ type ListingReadState =
 
 export function MarketplaceTradePanel() {
   const registry = useClientRegistry();
-  const client = useMemo(() => createRobinhoodPublicClient(), []);
+  const client = useMemo(() => createConfiguredPublicClient(registry.chainContext), [registry.chainContext]);
   const [listingIdInput, setListingIdInput] = useState("");
   const [listingState, setListingState] = useState<ListingReadState>({ status: "idle" });
   const [refresh, setRefresh] = useState(0);
@@ -244,6 +399,7 @@ export function MarketplaceTradePanel() {
       </p>
       <TransactionActionPanel
         actionDisabledReason={disabledReason}
+        chainContext={registry.chainContext}
         contracts={registry.contracts}
         ctaLabel="Buy listing"
         description="Reads the escrowed listing first, then submits Marketplace.buy with its exact on-chain price."
@@ -265,6 +421,7 @@ export function MarketplaceTradePanel() {
       />
       <TransactionActionPanel
         actionDisabledReason={disabledReason}
+        chainContext={registry.chainContext}
         contracts={registry.contracts}
         ctaLabel="Cancel listing"
         description="Returns escrowed inventory to the connected seller. The contract rejects non-sellers."
@@ -283,6 +440,7 @@ export function MarketplaceTradePanel() {
         })}
       />
       <TransactionActionPanel
+        chainContext={registry.chainContext}
         contracts={registry.contracts}
         ctaLabel="Withdraw proceeds"
         description="Withdraws the connected wallet's credited marketplace proceeds."
@@ -299,7 +457,7 @@ export function MarketplaceTradePanel() {
 function getListingDisabledReason(listingId: bigint | null, state: ListingReadState): string | null {
   if (listingId === null) return "Enter a listing ID first.";
   if (state.status === "loading" || state.status === "idle") return "Checking the on-chain listing.";
-  if (state.status === "error") return "Listing read failed. Check the testnet RPC and retry.";
+  if (state.status === "error") return "Listing data is temporarily unavailable. Check the network connection and retry.";
   if (state.status === "missing") return "This listing ID does not exist.";
   if (!state.listing.active) return state.listing.sold ? "This listing is already sold." : "This listing is not active.";
   return null;
@@ -324,7 +482,7 @@ type BuybackReadState =
 
 export function BuybackPanel() {
   const registry = useClientRegistry();
-  const client = useMemo(() => createRobinhoodPublicClient(), []);
+  const client = useMemo(() => createConfiguredPublicClient(registry.chainContext), [registry.chainContext]);
   const [tokenIdInput, setTokenIdInput] = useState("");
   const [quoteState, setQuoteState] = useState<BuybackReadState>({ status: "idle" });
   const [refresh, setRefresh] = useState(0);
@@ -360,11 +518,13 @@ export function BuybackPanel() {
 
   return (
     <div className="transaction-panel-stack buyback-stack">
-      <KnownInventoryTokenPicker
-        contracts={registry.contracts}
-        onSelectTokenId={(selectedTokenId) => setTokenIdInput(selectedTokenId.toString())}
-        registryMessage={registry.message}
-      />
+      {registry.chainContext.isMainnet ? <MainnetTokenEntryNotice purpose="Buyback" /> : (
+        <KnownInventoryTokenPicker
+          contracts={registry.contracts}
+          onSelectTokenId={(selectedTokenId) => setTokenIdInput(selectedTokenId.toString())}
+          registryMessage={registry.message}
+        />
+      )}
       <label className="transaction-input-row" htmlFor="buyback-token-id">
         <span>Quoted inventory token ID</span>
         <input
@@ -391,6 +551,7 @@ export function BuybackPanel() {
             approved: true
           })
         }}
+        chainContext={registry.chainContext}
         contracts={registry.contracts}
         ctaLabel="Accept buyback"
         description="Transfers one quoted item into BuybackVault and credits the exact published payout."
@@ -410,6 +571,7 @@ export function BuybackPanel() {
         })}
       />
       <TransactionActionPanel
+        chainContext={registry.chainContext}
         contracts={registry.contracts}
         ctaLabel="Withdraw payout"
         description="Withdraws the connected wallet's credited BuybackVault payout."
@@ -426,7 +588,7 @@ export function BuybackPanel() {
 function getBuybackDisabledReason(tokenId: bigint | null, state: BuybackReadState): string | null {
   if (tokenId === null) return "Select an owned inventory token first.";
   if (state.status === "loading" || state.status === "idle") return "Checking the on-chain quote.";
-  if (state.status === "error") return "Quote read failed. Check the testnet RPC and retry.";
+  if (state.status === "error") return "Quote data is temporarily unavailable. Check the network connection and retry.";
   if (!state.quote.active || state.quote.price === 0n) return "No active buyback quote exists for this token.";
   return null;
 }
@@ -459,6 +621,7 @@ export function ForgeCraftPanel({
   value
 }: ForgeCraftPanelProps) {
   const registry = useClientRegistry();
+  const safetyBlock = getPaidActionSafetyBlockReason(registry.chainContext);
 
   return (
     <TransactionActionPanel
@@ -472,7 +635,8 @@ export function ForgeCraftPanel({
           approved: true
         })
       }}
-      actionDisabledReason={actionDisabledReason}
+      actionDisabledReason={safetyBlock ?? actionDisabledReason}
+      chainContext={registry.chainContext}
       contracts={registry.contracts}
       ctaLabel="Craft recipe"
       description="Submits the matched blueprint and its provenance imprint with the exact recipe fee."
@@ -485,7 +649,7 @@ export function ForgeCraftPanel({
         { label: "Fee", value: displayValue },
         { label: "Imprint", value: imprintHash }
       ]}
-      title="Craft recipe on testnet"
+      title="Craft recipe"
       writeRequest={(contracts) => ({
         kind: "forgeCraft",
         contracts,
@@ -504,12 +668,14 @@ export function RedemptionRequestPanel() {
 
   return (
     <div className="transaction-panel-stack">
-      <KnownInventoryTokenPicker
-        contracts={registry.contracts}
-        onSelectTokenId={(selectedTokenId) => setTokenIdInput(selectedTokenId.toString())}
-        registryMessage={registry.message}
-        requireRedeemable
-      />
+      {registry.chainContext.isMainnet ? <MainnetTokenEntryNotice purpose="Redemption" /> : (
+        <KnownInventoryTokenPicker
+          contracts={registry.contracts}
+          onSelectTokenId={(selectedTokenId) => setTokenIdInput(selectedTokenId.toString())}
+          registryMessage={registry.message}
+          requireRedeemable
+        />
+      )}
       <label className="transaction-input-row" htmlFor="redemption-token-id">
         <span>Redeemable inventory token ID</span>
         <input
@@ -533,12 +699,13 @@ export function RedemptionRequestPanel() {
             approved: true
           })
         }}
+        chainContext={registry.chainContext}
         contracts={registry.contracts}
         ctaLabel="Request redemption"
         description="Calls RedemptionRegistry.requestRedemption for an owned redeemable inventory token."
         registryMessage={registry.message}
         summary={[{ label: "Function", value: "RedemptionRegistry.requestRedemption" }]}
-        title="Request redemption on testnet"
+        title="Request physical redemption"
         writeRequest={(contracts) => createRedemptionRequestForToken(contracts, tokenId)}
       />
     </div>
@@ -632,9 +799,10 @@ export function RedemptionOpsPanel() {
       </div>
       <TransactionActionPanel
         actionDisabledReason={actionDisabledReason}
+        chainContext={registry.chainContext}
         contracts={registry.contracts}
         ctaLabel={action.ctaLabel}
-        description="Submits testnet fulfillment status updates. Wallet must hold REDEMPTION_ADMIN_ROLE."
+        description={`Submits fulfillment status updates on ${registry.chainContext.chainName}. Wallet must hold REDEMPTION_ADMIN_ROLE.`}
         registryMessage={registry.message}
         summary={[
           { label: "Function", value: action.functionName },

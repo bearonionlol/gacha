@@ -3,3 +3,5 @@ export * from "./lifecycle";
 export * from "./photo-hash";
 export * from "./export";
 export * from "./sample-inventory";
+export * from "./repository";
+export * from "./postgres";

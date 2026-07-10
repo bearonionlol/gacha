@@ -38,6 +38,11 @@ export const LOCAL_STAGES = [
 
 export type LocalStage = (typeof LOCAL_STAGES)[number];
 
+export type LocalEnvironmentObserver = {
+  beforeStage?(stage: LocalStage): Promise<void>;
+  afterStage?(stage: LocalStage): Promise<void>;
+};
+
 type FileSnapshot =
   | { exists: false }
   | { exists: true; contents: Buffer; mode: number };
@@ -592,7 +597,10 @@ async function waitForHardhatNode(
   );
 }
 
-export async function runLocalEnvironment(signal: AbortSignal): Promise<void> {
+export async function runLocalEnvironment(
+  signal: AbortSignal,
+  observer: LocalEnvironmentObserver = {}
+): Promise<void> {
   const repositoryRoot = path.resolve(__dirname, "../../..");
   const deploymentPath = path.join(repositoryRoot, "deployments", "localhost.json");
   const lockPath = path.join(repositoryRoot, "deployments", ".local-environment.lock");
@@ -617,11 +625,13 @@ export async function runLocalEnvironment(signal: AbortSignal): Promise<void> {
       },
       runStage: async (stage, index) => {
         console.log(`[local] ${index + 1}/${LOCAL_STAGES.length}: ${stage.label}`);
+        await observer.beforeStage?.(stage);
         await runHardhatStage(stage, signal);
         if (stage.id === "deploy") {
           const contractCount = await assertLocalDeploymentRegistry(deploymentPath);
           console.log(`[local] verified deployment registry with ${contractCount} contracts`);
         }
+        await observer.afterStage?.(stage);
       },
       stopNode: async (node) => {
         console.log("[local] stopping ephemeral Hardhat node");

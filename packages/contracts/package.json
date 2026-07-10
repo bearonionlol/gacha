@@ -9,6 +9,8 @@
     "test": "hardhat test",
     "typecheck": "tsc --noEmit",
     "local": "ts-node scripts/local.ts",
+    "rehearse:mainnet-fork": "ts-node scripts/mainnet-fork.ts",
+    "validate:mainnet-manifest": "ts-node scripts/validate-release-manifest.ts",
     "deploy:testnet": "hardhat run scripts/deploy.ts --network robinhoodTestnet",
     "deploy:mainnet": "hardhat run scripts/deploy.ts --network robinhoodMainnet",
     "seed:testnet": "hardhat run scripts/seed.ts --network robinhoodTestnet",

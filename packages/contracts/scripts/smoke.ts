@@ -2,10 +2,16 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { ethers, network } from "hardhat";
 import type { BaseContract } from "ethers";
+import { resolveRandomnessSmokePlan } from "./smoke-randomness";
+import { resolveSmokeRolePlan } from "./smoke-roles";
 
 type DeploymentFile = {
   chainId: number;
   deployer: string;
+  randomnessProviderKind?: unknown;
+  randomnessCoordinator?: unknown;
+  launchState?: unknown;
+  roleHolders?: unknown;
   contracts: Record<string, string>;
 };
 
@@ -25,16 +31,29 @@ type ItemTokenContract = RoleReadableContract & {
   BURNER_ROLE(): Promise<string>;
   URI_SETTER_ROLE(): Promise<string>;
   PAUSER_ROLE(): Promise<string>;
+  paused(): Promise<boolean>;
 };
 
 type RandomnessProviderContract = RoleReadableContract & {
   REQUESTER_ROLE(): Promise<string>;
-  REVEALER_ROLE(): Promise<string>;
   readRandomness(requestId: string): Promise<[boolean, bigint]>;
+};
+
+type CommitRevealRandomnessProviderContract = RandomnessProviderContract & {
+  REVEALER_ROLE(): Promise<string>;
+};
+
+type CoordinatorRandomnessProviderContract = RandomnessProviderContract & {
+  FUND_ADMIN_ROLE(): Promise<string>;
+  coordinator(): Promise<string>;
+  coordinatorCodeHash(): Promise<string>;
+  maxRequestFee(): Promise<bigint>;
 };
 
 type PackSaleContract = RoleReadableContract & {
   DROP_ADMIN_ROLE(): Promise<string>;
+  PAUSER_ROLE(): Promise<string>;
+  paused(): Promise<boolean>;
   REFUND_TIMEOUT(): Promise<bigint>;
   inventoryRegistry(): Promise<string>;
   itemToken(): Promise<string>;
@@ -49,6 +68,8 @@ type PackSaleContract = RoleReadableContract & {
 
 type MarketplaceContract = RoleReadableContract & {
   MARKET_ADMIN_ROLE(): Promise<string>;
+  PAUSER_ROLE(): Promise<string>;
+  paused(): Promise<boolean>;
   itemToken(): Promise<string>;
   treasury(): Promise<string>;
   feeBps(): Promise<bigint>;
@@ -57,6 +78,8 @@ type MarketplaceContract = RoleReadableContract & {
 
 type BuybackVaultContract = RoleReadableContract & {
   BUYBACK_ADMIN_ROLE(): Promise<string>;
+  PAUSER_ROLE(): Promise<string>;
+  paused(): Promise<boolean>;
   itemToken(): Promise<string>;
   totalPayoutCredit(): Promise<bigint>;
   quotes(tokenId: bigint): Promise<readonly [bigint, boolean] & { price: bigint; active: boolean }>;
@@ -75,6 +98,7 @@ type ForgeRecipeView = {
 type ForgeContract = RoleReadableContract & {
   RECIPE_ADMIN_ROLE(): Promise<string>;
   CRAFT_REVIEWER_ROLE(): Promise<string>;
+  PAUSER_ROLE(): Promise<string>;
   itemToken(): Promise<string>;
   inventoryRegistry(): Promise<string>;
   treasury(): Promise<string>;
@@ -87,6 +111,8 @@ type ForgeContract = RoleReadableContract & {
 
 type RedemptionRegistryContract = RoleReadableContract & {
   REDEMPTION_ADMIN_ROLE(): Promise<string>;
+  PAUSER_ROLE(): Promise<string>;
+  paused(): Promise<boolean>;
   itemToken(): Promise<string>;
   inventoryRegistry(): Promise<string>;
   nextRequestId(): Promise<bigint>;
@@ -97,6 +123,7 @@ type DustLedgerContract = RoleReadableContract & {
   SPENDER_ROLE(): Promise<string>;
   RESTORER_ROLE(): Promise<string>;
   PAUSER_ROLE(): Promise<string>;
+  paused(): Promise<boolean>;
 };
 
 type DustPolicyView = {
@@ -140,6 +167,7 @@ type TradeInVaultContract = RoleReadableContract & {
 type TierPoolContract = RoleReadableContract & {
   POOL_ADMIN_ROLE(): Promise<string>;
   PAUSER_ROLE(): Promise<string>;
+  paused(): Promise<boolean>;
   itemToken(): Promise<string>;
   inventoryRegistry(): Promise<string>;
   collectiblePolicy(): Promise<string>;
@@ -164,6 +192,7 @@ type VaultForgeRecipeView = {
 type VaultForgeContract = RoleReadableContract & {
   RECIPE_ADMIN_ROLE(): Promise<string>;
   PAUSER_ROLE(): Promise<string>;
+  paused(): Promise<boolean>;
   itemToken(): Promise<string>;
   inventoryRegistry(): Promise<string>;
   collectiblePolicy(): Promise<string>;
@@ -301,12 +330,41 @@ async function assertRole(
   }
 }
 
-async function assertDefaultAdmin(
+async function assertHandoffRole(
   contract: RoleReadableContract,
+  role: string,
+  expectedHolder: string,
   deployer: string,
   label: string
 ): Promise<void> {
-  await assertRole(contract, await contract.DEFAULT_ADMIN_ROLE(), deployer, `${label}.DEFAULT_ADMIN_ROLE`);
+  await assertRole(contract, role, expectedHolder, label);
+  if (
+    expectedHolder.toLowerCase() !== deployer.toLowerCase() &&
+    (await contract.hasRole(role, deployer))
+  ) {
+    throw new Error(`${label} was not revoked from deployer ${deployer}`);
+  }
+}
+
+async function assertDefaultAdmin(
+  contract: RoleReadableContract,
+  expectedAdmin: string,
+  label: string,
+  deployer: string = expectedAdmin
+): Promise<void> {
+  await assertHandoffRole(
+    contract,
+    await contract.DEFAULT_ADMIN_ROLE(),
+    expectedAdmin,
+    deployer,
+    `${label}.DEFAULT_ADMIN_ROLE`
+  );
+}
+
+async function assertPaused(contract: { paused(): Promise<boolean> }, label: string): Promise<void> {
+  if (!(await contract.paused())) {
+    throw new Error(`${label} must be paused for the mainnet canary handoff`);
+  }
 }
 
 function arraysMatch(actual: readonly bigint[], expected: readonly bigint[]): boolean {
@@ -315,6 +373,18 @@ function arraysMatch(actual: readonly bigint[], expected: readonly bigint[]): bo
 
 async function main(): Promise<void> {
   const deployment = loadDeployment();
+  const isProductionFork = process.env.GACHA_MAINNET_FORK_REHEARSAL === "true";
+  const effectiveNetworkName = isProductionFork ? "robinhoodMainnet" : network.name;
+  const randomnessPlan = resolveRandomnessSmokePlan(
+    deployment,
+    effectiveNetworkName,
+    process.env
+  );
+  const rolePlan = resolveSmokeRolePlan(
+    deployment.deployer,
+    effectiveNetworkName,
+    process.env
+  );
   const chain = await ethers.provider.getNetwork();
   if (deployment.chainId !== Number(chain.chainId)) {
     throw new Error(
@@ -322,13 +392,16 @@ async function main(): Promise<void> {
     );
   }
 
-  const deployer = deployment.deployer;
+  const deployer = rolePlan.deployer;
   const addresses = Object.fromEntries(
     contractNames.map((name) => [name, requireAddress(deployment, name)])
   ) as Record<(typeof contractNames)[number], string>;
 
   for (const name of contractNames) {
-    await assertBytecode(name, addresses[name]);
+    await assertBytecode(
+      name === "CommitRevealRandomnessProvider" ? randomnessPlan.label : name,
+      addresses[name]
+    );
   }
 
   const inventoryRegistry = (await ethers.getContractAt(
@@ -340,7 +413,7 @@ async function main(): Promise<void> {
     addresses.ItemToken
   )) as unknown as ItemTokenContract;
   const randomnessProvider = (await ethers.getContractAt(
-    "CommitRevealRandomnessProvider",
+    randomnessPlan.artifactName,
     addresses.CommitRevealRandomnessProvider
   )) as unknown as RandomnessProviderContract;
   const packSale = (await ethers.getContractAt(
@@ -398,8 +471,42 @@ async function main(): Promise<void> {
   await forge.paused();
 
   await randomnessProvider.REQUESTER_ROLE();
-  await randomnessProvider.REVEALER_ROLE();
   await randomnessProvider.readRandomness(ethers.ZeroHash);
+  let commitRevealRandomnessProvider: CommitRevealRandomnessProviderContract | undefined;
+  let coordinatorRandomnessProvider: CoordinatorRandomnessProviderContract | undefined;
+  if (randomnessPlan.kind === "commit-reveal-demo") {
+    commitRevealRandomnessProvider =
+      randomnessProvider as CommitRevealRandomnessProviderContract;
+    await commitRevealRandomnessProvider.REVEALER_ROLE();
+  } else {
+    coordinatorRandomnessProvider =
+      randomnessProvider as CoordinatorRandomnessProviderContract;
+    await assertAddressEq(
+      "CoordinatorRandomnessProvider.coordinator",
+      coordinatorRandomnessProvider.coordinator(),
+      randomnessPlan.coordinator
+    );
+    const configuredCodeHash = (await coordinatorRandomnessProvider.coordinatorCodeHash()).toLowerCase();
+    if (configuredCodeHash !== randomnessPlan.coordinatorCodeHash) {
+      throw new Error(
+        `CoordinatorRandomnessProvider.coordinatorCodeHash expected ${randomnessPlan.coordinatorCodeHash} got ${configuredCodeHash}`
+      );
+    }
+    const coordinatorCode = await ethers.provider.getCode(randomnessPlan.coordinator);
+    const actualCodeHash = ethers.keccak256(coordinatorCode).toLowerCase();
+    if (coordinatorCode === "0x" || actualCodeHash !== randomnessPlan.coordinatorCodeHash) {
+      throw new Error(
+        `Randomness coordinator bytecode hash expected ${randomnessPlan.coordinatorCodeHash} got ${actualCodeHash}`
+      );
+    }
+    const configuredMaxRequestFee = await coordinatorRandomnessProvider.maxRequestFee();
+    if (configuredMaxRequestFee !== randomnessPlan.maxRequestFeeWei) {
+      throw new Error(
+        `CoordinatorRandomnessProvider.maxRequestFee expected ${randomnessPlan.maxRequestFeeWei} got ${configuredMaxRequestFee}`
+      );
+    }
+    await coordinatorRandomnessProvider.FUND_ADMIN_ROLE();
+  }
   await packSale.REFUND_TIMEOUT();
   await packSale.nextDropId();
   await marketplace.nextListingId();
@@ -410,7 +517,52 @@ async function main(): Promise<void> {
   await vaultForge.getRecipeConfig(0n);
   await vaultForge.exchangeMagicCost();
 
-  const expectsSampleSeed = network.name === "localhost" || network.name === "robinhoodTestnet";
+  if (effectiveNetworkName === "robinhoodMainnet") {
+    if (deployment.launchState !== "paused") {
+      throw new Error("Production deployment registry launchState must be paused");
+    }
+    const roleHolders = deployment.roleHolders;
+    if (
+      typeof roleHolders !== "object" ||
+      roleHolders === null ||
+      Array.isArray(roleHolders)
+    ) {
+      throw new Error("Production deployment registry roleHolders are required");
+    }
+    const expectedRoleHolders = {
+      protocolAdmin: rolePlan.protocolAdmin,
+      operations: rolePlan.operations,
+      guardian: rolePlan.guardian,
+      treasury: rolePlan.treasury
+    };
+    for (const [label, expected] of Object.entries(expectedRoleHolders)) {
+      const actual = (roleHolders as Record<string, unknown>)[label];
+      if (
+        typeof actual !== "string" ||
+        !ethers.isAddress(actual) ||
+        ethers.getAddress(actual) !== expected
+      ) {
+        throw new Error(`Production deployment roleHolders.${label} does not match ${expected}`);
+      }
+      if ((await ethers.provider.getCode(expected)) === "0x") {
+        throw new Error(`Production role holder ${label} at ${expected} has no contract code`);
+      }
+    }
+    await Promise.all([
+      assertPaused(itemToken, "ItemToken"),
+      assertPaused(packSale, "PackSale"),
+      assertPaused(marketplace, "Marketplace"),
+      assertPaused(buybackVault, "BuybackVault"),
+      assertPaused(forge, "Forge"),
+      assertPaused(redemptionRegistry, "RedemptionRegistry"),
+      assertPaused(dustLedger, "DustLedger"),
+      assertPaused(tierPool, "TierPool"),
+      assertPaused(vaultForge, "VaultForge")
+    ]);
+  }
+
+  const expectsSampleSeed =
+    effectiveNetworkName === "localhost" || effectiveNetworkName === "robinhoodTestnet";
   if (expectsSampleSeed) {
     const nextDropId = await packSale.nextDropId();
     if (nextDropId <= 1n) {
@@ -589,15 +741,15 @@ async function main(): Promise<void> {
     packSale.randomnessProvider(),
     addresses.CommitRevealRandomnessProvider
   );
-  await assertAddressEq("PackSale.treasury", packSale.treasury(), deployer);
+  await assertAddressEq("PackSale.treasury", packSale.treasury(), rolePlan.treasury);
   await assertAddressEq("PackSale.dustLedger", packSale.dustLedger(), addresses.DustLedger);
   await assertAddressEq("PackSale.dustRewardPolicy", packSale.dustRewardPolicy(), addresses.DustRewardPolicy);
   await assertAddressEq("Marketplace.itemToken", marketplace.itemToken(), addresses.ItemToken);
-  await assertAddressEq("Marketplace.treasury", marketplace.treasury(), deployer);
+  await assertAddressEq("Marketplace.treasury", marketplace.treasury(), rolePlan.treasury);
   await assertAddressEq("BuybackVault.itemToken", buybackVault.itemToken(), addresses.ItemToken);
   await assertAddressEq("Forge.itemToken", forge.itemToken(), addresses.ItemToken);
   await assertAddressEq("Forge.inventoryRegistry", forge.inventoryRegistry(), addresses.InventoryRegistry);
-  await assertAddressEq("Forge.treasury", forge.treasury(), deployer);
+  await assertAddressEq("Forge.treasury", forge.treasury(), rolePlan.treasury);
   await assertAddressEq("RedemptionRegistry.itemToken", redemptionRegistry.itemToken(), addresses.ItemToken);
   await assertAddressEq(
     "RedemptionRegistry.inventoryRegistry",
@@ -639,35 +791,40 @@ async function main(): Promise<void> {
     vaultForge.randomnessProvider(),
     addresses.CommitRevealRandomnessProvider
   );
-  await assertAddressEq("VaultForge.treasury", vaultForge.treasury(), deployer);
+  await assertAddressEq("VaultForge.treasury", vaultForge.treasury(), rolePlan.treasury);
 
-  await assertDefaultAdmin(inventoryRegistry, deployer, "InventoryRegistry");
-  await assertDefaultAdmin(itemToken, deployer, "ItemToken");
-  await assertDefaultAdmin(randomnessProvider, deployer, "CommitRevealRandomnessProvider");
-  await assertDefaultAdmin(packSale, deployer, "PackSale");
-  await assertDefaultAdmin(marketplace, deployer, "Marketplace");
-  await assertDefaultAdmin(buybackVault, deployer, "BuybackVault");
-  await assertDefaultAdmin(forge, deployer, "Forge");
-  await assertDefaultAdmin(redemptionRegistry, deployer, "RedemptionRegistry");
-  await assertDefaultAdmin(dustLedger, deployer, "DustLedger");
-  await assertDefaultAdmin(dustRewardPolicy, deployer, "DustRewardPolicy");
-  await assertDefaultAdmin(collectibleForgePolicy, deployer, "CollectibleForgePolicy");
-  await assertDefaultAdmin(tradeInVault, deployer, "TradeInVault");
-  await assertDefaultAdmin(tierPool, deployer, "TierPool");
-  await assertDefaultAdmin(vaultPassport, deployer, "VaultPassport");
-  await assertDefaultAdmin(vaultForge, deployer, "VaultForge");
+  const defaultAdminContracts: Array<[string, RoleReadableContract]> = [
+    ["InventoryRegistry", inventoryRegistry],
+    ["ItemToken", itemToken],
+    [randomnessPlan.label, randomnessProvider],
+    ["PackSale", packSale],
+    ["Marketplace", marketplace],
+    ["BuybackVault", buybackVault],
+    ["Forge", forge],
+    ["RedemptionRegistry", redemptionRegistry],
+    ["DustLedger", dustLedger],
+    ["DustRewardPolicy", dustRewardPolicy],
+    ["CollectibleForgePolicy", collectibleForgePolicy],
+    ["TradeInVault", tradeInVault],
+    ["TierPool", tierPool],
+    ["VaultPassport", vaultPassport],
+    ["VaultForge", vaultForge]
+  ];
+  for (const [label, contract] of defaultAdminContracts) {
+    await assertDefaultAdmin(contract, rolePlan.protocolAdmin, label, deployer);
+  }
 
   await assertRole(
     randomnessProvider,
     await randomnessProvider.REQUESTER_ROLE(),
     addresses.PackSale,
-    "CommitRevealRandomnessProvider.REQUESTER_ROLE for PackSale"
+    `${randomnessPlan.label}.REQUESTER_ROLE for PackSale`
   );
   await assertRole(
     randomnessProvider,
     await randomnessProvider.REQUESTER_ROLE(),
     addresses.VaultForge,
-    "CommitRevealRandomnessProvider.REQUESTER_ROLE for VaultForge"
+    `${randomnessPlan.label}.REQUESTER_ROLE for VaultForge`
   );
   await assertRole(
     inventoryRegistry,
@@ -742,74 +899,69 @@ async function main(): Promise<void> {
     "VaultPassport.FORGE_ROLE for VaultForge"
   );
 
-  await assertRole(
-    inventoryRegistry,
-    await inventoryRegistry.INVENTORY_ADMIN_ROLE(),
-    deployer,
-    "InventoryRegistry.INVENTORY_ADMIN_ROLE for deployer"
-  );
-  await assertRole(itemToken, await itemToken.URI_SETTER_ROLE(), deployer, "ItemToken.URI_SETTER_ROLE for deployer");
-  await assertRole(itemToken, await itemToken.PAUSER_ROLE(), deployer, "ItemToken.PAUSER_ROLE for deployer");
-  await assertRole(
-    randomnessProvider,
-    await randomnessProvider.REVEALER_ROLE(),
-    deployer,
-    "CommitRevealRandomnessProvider.REVEALER_ROLE for deployer"
-  );
-  await assertRole(packSale, await packSale.DROP_ADMIN_ROLE(), deployer, "PackSale.DROP_ADMIN_ROLE for deployer");
-  await assertRole(
-    marketplace,
-    await marketplace.MARKET_ADMIN_ROLE(),
-    deployer,
-    "Marketplace.MARKET_ADMIN_ROLE for deployer"
-  );
-  await assertRole(
-    buybackVault,
-    await buybackVault.BUYBACK_ADMIN_ROLE(),
-    deployer,
-    "BuybackVault.BUYBACK_ADMIN_ROLE for deployer"
-  );
-  await assertRole(forge, await forge.RECIPE_ADMIN_ROLE(), deployer, "Forge.RECIPE_ADMIN_ROLE for deployer");
-  await assertRole(
-    forge,
-    await forge.CRAFT_REVIEWER_ROLE(),
-    deployer,
-    "Forge.CRAFT_REVIEWER_ROLE for deployer"
-  );
-  await assertRole(
-    redemptionRegistry,
-    await redemptionRegistry.REDEMPTION_ADMIN_ROLE(),
-    deployer,
-    "RedemptionRegistry.REDEMPTION_ADMIN_ROLE for deployer"
-  );
-  await assertRole(dustLedger, await dustLedger.PAUSER_ROLE(), deployer, "DustLedger.PAUSER_ROLE for deployer");
-  await assertRole(
-    dustRewardPolicy,
-    await dustRewardPolicy.POLICY_ADMIN_ROLE(),
-    deployer,
-    "DustRewardPolicy.POLICY_ADMIN_ROLE for deployer"
-  );
-  await assertRole(
-    collectibleForgePolicy,
-    await collectibleForgePolicy.POLICY_ADMIN_ROLE(),
-    deployer,
-    "CollectibleForgePolicy.POLICY_ADMIN_ROLE for deployer"
-  );
-  await assertRole(
-    tradeInVault,
-    await tradeInVault.CUSTODY_ADMIN_ROLE(),
-    deployer,
-    "TradeInVault.CUSTODY_ADMIN_ROLE for deployer"
-  );
-  await assertRole(tierPool, await tierPool.POOL_ADMIN_ROLE(), deployer, "TierPool.POOL_ADMIN_ROLE for deployer");
-  await assertRole(tierPool, await tierPool.PAUSER_ROLE(), deployer, "TierPool.PAUSER_ROLE for deployer");
-  await assertRole(
-    vaultForge,
-    await vaultForge.RECIPE_ADMIN_ROLE(),
-    deployer,
-    "VaultForge.RECIPE_ADMIN_ROLE for deployer"
-  );
-  await assertRole(vaultForge, await vaultForge.PAUSER_ROLE(), deployer, "VaultForge.PAUSER_ROLE for deployer");
+  const operationsRoles: Array<[RoleReadableContract, string, string]> = [
+    [
+      inventoryRegistry,
+      await inventoryRegistry.INVENTORY_ADMIN_ROLE(),
+      "InventoryRegistry.INVENTORY_ADMIN_ROLE"
+    ],
+    [itemToken, await itemToken.URI_SETTER_ROLE(), "ItemToken.URI_SETTER_ROLE"],
+    [packSale, await packSale.DROP_ADMIN_ROLE(), "PackSale.DROP_ADMIN_ROLE"],
+    [marketplace, await marketplace.MARKET_ADMIN_ROLE(), "Marketplace.MARKET_ADMIN_ROLE"],
+    [buybackVault, await buybackVault.BUYBACK_ADMIN_ROLE(), "BuybackVault.BUYBACK_ADMIN_ROLE"],
+    [forge, await forge.RECIPE_ADMIN_ROLE(), "Forge.RECIPE_ADMIN_ROLE"],
+    [forge, await forge.CRAFT_REVIEWER_ROLE(), "Forge.CRAFT_REVIEWER_ROLE"],
+    [
+      redemptionRegistry,
+      await redemptionRegistry.REDEMPTION_ADMIN_ROLE(),
+      "RedemptionRegistry.REDEMPTION_ADMIN_ROLE"
+    ],
+    [dustRewardPolicy, await dustRewardPolicy.POLICY_ADMIN_ROLE(), "DustRewardPolicy.POLICY_ADMIN_ROLE"],
+    [
+      collectibleForgePolicy,
+      await collectibleForgePolicy.POLICY_ADMIN_ROLE(),
+      "CollectibleForgePolicy.POLICY_ADMIN_ROLE"
+    ],
+    [tradeInVault, await tradeInVault.CUSTODY_ADMIN_ROLE(), "TradeInVault.CUSTODY_ADMIN_ROLE"],
+    [tierPool, await tierPool.POOL_ADMIN_ROLE(), "TierPool.POOL_ADMIN_ROLE"],
+    [vaultForge, await vaultForge.RECIPE_ADMIN_ROLE(), "VaultForge.RECIPE_ADMIN_ROLE"]
+  ];
+  if (commitRevealRandomnessProvider !== undefined) {
+    operationsRoles.push([
+      commitRevealRandomnessProvider,
+      await commitRevealRandomnessProvider.REVEALER_ROLE(),
+      "CommitRevealRandomnessProvider.REVEALER_ROLE"
+    ]);
+  }
+  if (coordinatorRandomnessProvider !== undefined) {
+    operationsRoles.push([
+      coordinatorRandomnessProvider,
+      await coordinatorRandomnessProvider.FUND_ADMIN_ROLE(),
+      "CoordinatorRandomnessProvider.FUND_ADMIN_ROLE"
+    ]);
+  }
+  for (const [contract, role, label] of operationsRoles) {
+    await assertHandoffRole(contract, role, rolePlan.operations, deployer, label);
+  }
+
+  const guardianRoles: Array<[RoleReadableContract, string, string]> = [
+    [itemToken, await itemToken.PAUSER_ROLE(), "ItemToken.PAUSER_ROLE"],
+    [packSale, await packSale.PAUSER_ROLE(), "PackSale.PAUSER_ROLE"],
+    [marketplace, await marketplace.PAUSER_ROLE(), "Marketplace.PAUSER_ROLE"],
+    [buybackVault, await buybackVault.PAUSER_ROLE(), "BuybackVault.PAUSER_ROLE"],
+    [forge, await forge.PAUSER_ROLE(), "Forge.PAUSER_ROLE"],
+    [
+      redemptionRegistry,
+      await redemptionRegistry.PAUSER_ROLE(),
+      "RedemptionRegistry.PAUSER_ROLE"
+    ],
+    [dustLedger, await dustLedger.PAUSER_ROLE(), "DustLedger.PAUSER_ROLE"],
+    [tierPool, await tierPool.PAUSER_ROLE(), "TierPool.PAUSER_ROLE"],
+    [vaultForge, await vaultForge.PAUSER_ROLE(), "VaultForge.PAUSER_ROLE"]
+  ];
+  for (const [contract, role, label] of guardianRoles) {
+    await assertHandoffRole(contract, role, rolePlan.guardian, deployer, label);
+  }
 
   console.log(`smoke checks passed for ${network.name}`);
 }

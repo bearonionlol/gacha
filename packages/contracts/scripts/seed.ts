@@ -82,6 +82,8 @@ type PackSaleContract = BaseContract & {
     startTime: BigNumberish;
     endTime: BigNumberish;
     maxSupply: BigNumberish;
+    maxPerWallet: BigNumberish;
+    allowlistRoot: string;
     inventoryIds: string[];
     metadataUris: string[];
     bonusTokenIds: BigNumberish[];
@@ -648,6 +650,8 @@ async function seedDrop(packSale: PackSaleContract, item: InventoryItem): Promis
       startTime: latestBlock.timestamp - 60,
       endTime: latestBlock.timestamp + 30 * 24 * 60 * 60,
       maxSupply: 1,
+      maxPerWallet: 1,
+      allowlistRoot: ethers.ZeroHash,
       inventoryIds: [item.inventoryId],
       metadataUris: [metadataUriFor(item.inventoryId)],
       bonusTokenIds: sampleStarterMaterials.map((material) => material.tokenId),

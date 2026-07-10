@@ -2,7 +2,7 @@
 
 This runbook defines controls for moving the protocol package from testnet to Robinhood mainnet. It is a gated operational checklist, not approval to launch.
 
-Mainnet deployment requires legal review, inventory freeze, randomness-provider review or replacement, deployment registry review, admin role review, explicit RPC override, and a private smoke run before any public launch.
+Mainnet deployment requires legal review, inventory freeze, randomness-provider review, deployment registry review, admin role review, an authenticated RPC, a pinned mainnet-fork rehearsal, and a private smoke run before any public launch.
 
 ## Scope
 
@@ -14,12 +14,21 @@ The default `CommitRevealRandomnessProvider` is a testnet/demo adapter. It is op
 
 ## Required Environment
 
-Set environment variables explicitly for the deployment session:
+Set environment variables explicitly for the deployment session. Never reuse a key that has appeared in chat, source control, logs, or tickets:
 
 ```bash
 export DEPLOYER_PRIVATE_KEY=0x...
 export ROBINHOOD_TESTNET_RPC_URL=https://...
 export ROBINHOOD_MAINNET_RPC_URL=https://...
+export MAINNET_RELEASE_DEPLOYER_ADDRESS=0x...
+export MAINNET_RELEASE_ADMIN_ADDRESS=0x...
+export MAINNET_RELEASE_OPERATIONS_ADDRESS=0x...
+export MAINNET_RELEASE_GUARDIAN_ADDRESS=0x...
+export MAINNET_RELEASE_TREASURY_ADDRESS=0x...
+export MAINNET_DEPLOYMENT_CONFIRMATION=DEPLOY_ROBINHOOD_MAINNET_PAUSED_CANARY
+export ROBINHOOD_RANDOMNESS_COORDINATOR_ADDRESS=0x...
+export ROBINHOOD_RANDOMNESS_COORDINATOR_CODEHASH=0x...
+export ROBINHOOD_RANDOMNESS_MAX_REQUEST_FEE_WEI=...
 ```
 
 `ROBINHOOD_MAINNET_RPC_URL` must be an explicit, reviewed RPC override for the deployment window. Do not rely on an implicit default for mainnet launch operations.
@@ -36,11 +45,13 @@ Complete these gates before running `deploy:mainnet`:
 - Randomness-provider review: replace the default `CommitRevealRandomnessProvider` with approved fair/verifiable randomness before production launch, or explicitly document that any mainnet deployment is only a controlled unsafe rehearsal.
 - Deployment registry review: confirm the expected `deployments/robinhoodMainnet.json` path, chain ID, deployer address, and address review procedure.
 - Admin role review: approve the deployer and post-deploy role holders for default admin and operational roles.
+- Role separation: use distinct addresses for the deployer, protocol-admin multisig, operations multisig, guardian multisig, and treasury. The deployment script rejects reused addresses.
 - Treasury review: approve treasury addresses used by `PackSale`, `Marketplace`, `Forge`, and `VaultForge`.
 - Forge economy review: approve every recipe input, retained catalyst, fee, wallet cap, global output cap, schedule, metadata hash, and reviewer allowance policy. Reconcile reserved output capacity before activating overlapping recipes.
 - Vault Ascension review: approve each Dust reward distribution, mixed-Dust cost, fee, claim cap, Passport transition, duplicate-proof rule, and timeout. Reconcile tier-wide and set-specific real-card pool depth against all guided reservations.
 - Liquidity review: approve marketplace fee basis points, buyback quote methodology, maximum inventory exposure, and independently reserved native liquidity. Buyback liquidity is a balance-sheet commitment, not protocol revenue.
 - Launch plan review: define a private smoke window and a separate public launch decision.
+- Fork rehearsal: complete `docs/mainnet-fork-rehearsal.md` at a pinned mainnet block and archive a production-candidate manifest proving the exact coordinator, treasury, role handoff, deployer revocation, and paused launch state.
 
 ## Verification Before Deployment
 
@@ -56,6 +67,12 @@ git diff --check
 
 Do not deploy to mainnet with failing verification.
 
+## Mainnet-Fork Rehearsal
+
+When Robinhood testnet ETH is unavailable, use the pinned mainnet-fork path as the network-state rehearsal. It consumes no testnet ETH and cannot broadcast to mainnet. Follow `docs/mainnet-fork-rehearsal.md` and review the schema in `docs/mainnet-release-manifest.md`.
+
+The fork path is required before a direct mainnet canary, but it does not waive the security audit, legal, custody, inventory, fulfillment, monitoring, multisig, or production-randomness gates. Canary activation is a separate reviewed multisig operation after deployment and smoke approval.
+
 ## Mainnet Deployment
 
 Deploy to Robinhood mainnet only after every pre-migration gate is complete:
@@ -64,7 +81,7 @@ Deploy to Robinhood mainnet only after every pre-migration gate is complete:
 pnpm --filter @gacha/contracts deploy:mainnet
 ```
 
-The deploy script blocks `robinhoodMainnet` by default while it deploys `CommitRevealRandomnessProvider`. For a controlled rehearsal only, operators may set `ALLOW_OPERATOR_RANDOMNESS_MAINNET=true`; this override is unsafe for production drops and must be recorded in the deployment notes.
+The mainnet deploy path requires a pinned `CoordinatorRandomnessProvider` configuration. It verifies the configured coordinator bytecode against `ROBINHOOD_RANDOMNESS_COORDINATOR_CODEHASH` before deploying. The fork-only commit/reveal override is never accepted as mainnet randomness configuration.
 
 The deployment script writes `deployments/robinhoodMainnet.json` with the network name, chain ID, deployer, timestamp, and contract addresses.
 

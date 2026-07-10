@@ -1,14 +1,31 @@
-import { robinhoodChainTestnet } from "@gacha/shared";
-import { createWalletClient, custom, type Abi, type Address, type Hash, type Hex, type TransactionReceipt } from "viem";
+import {
+  createPublicClient,
+  createWalletClient,
+  custom,
+  http,
+  type Abi,
+  type Address,
+  type Hash,
+  type Hex,
+  type TransactionReceipt
+} from "viem";
 import { buybackVaultAbi, forgeAbi, itemTokenAbi, marketplaceAbi, packSaleAbi, redemptionRegistryAbi } from "./abis";
 import type { ProtocolContractName, ProtocolContracts } from "./registry";
 import type { Eip1193Provider } from "./wallet";
+import { loadChainContextFromEnv, type ChainContext } from "../deployments";
 
 export type ApprovalOperator = Extract<ProtocolContractName, "Marketplace" | "BuybackVault" | "Forge" | "RedemptionRegistry">;
 
 export type WriteRequest =
   | {
       kind: "packPurchase";
+      contracts: ProtocolContracts;
+      dropId: bigint;
+      value: bigint;
+    }
+  | {
+      kind: "packPurchaseAllowlisted";
+      allowlistProof: readonly Hex[];
       contracts: ProtocolContracts;
       dropId: bigint;
       value: bigint;
@@ -105,7 +122,16 @@ export type PreparedWrite = {
 };
 
 export type ReceiptClient = {
-  waitForTransactionReceipt: (parameters: { hash: Hash; timeout?: number }) => Promise<TransactionReceipt>;
+  waitForTransactionReceipt: (parameters: {
+    hash: Hash;
+    timeout?: number;
+    onReplaced?: (replacement: TransactionReplacement) => void;
+  }) => Promise<TransactionReceipt>;
+};
+
+export type TransactionReplacement = {
+  reason: "cancelled" | "replaced" | "repriced";
+  transaction: { hash: Hash };
 };
 
 export function createWriteRequest(request: WriteRequest): PreparedWrite {
@@ -115,6 +141,16 @@ export function createWriteRequest(request: WriteRequest): PreparedWrite {
       abi: packSaleAbi as Abi,
       functionName: "purchase",
       args: [request.dropId],
+      value: request.value
+    };
+  }
+
+  if (request.kind === "packPurchaseAllowlisted") {
+    return {
+      address: request.contracts.PackSale,
+      abi: packSaleAbi as Abi,
+      functionName: "purchaseAllowlisted",
+      args: [request.dropId, request.allowlistProof],
       value: request.value
     };
   }
@@ -243,19 +279,49 @@ function createRedemptionAdminWrite(
   };
 }
 
-export function createInjectedWalletClient(provider: Eip1193Provider) {
+export function createConfiguredPublicClient(
+  context: ChainContext = loadChainContextFromEnv(),
+  rpcUrl = process.env.NEXT_PUBLIC_GACHA_RPC_URL
+) {
+  return createPublicClient({
+    chain: context.chain,
+    transport: http(resolveConfiguredRpcUrl(context, rpcUrl))
+  });
+}
+
+export function resolveConfiguredRpcUrl(context: ChainContext, rpcUrl?: string): string {
+  const configuredRpc = rpcUrl?.trim();
+  if (!configuredRpc) return context.chain.rpcUrls.default.http[0]!;
+
+  const normalized = configuredRpc.toLowerCase();
+  const clearlyWrongNetwork = context.isMainnet
+    ? normalized.includes("testnet")
+    : context.mode === "testnet" && normalized.includes("mainnet") && !normalized.includes("testnet");
+
+  return clearlyWrongNetwork ? context.chain.rpcUrls.default.http[0]! : configuredRpc;
+}
+
+export function createInjectedWalletClient(
+  provider: Eip1193Provider,
+  context: ChainContext = loadChainContextFromEnv()
+) {
   return createWalletClient({
-    chain: robinhoodChainTestnet,
+    chain: context.chain,
     transport: custom(provider)
   });
 }
 
-export async function sendPreparedWrite(provider: Eip1193Provider, account: Address, request: PreparedWrite) {
-  const walletClient = createInjectedWalletClient(provider);
+export async function sendPreparedWrite(
+  provider: Eip1193Provider,
+  account: Address,
+  request: PreparedWrite,
+  context: ChainContext = loadChainContextFromEnv()
+) {
+  const walletClient = createInjectedWalletClient(provider, context);
 
   return walletClient.writeContract({
     account,
-    chain: robinhoodChainTestnet,
+    chain: context.chain,
     address: request.address,
     abi: request.abi,
     functionName: request.functionName,
@@ -264,19 +330,50 @@ export async function sendPreparedWrite(provider: Eip1193Provider, account: Addr
   });
 }
 
-export function waitForTransactionReceipt(client: ReceiptClient, hash: Hash): Promise<TransactionReceipt> {
-  return client.waitForTransactionReceipt({ hash, timeout: 60_000 });
+export async function switchWalletToChain(provider: Eip1193Provider, context: ChainContext): Promise<void> {
+  const chainId = `0x${context.chainId.toString(16)}`;
+
+  try {
+    await provider.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId }]
+    });
+  } catch (error) {
+    if (!hasProviderErrorCode(error, 4902)) throw error;
+
+    await provider.request({
+      method: "wallet_addEthereumChain",
+      params: [{
+        chainId,
+        chainName: context.chainName,
+        nativeCurrency: context.chain.nativeCurrency,
+        rpcUrls: [...context.chain.rpcUrls.default.http],
+        blockExplorerUrls: [context.explorerUrl]
+      }]
+    });
+  }
+}
+
+export function waitForTransactionReceipt(
+  client: ReceiptClient,
+  hash: Hash,
+  onReplaced?: (replacement: TransactionReplacement) => void
+): Promise<TransactionReceipt> {
+  return client.waitForTransactionReceipt({ hash, timeout: 90_000, onReplaced });
 }
 
 export function formatTransactionHash(hash: Hash): string {
   return `${hash.slice(0, 6)}...${hash.slice(-4)}`;
 }
 
-export function buildExplorerTxUrl(hash: Hash): string {
-  return `${robinhoodChainTestnet.blockExplorers.default.url}/tx/${hash}`;
+export function buildExplorerTxUrl(hash: Hash, context: ChainContext = loadChainContextFromEnv()): string {
+  return `${context.explorerUrl}/tx/${hash}`;
 }
 
-export function getTransactionErrorMessage(error: unknown): string {
+export function getTransactionErrorMessage(
+  error: unknown,
+  context: ChainContext = loadChainContextFromEnv()
+): string {
   if (hasProviderErrorCode(error, 4001)) {
     return "Transaction rejected in wallet.";
   }
@@ -284,7 +381,11 @@ export function getTransactionErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message.toLowerCase() : "";
 
   if (message.includes("insufficient funds") || message.includes("exceeds the balance")) {
-    return "Wallet does not have enough testnet ETH for this action.";
+    return `Wallet does not have enough ${context.nativeCurrencySymbol} for this action and network gas.`;
+  }
+
+  if (message.includes("timeout") || message.includes("timed out")) {
+    return "Confirmation is taking longer than expected. The transaction may still settle; check its explorer status before retrying.";
   }
 
   return "Transaction failed or could not be confirmed. Review wallet details and retry.";

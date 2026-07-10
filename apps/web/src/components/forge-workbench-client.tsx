@@ -28,10 +28,10 @@ import {
   type ForgeFrame,
   type ForgeSlot
 } from "../lib/forge-model";
-import { loadDeploymentRegistrySnapshotFromEnv } from "../lib/deployments";
+import { loadDeploymentRegistrySnapshotFromEnv, resolveChainContext } from "../lib/deployments";
 import { getForgeWalletSnapshot, type ForgeWalletSnapshot } from "../lib/contracts/forge-live";
-import { createRobinhoodPublicClient } from "../lib/contracts/public-client";
 import { getReadyContractRegistry } from "../lib/contracts/registry";
+import { createConfiguredPublicClient } from "../lib/contracts/transactions";
 import { ForgeCraftPanel } from "./testnet-write-panels";
 
 export type ForgeRecipeView = {
@@ -158,15 +158,15 @@ export function ForgeWorkbenchClient({ ingredients, materials, recipes }: ForgeW
     ...catalystRequirements.map((requirement) => requirement.tokenId)
   ])];
   const requiredTokenKey = requiredTokenIds.map(String).join(":");
-  const registry = useMemo(
-    () => getReadyContractRegistry(
-      loadDeploymentRegistrySnapshotFromEnv({
+  const deploymentSnapshot = useMemo(
+    () => loadDeploymentRegistrySnapshotFromEnv({
         NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY: process.env.NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY
-      })
-    ),
+      }),
     []
   );
-  const publicClient = useMemo(() => createRobinhoodPublicClient(), []);
+  const registry = useMemo(() => getReadyContractRegistry(deploymentSnapshot), [deploymentSnapshot]);
+  const chainContext = useMemo(() => resolveChainContext(deploymentSnapshot), [deploymentSnapshot]);
+  const publicClient = useMemo(() => createConfiguredPublicClient(chainContext), [chainContext]);
 
   useEffect(() => {
     let cancelled = false;
@@ -703,7 +703,7 @@ function getCraftDisabledReason(input: {
     return "Checking live recipe and wallet balances.";
   }
   if (input.liveForgeState.status === "error") {
-    return "Live recipe verification failed. Retry after checking the testnet RPC.";
+    return "Live recipe verification failed. Check the active network connection and retry.";
   }
 
   const snapshot = input.liveForgeState.snapshot;

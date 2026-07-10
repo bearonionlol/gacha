@@ -36,6 +36,7 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
 
     bytes32 public constant RECIPE_ADMIN_ROLE = keccak256("RECIPE_ADMIN_ROLE");
     bytes32 public constant CRAFT_REVIEWER_ROLE = keccak256("CRAFT_REVIEWER_ROLE");
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     uint256 public constant MAX_BURN_INPUTS = 9;
     uint256 public constant MAX_CATALYSTS = 3;
 
@@ -403,11 +404,11 @@ contract Forge is AccessControl, Pausable, ReentrancyGuard {
         _withdrawTreasuryFeesTo(to);
     }
 
-    function pause() external onlyRole(RECIPE_ADMIN_ROLE) {
+    function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
-    function unpause() external onlyRole(RECIPE_ADMIN_ROLE) {
+    function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
 

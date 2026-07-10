@@ -5,6 +5,10 @@ import path from "path";
 import ts from "typescript";
 import "@nomicfoundation/hardhat-ethers";
 import "@nomicfoundation/hardhat-chai-matchers";
+import {
+  loadHardhatForkingConfig,
+  loadLoopbackRpcUrl
+} from "./scripts/mainnet-fork-config";
 
 loadEnv();
 
@@ -118,6 +122,8 @@ const ROBINHOOD_TESTNET_RPC_URL =
 const ROBINHOOD_MAINNET_RPC_URL =
   process.env.ROBINHOOD_MAINNET_RPC_URL ?? ROBINHOOD_CHAIN_MAINNET_RPC_URL;
 const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY;
+const hardhatFork = loadHardhatForkingConfig(process.env);
+const localRpcUrl = loadLoopbackRpcUrl(process.env);
 
 const deployerAccounts = DEPLOYER_PRIVATE_KEY ? [DEPLOYER_PRIVATE_KEY] : [];
 
@@ -133,10 +139,19 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
-      chainId: 31337
+      chainId: 31337,
+      ...(hardhatFork === undefined
+        ? {}
+        : {
+            forking: {
+              url: hardhatFork.rpcUrl,
+              blockNumber: hardhatFork.blockNumber,
+              httpHeaders: hardhatFork.rpcHeaders
+            }
+          })
     },
     localhost: {
-      url: "http://127.0.0.1:8545",
+      url: localRpcUrl,
       chainId: 31337
     },
     robinhoodTestnet: {

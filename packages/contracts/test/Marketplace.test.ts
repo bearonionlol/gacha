@@ -352,6 +352,7 @@ describe("Marketplace", function () {
   it("restricts market controls to the market admin role", async function () {
     const { marketplace, marketAdmin, other, recipient } = await deployProtocolFixture();
     const role = await marketplace.MARKET_ADMIN_ROLE();
+    const pauserRole = await marketplace.PAUSER_ROLE();
 
     await expect(marketplace.connect(other).setFeeBps(1n))
       .to.be.revertedWithCustomError(marketplace, "AccessControlUnauthorizedAccount")
@@ -363,13 +364,13 @@ describe("Marketplace", function () {
 
     await expect(marketplace.connect(other).pause())
       .to.be.revertedWithCustomError(marketplace, "AccessControlUnauthorizedAccount")
-      .withArgs(other.address, role);
+      .withArgs(other.address, pauserRole);
 
     await marketplace.connect(marketAdmin).pause();
 
     await expect(marketplace.connect(other).unpause())
       .to.be.revertedWithCustomError(marketplace, "AccessControlUnauthorizedAccount")
-      .withArgs(other.address, role);
+      .withArgs(other.address, pauserRole);
 
     await marketplace.connect(marketAdmin).unpause();
   });

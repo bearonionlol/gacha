@@ -27,8 +27,9 @@ describe("app navigation", () => {
 
     expect(screen.getByRole("link", { name: /Gacha Markets home/i })).toBeInTheDocument();
     expect(screen.getByText("Gacha Markets")).toBeInTheDocument();
-    expect(screen.getByText("Vault Arcade")).toBeInTheDocument();
-    expect(screen.getByText(/Robinhood Chain testnet build/i)).toBeInTheDocument();
+    expect(screen.getByText(/Demo vault arcade/i)).toBeInTheDocument();
+    expect(screen.getByText(/Demo mode uses illustrative inventory/i)).toBeInTheDocument();
     expect(screen.getByText(/resale descriptors/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Skip to content/i })).toHaveAttribute("href", "#app-main");
   });
 });

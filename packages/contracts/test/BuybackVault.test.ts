@@ -239,6 +239,7 @@ describe("BuybackVault", function () {
   it("restricts buyback controls to the buyback admin role", async function () {
     const { buybackVault, buybackAdmin, other, recipient } = await deployProtocolFixture();
     const role = await buybackVault.BUYBACK_ADMIN_ROLE();
+    const pauserRole = await buybackVault.PAUSER_ROLE();
 
     await expect(buybackVault.connect(other).setQuote(buybackTokenId, quotePrice, true))
       .to.be.revertedWithCustomError(buybackVault, "AccessControlUnauthorizedAccount")
@@ -254,13 +255,13 @@ describe("BuybackVault", function () {
 
     await expect(buybackVault.connect(other).pause())
       .to.be.revertedWithCustomError(buybackVault, "AccessControlUnauthorizedAccount")
-      .withArgs(other.address, role);
+      .withArgs(other.address, pauserRole);
 
     await buybackVault.connect(buybackAdmin).pause();
 
     await expect(buybackVault.connect(other).unpause())
       .to.be.revertedWithCustomError(buybackVault, "AccessControlUnauthorizedAccount")
-      .withArgs(other.address, role);
+      .withArgs(other.address, pauserRole);
 
     await buybackVault.connect(buybackAdmin).unpause();
   });

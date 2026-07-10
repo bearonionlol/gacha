@@ -1,9 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Address, Hash } from "viem";
+import type { Address, Hash, TransactionReceipt } from "viem";
 import { TransactionActionPanel } from "../transaction-action-panel";
 import type { ProtocolContracts } from "../../lib/contracts/registry";
 import type { PreparedWrite } from "../../lib/contracts/transactions";
+import { resolveChainContext } from "../../lib/deployments";
 
 const contracts: ProtocolContracts = {
   InventoryRegistry: "0x32657A9d0AFe229E132dA8610a23D6d32d22C4Ee",
@@ -23,6 +24,19 @@ const packWrite = {
   args: [1n],
   value: 10_000_000_000_000_000n
 } satisfies PreparedWrite;
+
+const testnetChainContext = resolveChainContext({
+  network: "robinhoodTestnet",
+  chainId: 46630,
+  contracts: {}
+});
+
+const unsafeMainnetChainContext = resolveChainContext({
+  network: "robinhoodMainnet",
+  chainId: 4663,
+  randomnessProviderKind: "commit-reveal-demo",
+  contracts: {}
+});
 
 function setEthereumProvider(request: ReturnType<typeof vi.fn>) {
   Object.defineProperty(window, "ethereum", {
@@ -46,9 +60,10 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof TransactionA
   render(
     <TransactionActionPanel
       contracts={contracts}
+      chainContext={testnetChainContext}
       ctaLabel="Reserve pack"
-      description="Calls PackSale.purchase with the displayed testnet ETH value."
-      title="Reserve pack on testnet"
+      description="Calls PackSale.purchase with the displayed ETH value."
+      title="Reserve capsule"
       writeRequest={() => packWrite}
       receiptClient={receiptClient}
       sendWrite={sendWrite}
@@ -62,6 +77,7 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof TransactionA
 describe("TransactionActionPanel", () => {
   afterEach(() => {
     Reflect.deleteProperty(window, "ethereum");
+    window.localStorage.clear();
   });
 
   it("does not request accounts or send transactions on render", async () => {
@@ -70,7 +86,7 @@ describe("TransactionActionPanel", () => {
     const { sendWrite } = renderPanel();
 
     await waitFor(() => expect(screen.getByRole("button", { name: /Connect wallet/i })).toBeInTheDocument());
-    expect(request).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: "eth_requestAccounts" }));
     expect(sendWrite).not.toHaveBeenCalled();
   });
 
@@ -114,7 +130,7 @@ describe("TransactionActionPanel", () => {
 
     await waitFor(() => expect(screen.getByText(/confirmed in block 42/i)).toBeInTheDocument());
     expect(screen.getByText("0x1234...cdef")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /View on explorer/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /View on Blockscout/i })).toHaveAttribute(
       "href",
       expect.stringContaining("/tx/0x1234567890abcdef")
     );
@@ -143,7 +159,7 @@ describe("TransactionActionPanel", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Connect wallet/i }));
     fireEvent.click(await screen.findByRole("button", { name: /Reserve pack/i }));
 
-    await waitFor(() => expect(screen.getByText(/Transaction failed or could not be confirmed/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/transaction reverted on-chain/i)).toBeInTheDocument());
     expect(screen.queryByText(/confirmed in block 42/i)).not.toBeInTheDocument();
   });
 
@@ -195,6 +211,28 @@ describe("TransactionActionPanel", () => {
     expect(screen.getByRole("button", { name: /Retry Reserve pack/i })).toBeInTheDocument();
   });
 
+  it("prevents duplicate submission while a timed-out hash may still settle", async () => {
+    const request = vi.fn(async ({ method }: { method: string }) => {
+      if (method === "eth_accounts" || method === "eth_requestAccounts") {
+        return ["0x1234567890abcdef1234567890abcdef12345678"];
+      }
+      if (method === "eth_chainId") return "0xb626";
+      return null;
+    });
+    const receiptClient = {
+      waitForTransactionReceipt: vi.fn().mockRejectedValue(new Error("Timed out while waiting for receipt"))
+    };
+    setEthereumProvider(request);
+    const { sendWrite } = renderPanel({ receiptClient });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Reserve pack/i }));
+
+    expect(await screen.findByText(/may still settle/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Status unresolved/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Check status/i })).toBeInTheDocument();
+    expect(sendWrite).toHaveBeenCalledTimes(1);
+  });
+
   it("renders approval and final action controls together", async () => {
     const request = vi.fn(async ({ method }: { method: string }) => {
       if (method === "eth_requestAccounts") {
@@ -236,5 +274,64 @@ describe("TransactionActionPanel", () => {
 
     expect(functionValue).toHaveClass("breakable-value");
     expect(functionValue).toHaveAttribute("title", "RedemptionRegistry.requestRedemption");
+  });
+
+  it("tracks a repriced replacement by its new hash", async () => {
+    const request = vi.fn(async ({ method }: { method: string }) => {
+      if (method === "eth_accounts" || method === "eth_requestAccounts") {
+        return ["0x1234567890abcdef1234567890abcdef12345678"];
+      }
+      if (method === "eth_chainId") return "0xb626";
+      return null;
+    });
+    const replacementHash = `0x${"ab".repeat(32)}` as Hash;
+    const receiptClient = {
+      waitForTransactionReceipt: vi.fn(async (parameters: {
+        onReplaced?: (replacement: { reason: "repriced"; transaction: { hash: Hash } }) => void;
+      }) => {
+        parameters.onReplaced?.({ reason: "repriced", transaction: { hash: replacementHash } });
+        return new Promise<never>(() => undefined);
+      })
+    };
+    setEthereumProvider(request);
+    renderPanel({ receiptClient });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Reserve pack/i }));
+
+    expect(await screen.findByText(/repriced the transaction/i)).toBeInTheDocument();
+    expect(screen.getByText("0xabab...abab")).toBeInTheDocument();
+  });
+
+  it("recovers a pending transaction after refresh", async () => {
+    const hash = `0x${"12".repeat(32)}` as Hash;
+    window.localStorage.setItem(
+      "gacha:pending-transaction:46630:reserve-capsule",
+      JSON.stringify({ hash, label: "Reserve pack", submittedAt: Date.now() })
+    );
+    let resolveReceipt!: (value: TransactionReceipt) => void;
+    const receiptClient = {
+      waitForTransactionReceipt: vi.fn(() => new Promise<TransactionReceipt>((resolve) => {
+        resolveReceipt = resolve;
+      }))
+    };
+    renderPanel({ receiptClient });
+
+    expect(await screen.findByText(/Recovered after refresh/i)).toBeInTheDocument();
+    resolveReceipt({ blockNumber: 88n, status: "success", transactionHash: hash } as TransactionReceipt);
+    expect(await screen.findByText(/Confirmed in block 88/i)).toBeInTheDocument();
+    expect(window.localStorage.getItem("gacha:pending-transaction:46630:reserve-capsule")).toBeNull();
+  });
+
+  it("blocks every mainnet write when production randomness metadata is unsafe", async () => {
+    const request = vi.fn(async ({ method }: { method: string }) => {
+      if (method === "eth_accounts") return ["0x1234567890abcdef1234567890abcdef12345678"];
+      if (method === "eth_chainId") return "0x1237";
+      return null;
+    });
+    setEthereumProvider(request);
+    const { sendWrite } = renderPanel({ chainContext: unsafeMainnetChainContext });
+
+    expect(await screen.findByText(/randomnessProviderKind=pinned-coordinator/i)).toBeInTheDocument();
+    expect(sendWrite).not.toHaveBeenCalled();
   });
 });

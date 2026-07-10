@@ -3,11 +3,12 @@ pragma solidity 0.8.28;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {InventoryRegistry} from "./InventoryRegistry.sol";
 import {ItemToken} from "./ItemToken.sol";
 
-contract RedemptionRegistry is AccessControl, ReentrancyGuard, ERC1155Holder {
+contract RedemptionRegistry is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     enum RedemptionStatus {
         Requested,
         Approved,
@@ -18,6 +19,7 @@ contract RedemptionRegistry is AccessControl, ReentrancyGuard, ERC1155Holder {
     }
 
     bytes32 public constant REDEMPTION_ADMIN_ROLE = keccak256("REDEMPTION_ADMIN_ROLE");
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     struct RedemptionRequest {
         address requester;
@@ -68,7 +70,7 @@ contract RedemptionRegistry is AccessControl, ReentrancyGuard, ERC1155Holder {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
-    function requestRedemption(uint256 tokenId) external nonReentrant returns (uint256 requestId) {
+    function requestRedemption(uint256 tokenId) external nonReentrant whenNotPaused returns (uint256 requestId) {
         InventoryRegistry.InventoryRecord memory record = inventoryRegistry.getInventoryByTokenId(tokenId);
         if (!record.redeemable) {
             revert InventoryNotRedeemable(tokenId);
@@ -156,6 +158,14 @@ contract RedemptionRegistry is AccessControl, ReentrancyGuard, ERC1155Holder {
 
         emit RedemptionStatusUpdated(requestId, previousStatus, RedemptionStatus.Cancelled);
         emit RedemptionCancelled(requestId, reason);
+    }
+
+    function pause() external onlyRole(PAUSER_ROLE) {
+        _pause();
+    }
+
+    function unpause() external onlyRole(PAUSER_ROLE) {
+        _unpause();
     }
 
     function onERC1155Received(

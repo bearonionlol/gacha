@@ -1,9 +1,21 @@
 import { signalRun } from "../arcade";
-import { resolveDeploymentStatus } from "../deployments";
+import { requiredDeploymentContracts, resolveChainContext, resolveDeploymentStatus } from "../deployments";
 import { activeDrop, marketListings } from "../game-state";
 import { collectibleCards, vaultStats } from "../inventory";
 
 describe("Phase 3 app state", () => {
+  const completeContracts = Object.fromEntries(
+    requiredDeploymentContracts.map((name, index) => [
+      name,
+      `0x${(index + 1).toString(16).padStart(40, "0")}`
+    ])
+  );
+  const productionRoleHolders = {
+    protocolAdmin: "0x0000000000000000000000000000000000000101",
+    operations: "0x0000000000000000000000000000000000000102",
+    guardian: "0x0000000000000000000000000000000000000103",
+    treasury: "0x0000000000000000000000000000000000000104"
+  };
   it("maps sample inventory into collectible cards and vault stats", () => {
     expect(collectibleCards.map((card) => card.title)).toContain("Pokemon TCG Charizard ex");
     expect(vaultStats.totalItems).toBeGreaterThanOrEqual(3);
@@ -135,6 +147,50 @@ describe("Phase 3 app state", () => {
     expect(status.chainName).toBe("Unsupported chain");
     expect(status.chainId).toBe(31337);
     expect(status.message).toMatch(/unsupported chain/i);
+  });
+
+  it("fails mainnet writes closed unless a nonzero pinned coordinator is declared", () => {
+    const missingMetadata = resolveChainContext({ network: "robinhoodMainnet", chainId: 4663, contracts: {} });
+    const demoRandomness = resolveChainContext({
+      network: "robinhoodMainnet",
+      chainId: 4663,
+      randomnessProviderKind: "commit-reveal-demo",
+      contracts: {}
+    });
+    const productionRandomness = resolveChainContext({
+      network: "robinhoodMainnet",
+      chainId: 4663,
+      randomnessProviderKind: "pinned-coordinator",
+      randomnessCoordinator: "0x0000000000000000000000000000000000001234",
+      launchState: "active",
+      roleHolders: productionRoleHolders,
+      contracts: completeContracts
+    });
+
+    expect(missingMetadata.writesEnabled).toBe(false);
+    expect(demoRandomness.writesEnabled).toBe(false);
+    expect(productionRandomness.writesEnabled).toBe(true);
+    expect(productionRandomness.readiness).toBe("ready");
+    expect(productionRandomness.chainId).toBe(4663);
+    expect(productionRandomness.explorerUrl).toContain("blockscout.com");
+  });
+
+  it("keeps a fully deployed paused mainnet registry explicitly read-only", () => {
+    const context = resolveChainContext({
+      network: "robinhoodMainnet",
+      chainId: 4663,
+      randomnessProviderKind: "pinned-coordinator",
+      randomnessCoordinator: "0x0000000000000000000000000000000000001234",
+      launchState: "paused",
+      roleHolders: productionRoleHolders,
+      contracts: completeContracts
+    });
+
+    expect(context.readiness).toBe("incomplete");
+    expect(context.writesEnabled).toBe(false);
+    expect(context.transactionLabel).toBe("Mainnet read-only");
+    expect(context.writeBlockReason).toMatch(/launchState is paused/i);
+    expect(context.disclosure).toMatch(/currently read-only/i);
   });
 
   it("keeps Signal Run separate from pull odds", () => {

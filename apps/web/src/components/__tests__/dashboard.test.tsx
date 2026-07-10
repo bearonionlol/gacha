@@ -20,7 +20,8 @@ describe("dashboard", () => {
     expect(screen.getByText(/Fire shards/i)).toBeInTheDocument();
     expect(screen.getAllByText("Magic Dust").length).toBeGreaterThan(0);
     expect(screen.getByText(/50% Echo, 35% Prism, and 15% Star/i)).toBeInTheDocument();
-    expect(screen.getByText(/randomness adapter is operator-controlled/i)).toBeInTheDocument();
+    expect(screen.getByText(/Illustrative demo pull/i)).toBeInTheDocument();
+    expect(screen.getByText(/Demo interactions do not submit transactions/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Keep in vault/i })).toHaveAttribute("href", "/vault");
     expect(screen.getByRole("link", { name: /List on market/i })).toHaveAttribute("href", "/market");
   });
@@ -68,16 +69,16 @@ describe("dashboard", () => {
   it("shows the live protocol panel without blocking demo browsing", async () => {
     render(await HomePage());
 
-    expect(screen.getByRole("heading", { name: /Live protocol offline/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Demo protocol preview/i })).toBeInTheDocument();
   });
 
-  it("shows testnet write panels on dashboard actions without roadmap labels", async () => {
+  it("shows environment-aware transaction previews without roadmap labels", async () => {
     render(await HomePage());
 
-    expect(screen.getByText(/Reserve pack on testnet/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Reserve capsule/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/PackSale\.purchase/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/0\.01 ETH/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Wallet action/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Preview only/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText(/Phase 4B/i)).not.toBeInTheDocument();
   });
 
@@ -101,13 +102,13 @@ describe("dashboard", () => {
 
     expect(screen.getByText(/New pulls are paused until PackSale and Vault Forge V4 are deployed together/i)).toBeInTheDocument();
     expect(screen.getByText(/Existing purchases can still be revealed/i)).toBeInTheDocument();
-    expect(screen.getByText(/Reveal purchase on testnet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Reveal reserved capsule/i)).toBeInTheDocument();
   });
 
   it("shows Phase 4C pack reveal operations on the dashboard", async () => {
     render(await HomePage());
 
-    expect(screen.getByText(/Reveal purchase on testnet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Reveal reserved capsule/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Purchase ID/i)).toBeInTheDocument();
     expect(screen.getAllByText(/PackSale\.reveal/i).length).toBeGreaterThan(0);
   });

@@ -85,13 +85,16 @@ async function increaseTime(seconds: number): Promise<void> {
 
 async function activeDropParams(overrides: Partial<CreateDropParams> = {}): Promise<CreateDropParams> {
   const now = await latestTimestamp();
+  const maxSupply = overrides.maxSupply ?? 2n;
 
   return {
     name: dropName,
     price: packPrice,
     startTime: now,
     endTime: now + 3600,
-    maxSupply: 2n,
+    maxSupply,
+    maxPerWallet: overrides.maxPerWallet ?? maxSupply,
+    allowlistRoot: ethers.ZeroHash,
     inventoryIds,
     metadataUris,
     bonusTokenIds: [],
@@ -191,6 +194,15 @@ function commitmentFor(seed: string): string {
   return ethers.keccak256(abiCoder.encode(["bytes32"], [seed]));
 }
 
+function allowlistLeaf(account: string): string {
+  return ethers.keccak256(ethers.getBytes(ethers.keccak256(abiCoder.encode(["address"], [account]))));
+}
+
+function allowlistPair(left: string, right: string): string {
+  const ordered = BigInt(left) < BigInt(right) ? [left, right] : [right, left];
+  return ethers.keccak256(ethers.concat(ordered));
+}
+
 async function makeRandomnessReady(
   randomnessProvider: Awaited<ReturnType<typeof deployProtocolFixture>>["randomnessProvider"],
   revealer: Awaited<ReturnType<typeof deployProtocolFixture>>["revealer"],
@@ -209,9 +221,53 @@ describe("PackSale", function () {
 
     await expect(packSale.connect(dropAdmin).createDrop(await activeDropParams()))
       .to.emit(packSale, "DropCreated")
-      .withArgs(1n, dropName, packPrice, anyValue, anyValue, 2n, 3n);
+      .withArgs(1n, dropName, packPrice, anyValue, anyValue, 2n, 2n, ethers.ZeroHash, 3n);
 
     expect(await packSale.remainingInventory(1n)).to.equal(3n);
+    const summary = await packSale.getDropSummary(1n);
+    expect(summary.name).to.equal(dropName);
+    expect(summary.price).to.equal(packPrice);
+    expect(summary.maxSupply).to.equal(2n);
+    expect(summary.maxPerWallet).to.equal(2n);
+    expect(summary.allowlistRoot).to.equal(ethers.ZeroHash);
+    expect(summary.sold).to.equal(0n);
+    expect(summary.pendingPurchases).to.equal(0n);
+    expect(summary.remainingInventory).to.equal(3n);
+  });
+
+  it("requires a nonzero per-wallet cap no larger than the drop supply", async function () {
+    const { registry, inventoryAdmin, packSale, dropAdmin } = await deployProtocolFixture();
+    await anchorInventories(registry, inventoryAdmin);
+
+    await expect(
+      packSale.connect(dropAdmin).createDrop(await activeDropParams({ maxPerWallet: 0n }))
+    ).to.be.revertedWithCustomError(packSale, "InvalidDropParams");
+    await expect(
+      packSale
+        .connect(dropAdmin)
+        .createDrop(await activeDropParams({ maxSupply: 1n, maxPerWallet: 2n }))
+    ).to.be.revertedWithCustomError(packSale, "InvalidDropParams");
+  });
+
+  it("caps each drop so purchase and cleanup loops remain executable", async function () {
+    const { packSale, dropAdmin } = await deployProtocolFixture();
+    const maximum = await packSale.MAX_DROP_INVENTORY();
+    const oversizedCount = Number(maximum) + 1;
+    const oversizedInventory = Array.from({ length: oversizedCount }, (_, index) => `inventory-${index}`);
+    const oversizedMetadata = oversizedInventory.map((inventoryId) => `ipfs://items/${inventoryId}.json`);
+
+    await expect(
+      packSale.connect(dropAdmin).createDrop(
+        await activeDropParams({
+          maxSupply: 1n,
+          maxPerWallet: 1n,
+          inventoryIds: oversizedInventory,
+          metadataUris: oversizedMetadata
+        })
+      )
+    )
+      .to.be.revertedWithCustomError(packSale, "DropInventoryLimitExceeded")
+      .withArgs(BigInt(oversizedCount), maximum);
   });
 
   it("delivers a transparent game-material starter bundle with every revealed physical card", async function () {
@@ -408,6 +464,53 @@ describe("PackSale", function () {
     await expect(packSale.connect(recipient).purchase(dropId, { value: packPrice }))
       .to.be.revertedWithCustomError(packSale, "SoldOut")
       .withArgs(dropId);
+  });
+
+  it("enforces a drop-level wallet cap that an expired refund restores exactly", async function () {
+    const now = await latestTimestamp();
+    const {
+      fixture: { packSale, buyer },
+      dropId
+    } = await createActiveDrop({
+      maxSupply: 2n,
+      maxPerWallet: 1n,
+      endTime: now + refundTimeoutSeconds + 3600
+    });
+
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    expect(await packSale.purchasesByWallet(dropId, buyer.address)).to.equal(1n);
+    await expect(packSale.connect(buyer).purchase(dropId, { value: packPrice }))
+      .to.be.revertedWithCustomError(packSale, "WalletPurchaseLimit")
+      .withArgs(dropId, buyer.address, 1n);
+
+    await increaseTime(refundTimeoutSeconds + 1);
+    await packSale.connect(buyer).refundExpiredPurchase(1n);
+    expect(await packSale.purchasesByWallet(dropId, buyer.address)).to.equal(0n);
+    await packSale.connect(buyer).purchase(dropId, { value: packPrice });
+    expect(await packSale.purchasesByWallet(dropId, buyer.address)).to.equal(1n);
+  });
+
+  it("enforces an optional Merkle allowlist for a private canary drop", async function () {
+    const fixture = await deployProtocolFixture();
+    const { registry, inventoryAdmin, packSale, dropAdmin, buyer, recipient, other } = fixture;
+    await anchorInventories(registry, inventoryAdmin);
+    const buyerLeaf = allowlistLeaf(buyer.address);
+    const recipientLeaf = allowlistLeaf(recipient.address);
+    const allowlistRoot = allowlistPair(buyerLeaf, recipientLeaf);
+    await packSale.connect(dropAdmin).createDrop(
+      await activeDropParams({ maxSupply: 2n, maxPerWallet: 1n, allowlistRoot })
+    );
+
+    await expect(packSale.connect(buyer).purchase(1n, { value: packPrice }))
+      .to.be.revertedWithCustomError(packSale, "InvalidAllowlistProof")
+      .withArgs(1n, buyer.address);
+    await expect(
+      packSale.connect(other).purchaseAllowlisted(1n, [recipientLeaf], { value: packPrice })
+    )
+      .to.be.revertedWithCustomError(packSale, "InvalidAllowlistProof")
+      .withArgs(1n, other.address);
+    await packSale.connect(buyer).purchaseAllowlisted(1n, [recipientLeaf], { value: packPrice });
+    expect(await packSale.purchasesByWallet(1n, buyer.address)).to.equal(1n);
   });
 
   it("rejects purchases while paused", async function () {
