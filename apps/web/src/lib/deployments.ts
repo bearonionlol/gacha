@@ -108,6 +108,12 @@ type DeploymentRegistryEnv = Record<string, string | undefined>;
 const evmAddressPattern = /^0x[a-fA-F0-9]{40}$/;
 const zeroAddressPattern = /^0x0{40}$/i;
 
+function readPublicDeploymentEnv(): DeploymentRegistryEnv {
+  return {
+    NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY: process.env.NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY
+  };
+}
+
 function isDeploymentAddress(value: string): boolean {
   return evmAddressPattern.test(value) && !zeroAddressPattern.test(value);
 }
@@ -134,9 +140,9 @@ function isDeploymentRegistrySnapshot(value: unknown): value is DeploymentRegist
 }
 
 export function loadDeploymentRegistrySnapshotFromEnv(
-  env: DeploymentRegistryEnv = process.env
+  env?: DeploymentRegistryEnv
 ): DeploymentRegistrySnapshot | null {
-  const rawRegistry = env.NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY;
+  const rawRegistry = (env ?? readPublicDeploymentEnv()).NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY;
   if (rawRegistry === undefined || rawRegistry.trim() === "" || rawRegistry === "demo") {
     return null;
   }
@@ -326,7 +332,7 @@ export function resolveChainContext(snapshot: DeploymentRegistrySnapshot | null)
   };
 }
 
-export function loadChainContextFromEnv(env: DeploymentRegistryEnv = process.env): ChainContext {
+export function loadChainContextFromEnv(env?: DeploymentRegistryEnv): ChainContext {
   return resolveChainContext(loadDeploymentRegistrySnapshotFromEnv(env));
 }
 

@@ -36,7 +36,7 @@ function StatusIcon({ status }: { status: PublicTestnetReadinessStatus }) {
 }
 
 export function PublicTestnetReadinessPanel({
-  env = process.env
+  env
 }: PublicTestnetReadinessPanelProps) {
   const readiness = getPublicTestnetReadiness(env);
   const diagnostics = getDeploymentDiagnostics(loadDeploymentRegistrySnapshotFromEnv(env));

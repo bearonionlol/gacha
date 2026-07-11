@@ -2,15 +2,24 @@
   "network": "robinhoodTestnet",
   "chainId": 46630,
   "deployer": "0x9Ec1807165F0e887ffDaA044b2224f33Aa49a6dE",
-  "timestamp": "2026-07-09T19:49:33.993Z",
+  "timestamp": "2026-07-11T16:50:01.585Z",
+  "randomnessProviderKind": "commit-reveal-demo",
+  "launchState": "active",
   "contracts": {
-    "InventoryRegistry": "0x04B324CDEE6D1443f30134B777317b0a9F11B3Ea",
-    "ItemToken": "0xef65196dF201f3FA0156C166B745cAF4Aa7f36F1",
-    "CommitRevealRandomnessProvider": "0x84B5239049A8c749F19D04E29561cDE6EA0CD177",
-    "PackSale": "0xF892a8e349F03355eD50FDA6e62c6e512A90a087",
-    "Marketplace": "0xF16F3Fdf97FA8704f90233c959299C2DBa5576c1",
-    "BuybackVault": "0x435923268970757561eD3054a0Ad22d9C7B6F3eB",
-    "Forge": "0xbF35aF94B3863389c30625d9031aeEF86a539b44",
-    "RedemptionRegistry": "0x270821B69f6e640d2bE51Dbf79E39AE38BE3fB01"
+    "InventoryRegistry": "0x2e06aFaCb5551FFDc646a3B861AFDD4992Ca5f18",
+    "ItemToken": "0xaA3647999e10061Ced32bC80286A2b548da6Af8e",
+    "CommitRevealRandomnessProvider": "0x71565CabdC69C85436D0bd981Bf327a64ee3834F",
+    "PackSale": "0xf8ce8CBf0331701BA5d8BcFB0b71c982F40c4122",
+    "Marketplace": "0xB1Ba30D6E24C15750574312B1d05a7015A981be9",
+    "BuybackVault": "0x0443686043146589c8517FC1E7C6d7d68A17Ca1b",
+    "Forge": "0x6E3709Dc0097027D5771057d5Bb715BFD3dC0FF2",
+    "RedemptionRegistry": "0x0618a027967EC3cc0646Db7A354Edf30be550716",
+    "DustLedger": "0xa02Ba6609F5DC216c1A48ecB821AD9169F49E275",
+    "DustRewardPolicy": "0x69Cb55D4b834A415741F07e35772A2857cb80542",
+    "CollectibleForgePolicy": "0xceC3c1d885aa620AF445916975ef88B6e01a9Cd3",
+    "TradeInVault": "0xA3457F90b223116B95f4802BEEdF1aAE5555b3FD",
+    "TierPool": "0xe69CB02ea22bAcf9874ab629c1CD62cc6F47f233",
+    "VaultPassport": "0x602510e22a3888f46d1B31629769D41AdDD50c25",
+    "VaultForge": "0x7fE2C37dC2ae0942c77eA218f290f208e3182168"
   }
 }
