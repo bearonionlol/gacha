@@ -44,6 +44,7 @@ export type LiveDropSummary = {
 type LiveProtocolOptions = {
   registrySnapshot: DeploymentRegistrySnapshot | null;
   client?: ProtocolReadClient;
+  dropId?: bigint;
   timeoutMs?: number;
 };
 
@@ -148,6 +149,7 @@ function withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
 export async function getLiveProtocolSnapshot({
   registrySnapshot,
   client,
+  dropId = 1n,
   timeoutMs = DEFAULT_READ_TIMEOUT_MS
 }: LiveProtocolOptions): Promise<LiveProtocolSnapshot> {
   const registry = getReadyContractRegistry(registrySnapshot);
@@ -179,7 +181,7 @@ export async function getLiveProtocolSnapshot({
         readBigint(readClient, registry.contracts.PackSale, packSaleAbi as Abi, "nextDropId"),
         readBigint(readClient, registry.contracts.PackSale, packSaleAbi as Abi, "nextPurchaseId"),
         readBigint(readClient, registry.contracts.PackSale, packSaleAbi as Abi, "treasuryCredit"),
-        readBigint(readClient, registry.contracts.PackSale, packSaleAbi as Abi, "remainingInventory", [1n]).catch(() => 0n),
+        readBigint(readClient, registry.contracts.PackSale, packSaleAbi as Abi, "remainingInventory", [dropId]).catch(() => 0n),
         readBigint(readClient, registry.contracts.Marketplace, marketplaceAbi as Abi, "nextListingId"),
         readBigint(readClient, registry.contracts.Marketplace, marketplaceAbi as Abi, "feeBps"),
         readBigint(readClient, registry.contracts.Forge, forgeAbi as Abi, "nextRecipeId"),
@@ -195,7 +197,7 @@ export async function getLiveProtocolSnapshot({
       metrics: [
         { label: "Drops created", value: bigintToString(nextDropId - 1n), detail: "PackSale.nextDropId" },
         { label: "Purchases opened", value: bigintToString(nextPurchaseId - 1n), detail: "PackSale.nextPurchaseId" },
-        { label: "Drop 1 inventory", value: bigintToString(remainingInventory), detail: "PackSale.remainingInventory" },
+        { label: `Drop ${dropId} inventory`, value: bigintToString(remainingInventory), detail: "PackSale.remainingInventory" },
         { label: "Treasury credit", value: `${bigintToString(treasuryCredit)} wei`, detail: "PackSale.treasuryCredit" },
         { label: "Listings created", value: bigintToString(nextListingId - 1n), detail: "Marketplace.nextListingId" },
         { label: "Market fee", value: `${bigintToString(feeBps)} bps`, detail: "Marketplace.feeBps" },

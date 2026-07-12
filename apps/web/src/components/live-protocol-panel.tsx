@@ -1,10 +1,12 @@
 import { RadioTower } from "lucide-react";
 import { getLiveProtocolSnapshot } from "../lib/contracts/live-state";
+import { protocolWriteConfig } from "../lib/contracts/transaction-config";
 import { loadDeploymentRegistrySnapshotFromEnv } from "../lib/deployments";
 
 export async function LiveProtocolPanel() {
   const snapshot = await getLiveProtocolSnapshot({
-    registrySnapshot: loadDeploymentRegistrySnapshotFromEnv()
+    registrySnapshot: loadDeploymentRegistrySnapshotFromEnv(),
+    dropId: protocolWriteConfig.pack.dropId
   });
 
   return (

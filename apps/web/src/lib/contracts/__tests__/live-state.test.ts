@@ -40,8 +40,10 @@ describe("live protocol state", () => {
   });
 
   it("returns ready metrics from a read client", async () => {
+    const reads: { args?: readonly unknown[]; functionName: string }[] = [];
     const client: ProtocolReadClient = {
-      readContract: async ({ functionName }) => {
+      readContract: async ({ functionName, args }) => {
+        reads.push({ functionName, ...(args === undefined ? {} : { args }) });
         const values: Record<string, bigint> = {
           nextDropId: 2n,
           nextPurchaseId: 1n,
@@ -57,11 +59,13 @@ describe("live protocol state", () => {
       }
     };
 
-    const snapshot = await getLiveProtocolSnapshot({ registrySnapshot: registry, client });
+    const snapshot = await getLiveProtocolSnapshot({ registrySnapshot: registry, client, dropId: 2n });
 
     expect(snapshot.state).toBe("ready");
     expect(snapshot.metrics.map((metric) => metric.label)).toContain("Drops created");
+    expect(snapshot.metrics.find((metric) => metric.label === "Drop 2 inventory")?.value).toBe("3");
     expect(snapshot.metrics.find((metric) => metric.label === "Market fee")?.value).toBe("250 bps");
+    expect(reads).toContainEqual({ functionName: "remainingInventory", args: [2n] });
   });
 
   it("returns degraded state when an RPC read fails", async () => {
