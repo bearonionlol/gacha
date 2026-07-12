@@ -25,6 +25,7 @@ export type AdminSession = {
 };
 
 export type AdminRuntimeConfig = {
+  allowSingleCustodyPhotoOnTestnet: boolean;
   allowedOrigins: readonly string[];
   authRateLimits: {
     challengeClient: number;

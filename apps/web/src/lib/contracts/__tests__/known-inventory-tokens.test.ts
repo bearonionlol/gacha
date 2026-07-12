@@ -33,7 +33,8 @@ function createClient(balances: Record<string, bigint>): TokenReadClient {
           const tokenIds: Record<string, bigint> = {
             "inv-sample-pkm-raw-001": 1001n,
             "inv-sample-op-raw-001": 1002n,
-            "inv-sample-graded-001": 1003n
+            "inv-sample-graded-001": 1003n,
+            "inv-op06-case-001": 1004n
           };
           return tokenIds[inventoryId] ?? 0n;
         }
@@ -87,7 +88,29 @@ describe("known inventory token scanner", () => {
 
     expect(result.status).toBe("empty");
     expect(result.tokens).toEqual([]);
-    expect(result.message).toMatch(/No seeded inventory tokens found/i);
+    expect(result.message).toMatch(/No known inventory tokens found/i);
+  });
+
+  it("recognizes the reviewed OP-06 case without making it trade-in eligible", async () => {
+    const result = await readKnownInventoryTokenStates({
+      account,
+      contracts,
+      client: createClient({ "1004": 1n })
+    });
+
+    expect(result.status).toBe("ready");
+    expect(result.tokens).toEqual([
+      expect.objectContaining({
+        inventoryId: "inv-op06-case-001",
+        title: "Wings of the Captain OP-06 Sealed Booster Case",
+        tokenId: 1004n,
+        balance: 1n,
+        redeemable: true,
+        grailTier: "grail",
+        forgeTier: 4,
+        tradeInEligible: false
+      })
+    ]);
   });
 
   it("returns sanitized degraded state when a token read fails", async () => {
@@ -101,7 +124,7 @@ describe("known inventory token scanner", () => {
 
     expect(result.status).toBe("degraded");
     expect(result.tokens).toEqual([]);
-    expect(result.message).toMatch(/Unable to scan known seeded inventory/i);
+    expect(result.message).toMatch(/Unable to scan known inventory/i);
     expect(result.message).not.toContain("secret.example");
   });
 });

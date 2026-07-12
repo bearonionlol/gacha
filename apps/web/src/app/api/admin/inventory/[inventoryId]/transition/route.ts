@@ -29,7 +29,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       body.to as InventoryStatus,
       parseExpectedRevision(body.expectedRevision),
       createInventoryActor(session),
-      body.adminReviewed === true
+      {
+        adminReviewed: body.adminReviewed === true,
+        allowSingleCustodyPhotoOnTestnet: runtime.config.allowSingleCustodyPhotoOnTestnet
+      }
     );
     return noStoreJson({ record });
   } catch (error) {

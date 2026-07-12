@@ -11,6 +11,7 @@ const secondAccount = privateKeyToAccount("0x22222222222222222222222222222222222
 const origin = "https://ops.example.com";
 
 const createConfig = (overrides: Partial<AdminRuntimeConfig["authRateLimits"]> = {}): AdminRuntimeConfig => ({
+  allowSingleCustodyPhotoOnTestnet: false,
   allowedOrigins: [origin],
   authRateLimits: {
     challengeClient: 30,

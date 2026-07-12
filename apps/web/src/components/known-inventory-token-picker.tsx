@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { Address } from "viem";
-import { Search, Wallet } from "lucide-react";
+import { PackageCheck, Search, Store, Wallet } from "lucide-react";
 import {
   readKnownInventoryTokenStates,
   type KnownInventoryToken,
@@ -23,10 +24,11 @@ import {
 
 type KnownInventoryTokenPickerProps = {
   contracts: ProtocolContracts | null;
-  onSelectTokenId: (tokenId: bigint) => void;
+  onSelectTokenId?: (tokenId: bigint) => void;
   readClient?: TokenReadClient;
   registryMessage?: string;
   requireRedeemable?: boolean;
+  mode?: "select" | "vault";
 };
 
 type ScanState =
@@ -37,6 +39,7 @@ type ScanState =
 
 export function KnownInventoryTokenPicker({
   contracts,
+  mode = "select",
   onSelectTokenId,
   readClient,
   registryMessage = "Live contracts are not configured for this environment.",
@@ -75,7 +78,7 @@ export function KnownInventoryTokenPicker({
       const account = accounts[0] as Address | undefined;
 
       if (account === undefined) {
-        setScanState({ status: "failed", message: "Connect a wallet before scanning known seeded inventory." });
+        setScanState({ status: "failed", message: "Connect a wallet before scanning known inventory." });
         return;
       }
 
@@ -97,11 +100,11 @@ export function KnownInventoryTokenPicker({
   }
 
   return (
-    <aside className="known-token-picker" aria-label="Known seeded inventory token picker">
+    <aside className="known-token-picker" aria-label="Known inventory token picker">
       <div className="transaction-state-row">
         <div>
-          <span className="eyebrow">Known seeded inventory</span>
-          <strong>Wallet token scan</strong>
+          <span className="eyebrow">Known inventory</span>
+          <strong>{mode === "vault" ? "Connected wallet holdings" : "Wallet token scan"}</strong>
         </div>
         {scanState.status === "ready" ? (
           <span className="chain-pill">{formatWalletAddress(scanState.account)}</span>
@@ -110,7 +113,7 @@ export function KnownInventoryTokenPicker({
         )}
       </div>
       <p>
-        Scan known seeded inventory only. Manual token ID entry stays available for non-seeded test tokens and future
+        Scan reviewed inventory IDs against the connected wallet. Manual token ID entry remains available for future
         indexer-backed inventory.
       </p>
       <button className="secondary-action" disabled={scanState.status === "scanning"} onClick={() => void handleScan()} type="button">
@@ -119,7 +122,12 @@ export function KnownInventoryTokenPicker({
       </button>
 
       {scanState.status === "ready" ? (
-        <TokenScanResult tokens={tokens} message={tokens.length > 0 ? scanState.scan.message : "No redeemable seeded inventory tokens found for this wallet."} onSelectTokenId={onSelectTokenId} />
+        <TokenScanResult
+          message={tokens.length > 0 ? scanState.scan.message : "No redeemable known inventory tokens found for this wallet."}
+          mode={mode}
+          onSelectTokenId={onSelectTokenId}
+          tokens={tokens}
+        />
       ) : null}
 
       {scanState.status === "failed" ? (
@@ -133,11 +141,13 @@ export function KnownInventoryTokenPicker({
 
 function TokenScanResult({
   message,
+  mode,
   onSelectTokenId,
   tokens
 }: {
   message: string;
-  onSelectTokenId: (tokenId: bigint) => void;
+  mode: "select" | "vault";
+  onSelectTokenId?: (tokenId: bigint) => void;
   tokens: KnownInventoryToken[];
 }) {
   if (tokens.length === 0) {
@@ -149,7 +159,7 @@ function TokenScanResult({
   }
 
   return (
-    <div className="known-token-list" role="list" aria-label="Owned seeded inventory tokens">
+    <div className="known-token-list" role="list" aria-label="Owned known inventory tokens">
       {tokens.map((token) => (
         <article className="known-token-card" key={token.inventoryId} role="listitem">
           <div>
@@ -158,9 +168,22 @@ function TokenScanResult({
             <span>Forge Tier {token.forgeTier} / {token.tradeInEligible ? "trade-in eligible" : "protected hold"}</span>
             <code>{token.tokenId.toString()}</code>
           </div>
-          <button className="secondary-action" onClick={() => onSelectTokenId(token.tokenId)} type="button">
-            Use token {token.tokenId.toString()}
-          </button>
+          {mode === "vault" ? (
+            <div className="vault-card-actions">
+              <Link className="secondary-action" href="/market">
+                <Store size={15} aria-hidden="true" />
+                Market
+              </Link>
+              <Link className="secondary-action" href="/redemption">
+                <PackageCheck size={15} aria-hidden="true" />
+                Redeem
+              </Link>
+            </div>
+          ) : onSelectTokenId ? (
+            <button className="secondary-action" onClick={() => onSelectTokenId(token.tokenId)} type="button">
+              Use token {token.tokenId.toString()}
+            </button>
+          ) : null}
         </article>
       ))}
     </div>

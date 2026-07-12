@@ -87,6 +87,21 @@ Seed Robinhood testnet:
 pnpm --filter @gacha/contracts seed:testnet
 ```
 
+Onboard one reviewed, allowlisted physical-item drop without purchasing it:
+
+```bash
+export TESTNET_DROP_MANIFEST_PATH=docs/reviewed-drop-manifest.example.json
+pnpm --filter @gacha/contracts onboard-drop:testnet
+```
+
+Resolve commit/reveal randomness for a confirmed testnet purchase:
+
+```bash
+export TESTNET_PURCHASE_ID=2
+export TESTNET_PURCHASE_BUYER=0x...
+pnpm --filter @gacha/contracts fulfill-pack-randomness:testnet
+```
+
 Onboard reviewed, anchored real inventory into general or set-specific Ascension pools:
 
 ```bash

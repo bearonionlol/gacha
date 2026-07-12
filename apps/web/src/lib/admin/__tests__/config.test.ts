@@ -6,13 +6,16 @@ const keys = [
   "ADMIN_ALLOWED_ORIGINS",
   "ADMIN_WALLET_ROLES",
   "ADMIN_PRODUCTION_OPERATIONS_ENABLED",
-  "ADMIN_MULTISIG_ADDRESS"
+  "ADMIN_MULTISIG_ADDRESS",
+  "ADMIN_TESTNET_ALLOW_SINGLE_CUSTODY_PHOTO",
+  "NEXT_PUBLIC_GACHA_CHAIN_MODE"
 ] as const;
 
 const originalValues = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 
 describe("admin configuration", () => {
   afterEach(() => {
+    vi.unstubAllEnvs();
     for (const key of keys) {
       const value = originalValues[key];
       if (value === undefined) delete process.env[key];
@@ -62,5 +65,26 @@ describe("admin configuration", () => {
       expect(state.config.onchainQueue?.multisigAddress).toBe("0x2222222222222222222222222222222222222222");
     }
     expect(getAdminPublicConfiguration().onchainQueueConfigured).toBe(true);
+  });
+
+  it("allows the single-photo exception only outside production on Robinhood testnet", () => {
+    process.env.DATABASE_URL = "postgresql://admin:secret@db.example.com/gacha";
+    process.env.ADMIN_SESSION_SECRET = "a-production-secret-with-at-least-thirty-two-characters";
+    process.env.ADMIN_ALLOWED_ORIGINS = "https://ops.example.com";
+    process.env.ADMIN_WALLET_ROLES = JSON.stringify({
+      "0x1111111111111111111111111111111111111111": "inventory_manager"
+    });
+    process.env.ADMIN_TESTNET_ALLOW_SINGLE_CUSTODY_PHOTO = "true";
+    process.env.NEXT_PUBLIC_GACHA_CHAIN_MODE = "testnet";
+    vi.stubEnv("NODE_ENV", "test");
+
+    let state = getAdminConfiguration();
+    expect(state.configured).toBe(true);
+    if (state.configured) expect(state.config.allowSingleCustodyPhotoOnTestnet).toBe(true);
+
+    vi.stubEnv("NODE_ENV", "production");
+    state = getAdminConfiguration();
+    expect(state.configured).toBe(true);
+    if (state.configured) expect(state.config.allowSingleCustodyPhotoOnTestnet).toBe(false);
   });
 });

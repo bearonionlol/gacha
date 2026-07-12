@@ -144,6 +144,45 @@ Testnet seed data uses sample inventory and placeholder metadata URIs such as `i
 
 Real-brand inventory descriptors in sample data are resale inventory descriptors only. Do not imply brand affiliation, endorsement, sponsorship, or investment exposure.
 
+## Reviewed Single-Item Drop Onboarding
+
+Use the reviewed-drop path for a controlled physical-item rehearsal after Admin intake has reached `drop_ready`.
+Do not use the sample seed command for real custody records. Start from
+`docs/reviewed-drop-manifest.example.json` and preserve decimal quantities as strings so JSON cannot round wei or token
+amounts.
+
+The manifest is intentionally narrow: one anchored inventory item, one allowlisted buyer, one exact-price pull, one
+active Dust policy, and up to four reviewed game-item bonuses. The operator script rejects mainnet, non-46630 chains,
+inactive sale windows, missing roles, zero or malformed hashes, tokenized inventory, mismatched existing anchors,
+unexpected existing policies, trade-in eligibility, TierPool eligibility, and non-idempotent drop IDs.
+
+```bash
+export TESTNET_DROP_MANIFEST_PATH=docs/reviewed-drop-manifest.example.json
+pnpm --filter @gacha/contracts onboard-drop:testnet
+```
+
+Review the final JSON output and set the local web build to the returned drop ID and exact price. A single-wallet
+allowlist uses an explicitly empty Merkle proof:
+
+```bash
+NEXT_PUBLIC_GACHA_DROP_ID=2
+NEXT_PUBLIC_GACHA_PACK_PRICE_WEI=1000000000000000
+NEXT_PUBLIC_GACHA_ALLOWLIST_PROOF=[]
+```
+
+The onboarding command never purchases the drop. After the allowlisted wallet reserves the pull, the testnet
+randomness operator resolves that purchase with a recoverable, ignored local journal:
+
+```bash
+export TESTNET_PURCHASE_ID=2
+export TESTNET_PURCHASE_BUYER=0x...
+pnpm --filter @gacha/contracts fulfill-pack-randomness:testnet
+```
+
+The browser wallet can then call `PackSale.reveal`. The randomness command refuses mainnet and verifies the matching
+`PackPurchased` event before committing or revealing a seed. Never place a deployer key, randomness seed, Admin session
+secret, database credential, or authenticated RPC URL in a public web variable.
+
 ## Testnet Smoke
 
 Run a read-only smoke check:

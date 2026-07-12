@@ -15,6 +15,10 @@ import {
 } from "@gacha/inventory";
 
 const MAXIMUM_BULK_IMPORT = 200;
+const TESTNET_SINGLE_PHOTO_EXCEPTION = {
+  environment: "robinhood_testnet",
+  reason: "Explicit local Robinhood Chain testnet rehearsal using one sanitized custody photo."
+} as const;
 const ONCHAIN_MANAGED_STATUSES = new Set<InventoryStatus>([
   "tokenized",
   "user_owned",
@@ -53,12 +57,29 @@ const assertSafeInventoryPolicy = (item: InventoryItem): void => {
   }
 };
 
-const assertTransitionReadiness = (item: InventoryItem, to: InventoryStatus): void => {
-  if (to === "photographed" && item.photoUrls.length < 2) {
+type AdminInventoryTransitionOptions = {
+  adminReviewed?: boolean;
+  allowSingleCustodyPhotoOnTestnet?: boolean;
+};
+
+const assertTransitionReadiness = (
+  item: InventoryItem,
+  to: InventoryStatus,
+  allowSingleCustodyPhotoOnTestnet: boolean
+): boolean => {
+  const hasRequiredPhotoPair = item.photoUrls.length >= 2;
+  const usesSinglePhotoException = !hasRequiredPhotoPair
+    && item.photoUrls.length === 1
+    && allowSingleCustodyPhotoOnTestnet
+    && (to === "photographed" || to === "verified");
+
+  if (to === "photographed" && !hasRequiredPhotoPair && !usesSinglePhotoException) {
     throw new InventoryMutationForbiddenError("Front and back custody photos are required before photographed status");
   }
   if (to === "verified") {
-    if (item.photoUrls.length < 2 || item.vaultLocationLabel.trim() === "" || item.marketEstimateCents <= 0) {
+    if ((!hasRequiredPhotoPair && !usesSinglePhotoException)
+      || item.vaultLocationLabel.trim() === ""
+      || item.marketEstimateCents <= 0) {
       throw new InventoryMutationForbiddenError(
         "Verification requires front and back photos, a vault location, and a positive market estimate"
       );
@@ -71,6 +92,7 @@ const assertTransitionReadiness = (item: InventoryItem, to: InventoryStatus): vo
   if (to === "drop_ready" && !item.dropEligibility) {
     throw new InventoryMutationForbiddenError("Drop eligibility must be reviewed before drop-ready status");
   }
+  return usesSinglePhotoException;
 };
 
 export class AdminInventoryService {
@@ -146,7 +168,7 @@ export class AdminInventoryService {
     to: InventoryStatus,
     expectedRevision: number,
     actor: InventoryActor,
-    adminReviewed = false
+    options: AdminInventoryTransitionOptions = {}
   ): Promise<VersionedInventoryItem> {
     const existing = await this.repository.get(inventoryId);
     if (existing === null) throw new InventoryNotFoundError(inventoryId);
@@ -155,9 +177,16 @@ export class AdminInventoryService {
         "On-chain custody states cannot be set manually; they must be reconciled from indexed contract events"
       );
     }
-    assertTransitionReadiness(existing.item, to);
+    const usesSinglePhotoException = assertTransitionReadiness(
+      existing.item,
+      to,
+      options.allowSingleCustodyPhotoOnTestnet === true
+    );
     assertSafeInventoryPolicy({ ...existing.item, custodyStatus: to });
-    return this.repository.transition(inventoryId, to, expectedRevision, actor, { adminReviewed });
+    return this.repository.transition(inventoryId, to, expectedRevision, actor, {
+      adminReviewed: options.adminReviewed,
+      ...(usesSinglePhotoException ? { custodyPhotoException: TESTNET_SINGLE_PHOTO_EXCEPTION } : {})
+    });
   }
 
   queueOnchainOperation(

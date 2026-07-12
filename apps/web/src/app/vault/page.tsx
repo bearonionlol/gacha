@@ -1,7 +1,12 @@
 import { AppShell } from "../../components/app-shell";
+import { KnownInventoryTokenPicker } from "../../components/known-inventory-token-picker";
 import { VaultGrid } from "../../components/vault-grid";
+import { loadDeploymentRegistrySnapshotFromEnv } from "../../lib/deployments";
+import { getReadyContractRegistry } from "../../lib/contracts/registry";
 
 export default function VaultPage() {
+  const registry = getReadyContractRegistry(loadDeploymentRegistrySnapshotFromEnv());
+
   return (
     <AppShell activePath="/vault">
       <main className="command-center route-page">
@@ -18,6 +23,11 @@ export default function VaultPage() {
             place. Estimates are references, not promises of future value.
           </p>
         </section>
+        <KnownInventoryTokenPicker
+          contracts={registry.contracts}
+          mode="vault"
+          registryMessage={registry.status.message}
+        />
         <VaultGrid />
       </main>
     </AppShell>

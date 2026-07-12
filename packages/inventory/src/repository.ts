@@ -44,6 +44,16 @@ export type InventoryAuditEvent = {
   revision: number;
 };
 
+export type InventoryCustodyPhotoException = {
+  environment: "robinhood_testnet";
+  reason: string;
+};
+
+export type InventoryRepositoryTransitionOptions = {
+  adminReviewed?: boolean;
+  custodyPhotoException?: InventoryCustodyPhotoException;
+};
+
 export type InventoryListQuery = {
   brand?: InventoryItem["brand"];
   limit?: number;
@@ -78,7 +88,7 @@ export interface InventoryRepository {
     to: InventoryStatus,
     expectedRevision: number,
     actor: InventoryActor,
-    options?: { adminReviewed?: boolean }
+    options?: InventoryRepositoryTransitionOptions
   ): Promise<VersionedInventoryItem>;
   update(item: InventoryItem, expectedRevision: number, actor: InventoryActor): Promise<VersionedInventoryItem>;
 }
@@ -228,7 +238,7 @@ export class InMemoryInventoryRepository implements InventoryRepository {
     to: InventoryStatus,
     expectedRevision: number,
     actor: InventoryActor,
-    options: { adminReviewed?: boolean } = {}
+    options: InventoryRepositoryTransitionOptions = {}
   ): Promise<VersionedInventoryItem> {
     assertExpectedRevision(expectedRevision);
     const existing = this.#requireRecord(inventoryId);
@@ -241,7 +251,10 @@ export class InMemoryInventoryRepository implements InventoryRepository {
     this.#appendAudit("inventory.transitioned", record, actor, {
       from: existing.item.custodyStatus,
       previousRevision: existing.revision,
-      to
+      to,
+      ...(options.custodyPhotoException === undefined
+        ? {}
+        : { custodyPhotoException: options.custodyPhotoException })
     });
     return cloneRecord(record);
   }

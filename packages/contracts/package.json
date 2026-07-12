@@ -14,7 +14,9 @@
     "deploy:testnet": "hardhat run scripts/deploy.ts --network robinhoodTestnet",
     "deploy:mainnet": "hardhat run scripts/deploy.ts --network robinhoodMainnet",
     "seed:testnet": "hardhat run scripts/seed.ts --network robinhoodTestnet",
+    "onboard-drop:testnet": "hardhat run scripts/onboard-drop.ts --network robinhoodTestnet",
     "onboard-pool:testnet": "hardhat run scripts/onboard-pool.ts --network robinhoodTestnet",
+    "fulfill-pack-randomness:testnet": "hardhat run scripts/fulfill-pack-randomness.ts --network robinhoodTestnet",
     "smoke:testnet": "hardhat run scripts/smoke.ts --network robinhoodTestnet",
     "rehearse:testnet": "hardhat run scripts/rehearse.ts --network robinhoodTestnet"
   },

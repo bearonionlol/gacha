@@ -85,11 +85,60 @@ describe("AdminInventoryService", () => {
     await expect(service.transition(draft.inventoryId, "photographed", 1, actor)).rejects.toBeInstanceOf(
       InventoryMutationForbiddenError
     );
+    await expect(service.transition(draft.inventoryId, "photographed", 1, actor, {
+      allowSingleCustodyPhotoOnTestnet: true
+    })).rejects.toBeInstanceOf(InventoryMutationForbiddenError);
     await expect(service.create({
       ...sampleInventory[0]!,
       inventoryId: "inv-unsafe-buyback",
       marketEstimateCents: 100,
       buybackQuoteCents: 200
     }, actor)).rejects.toBeInstanceOf(InventoryMutationForbiddenError);
+  });
+
+  it("allows and audits one sanitized photo only through the explicit testnet exception", async () => {
+    const photoUrls = ["https://assets.example.com/op06-case-front.jpg"];
+    const draft = {
+      ...sampleInventory[0]!,
+      inventoryId: "inv-testnet-single-photo",
+      custodyStatus: "draft" as const,
+      dropEligibility: false,
+      tierPoolEligible: false,
+      tradeInEligible: false,
+      photoUrls,
+      photoHash: createPhotoHash(photoUrls),
+      vaultLocationLabel: "Private vault / OP06 case shelf",
+      marketEstimateCents: 480_000
+    };
+    const repository = new InMemoryInventoryRepository([draft]);
+    const service = new AdminInventoryService(repository);
+
+    await expect(service.transition(draft.inventoryId, "photographed", 1, actor)).rejects.toBeInstanceOf(
+      InventoryMutationForbiddenError
+    );
+
+    const photographed = await service.transition(draft.inventoryId, "photographed", 1, actor, {
+      allowSingleCustodyPhotoOnTestnet: true
+    });
+    const verified = await service.transition(draft.inventoryId, "verified", photographed.revision, actor, {
+      allowSingleCustodyPhotoOnTestnet: true
+    });
+
+    expect(verified.item.custodyStatus).toBe("verified");
+    expect(await repository.listAudit({ inventoryId: draft.inventoryId })).toEqual([
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          custodyPhotoException: {
+            environment: "robinhood_testnet",
+            reason: "Explicit local Robinhood Chain testnet rehearsal using one sanitized custody photo."
+          }
+        })
+      }),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          custodyPhotoException: expect.objectContaining({ environment: "robinhood_testnet" })
+        })
+      })
+    ]);
   });
 });

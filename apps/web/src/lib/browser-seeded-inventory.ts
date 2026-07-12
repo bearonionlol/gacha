@@ -133,5 +133,42 @@ export const browserSeededInventory: BrowserSeededInventoryItem[] = [
     legalDisclaimer,
     createdAt: timestamp,
     updatedAt: timestamp
+  },
+  {
+    inventoryId: "inv-op06-case-001",
+    brand: "one_piece",
+    category: "sealed_product",
+    cardName: "Wings of the Captain OP-06 Sealed Booster Case",
+    setName: "Wings of the Captain (OP-06)",
+    cardNumber: "OP-06",
+    language: "English",
+    edition: "",
+    variant: "Sealed distributor case / 288 packs",
+    rawConditionEstimate: "Unopened sealed product; outer shipping carton shows handling wear",
+    conditionNotes: "Owner attests the 288-pack case is unopened and factory sealed. Exterior shows compressed corners and edges, surface handling wear, shipping labels, taped seams, and a small top-panel puncture. Photos do not independently authenticate contents or seal integrity.",
+    gradingCompany: null,
+    grade: null,
+    certNumber: null,
+    certUrl: null,
+    photoUrls: [
+      "https://raw.githubusercontent.com/bearonionlol/gacha/codex/mainnet-production-readiness/apps/web/public/assets/inventory/op06-case-001/front.jpg"
+    ],
+    photoHash: "sha256:1af0c5121da53abf2b9b0758a44bd8aed25576e560305a1b31da4c937fee47b6",
+    vaultLocationLabel: "Private custody / OP06-001",
+    custodyStatus: "drop_ready",
+    redeemable: true,
+    marketEstimateCents: 480000,
+    buybackQuoteCents: 0,
+    grailTier: "grail",
+    canonicalCollectibleKey: "one_piece:op06:wings_of_the_captain:sealed_case:english",
+    forgeTier: 4,
+    tradeInEligible: false,
+    tierPoolEligible: false,
+    forgeSetKey: "one_piece:op06:sealed_case",
+    craftingTags: ["one_piece", "op06", "sealed_case", "wings_of_the_captain"],
+    dropEligibility: true,
+    legalDisclaimer: "Authentic resale collectible descriptor only. ONE PIECE and Bandai Namco trademarks belong to their respective owners; no affiliation, endorsement, or sponsorship is claimed. Testnet records do not transfer legal title or require physical shipment.",
+    createdAt: "2026-07-12T12:44:52.038Z",
+    updatedAt: "2026-07-12T13:11:21.852Z"
   }
 ];

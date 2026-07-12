@@ -17,6 +17,7 @@ import {
   type InventoryOnchainAction,
   type InventoryOnchainOperation,
   type InventoryRepository,
+  type InventoryRepositoryTransitionOptions,
   type VersionedInventoryItem,
   assertOnchainQueueEligibility
 } from "./repository";
@@ -221,7 +222,7 @@ export class PostgresInventoryRepository implements InventoryRepository {
     to: InventoryStatus,
     expectedRevision: number,
     actor: InventoryActor,
-    options: { adminReviewed?: boolean } = {}
+    options: InventoryRepositoryTransitionOptions = {}
   ): Promise<VersionedInventoryItem> {
     assertExpectedRevision(expectedRevision);
     return this.#transaction(async (client) => {
@@ -237,7 +238,10 @@ export class PostgresInventoryRepository implements InventoryRepository {
       await this.#appendAudit(client, "inventory.transitioned", record, actor, {
         from: existing.item.custodyStatus,
         previousRevision: existing.revision,
-        to
+        to,
+        ...(options.custodyPhotoException === undefined
+          ? {}
+          : { custodyPhotoException: options.custodyPhotoException })
       });
       return record;
     });

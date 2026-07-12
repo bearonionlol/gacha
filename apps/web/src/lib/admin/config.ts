@@ -93,6 +93,10 @@ export const getAdminConfiguration = (): AdminConfigurationState => {
   return {
     configured: true,
     config: {
+      allowSingleCustodyPhotoOnTestnet:
+        process.env.NODE_ENV !== "production"
+        && process.env.NEXT_PUBLIC_GACHA_CHAIN_MODE === "testnet"
+        && process.env.ADMIN_TESTNET_ALLOW_SINGLE_CUSTODY_PHOTO === "true",
       allowedOrigins,
       authRateLimits: {
         challengeClient: parseBoundedInteger(process.env.ADMIN_AUTH_CHALLENGE_CLIENT_LIMIT, 30, 1, 1_000),

@@ -23,26 +23,45 @@ const defaultWriteValues = {
   forgeFee: 1_000_000_000_000_000n
 } as const;
 
+function readPublicTransactionConfigEnv(): TransactionConfigEnv {
+  return {
+    NEXT_PUBLIC_GACHA_ALLOWLIST_PROOF: process.env.NEXT_PUBLIC_GACHA_ALLOWLIST_PROOF,
+    NEXT_PUBLIC_GACHA_DEFAULT_LISTING_PRICE_WEI: process.env.NEXT_PUBLIC_GACHA_DEFAULT_LISTING_PRICE_WEI,
+    NEXT_PUBLIC_GACHA_DROP_ID: process.env.NEXT_PUBLIC_GACHA_DROP_ID,
+    NEXT_PUBLIC_GACHA_FORGE_FEE_WEI: process.env.NEXT_PUBLIC_GACHA_FORGE_FEE_WEI,
+    NEXT_PUBLIC_GACHA_FORGE_RECIPE_ID: process.env.NEXT_PUBLIC_GACHA_FORGE_RECIPE_ID,
+    NEXT_PUBLIC_GACHA_PACK_PRICE_WEI: process.env.NEXT_PUBLIC_GACHA_PACK_PRICE_WEI
+  };
+}
+
 function parsePositiveEnvBigint(value: string | undefined, fallback: bigint): bigint {
   if (value === undefined || !/^\d+$/.test(value.trim())) return fallback;
   const parsed = BigInt(value.trim());
   return parsed > 0n ? parsed : fallback;
 }
 
-export function resolveProtocolWriteConfig(env: TransactionConfigEnv = process.env) {
-  const dropId = parsePositiveEnvBigint(env.NEXT_PUBLIC_GACHA_DROP_ID, defaultWriteValues.dropId);
-  const packPrice = parsePositiveEnvBigint(env.NEXT_PUBLIC_GACHA_PACK_PRICE_WEI, defaultWriteValues.packPrice);
-  const marketPrice = parsePositiveEnvBigint(env.NEXT_PUBLIC_GACHA_DEFAULT_LISTING_PRICE_WEI, defaultWriteValues.marketPrice);
-  const forgeRecipeId = parsePositiveEnvBigint(env.NEXT_PUBLIC_GACHA_FORGE_RECIPE_ID, defaultWriteValues.forgeRecipeId);
-  const forgeFee = parsePositiveEnvBigint(env.NEXT_PUBLIC_GACHA_FORGE_FEE_WEI, defaultWriteValues.forgeFee);
+export function resolveProtocolWriteConfig(env?: TransactionConfigEnv) {
+  const publicEnv = env ?? readPublicTransactionConfigEnv();
+  const dropId = parsePositiveEnvBigint(publicEnv.NEXT_PUBLIC_GACHA_DROP_ID, defaultWriteValues.dropId);
+  const packPrice = parsePositiveEnvBigint(publicEnv.NEXT_PUBLIC_GACHA_PACK_PRICE_WEI, defaultWriteValues.packPrice);
+  const marketPrice = parsePositiveEnvBigint(
+    publicEnv.NEXT_PUBLIC_GACHA_DEFAULT_LISTING_PRICE_WEI,
+    defaultWriteValues.marketPrice
+  );
+  const forgeRecipeId = parsePositiveEnvBigint(
+    publicEnv.NEXT_PUBLIC_GACHA_FORGE_RECIPE_ID,
+    defaultWriteValues.forgeRecipeId
+  );
+  const forgeFee = parsePositiveEnvBigint(publicEnv.NEXT_PUBLIC_GACHA_FORGE_FEE_WEI, defaultWriteValues.forgeFee);
 
   return {
     pack: {
       dropId,
       value: packPrice,
       displayValue: `${formatEther(packPrice)} ETH`,
-      dropIdIsExplicit: env.NEXT_PUBLIC_GACHA_DROP_ID !== undefined,
-      priceIsExplicit: env.NEXT_PUBLIC_GACHA_PACK_PRICE_WEI !== undefined
+      allowlistProofInput: publicEnv.NEXT_PUBLIC_GACHA_ALLOWLIST_PROOF?.trim() ?? "",
+      dropIdIsExplicit: publicEnv.NEXT_PUBLIC_GACHA_DROP_ID !== undefined,
+      priceIsExplicit: publicEnv.NEXT_PUBLIC_GACHA_PACK_PRICE_WEI !== undefined
     },
     market: {
       amount: 1n,

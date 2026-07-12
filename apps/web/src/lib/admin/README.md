@@ -19,6 +19,12 @@ Optional security and database variables:
 - `ADMIN_AUTH_CHALLENGE_WALLET_LIMIT` / `ADMIN_AUTH_CHALLENGE_CLIENT_LIMIT`: defaults to 10 / 30.
 - `ADMIN_AUTH_VERIFY_WALLET_LIMIT` / `ADMIN_AUTH_VERIFY_CLIENT_LIMIT`: defaults to 20 / 60.
 
+For a controlled local Robinhood testnet rehearsal only,
+`ADMIN_TESTNET_ALLOW_SINGLE_CUSTODY_PHOTO=true` permits lifecycle advancement with exactly one
+sanitized custody photo. The exception is ignored when `NODE_ENV=production`, requires
+`NEXT_PUBLIC_GACHA_CHAIN_MODE=testnet`, and is written into every affected transition audit event.
+Zero-photo records remain blocked.
+
 Mainnet requests remain disabled unless both variables are explicitly present:
 
 - `ADMIN_PRODUCTION_OPERATIONS_ENABLED=true`

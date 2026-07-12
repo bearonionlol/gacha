@@ -66,11 +66,13 @@ describe("transaction config", () => {
 
   it("requires explicit mainnet drop configuration and production randomness metadata", () => {
     const config = resolveProtocolWriteConfig({
+      NEXT_PUBLIC_GACHA_ALLOWLIST_PROOF: "[]",
       NEXT_PUBLIC_GACHA_DROP_ID: "7",
       NEXT_PUBLIC_GACHA_PACK_PRICE_WEI: "20000000000000000"
     });
     expect(config.pack.dropId).toBe(7n);
     expect(config.pack.dropIdIsExplicit).toBe(true);
+    expect(config.pack.allowlistProofInput).toBe("[]");
 
     const unsafeMainnet = resolveChainContext({
       network: "robinhoodMainnet",

@@ -36,7 +36,7 @@ describe("vault, market, and redemption routes", () => {
     expect(screen.getAllByText(/Marketplace\.list/i).length).toBeGreaterThan(0);
     expect(screen.getAllByLabelText(/Owned inventory token ID/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Scan wallet inventory/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/known seeded inventory/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/known inventory/i).length).toBeGreaterThan(0);
     expect(screen.getByLabelText(/On-chain listing ID/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Marketplace\.buy/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Marketplace\.cancel/i).length).toBeGreaterThan(0);
@@ -60,7 +60,7 @@ describe("vault, market, and redemption routes", () => {
     expect(screen.getAllByText(/RedemptionRegistry\.requestRedemption/i).length).toBeGreaterThan(0);
     expect(screen.getByLabelText(/Redeemable inventory token ID/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Scan wallet inventory/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/known seeded inventory/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/known inventory/i).length).toBeGreaterThan(0);
   });
 
   it("routes item-specific vault actions into Forge and redemption", () => {

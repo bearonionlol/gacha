@@ -77,7 +77,7 @@ export function PackPurchasePanel({
   const client = useMemo(() => createConfiguredPublicClient(registry.chainContext), [registry.chainContext]);
   const [walletAccount, setWalletAccount] = useState<Address | null>(null);
   const [dropState, setDropState] = useState<DropReadState>({ status: "idle" });
-  const [allowlistProofInput, setAllowlistProofInput] = useState("");
+  const [allowlistProofInput, setAllowlistProofInput] = useState(protocolWriteConfig.pack.allowlistProofInput);
   const [refresh, setRefresh] = useState(0);
   const fullStackBlocked = registry.contracts !== null && !registry.fullStackReady;
   const blockedMessage =
