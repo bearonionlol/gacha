@@ -8,7 +8,7 @@ const rolePermissions: Readonly<Record<AdminRole, readonly AdminPermission[]>> =
   viewer: ["inventory:read", "audit:read"],
   inventory_operator: ["inventory:read", "inventory:create", "inventory:update", "inventory:transition", "inventory:import", "audit:read"],
   inventory_manager: ["inventory:read", "inventory:create", "inventory:update", "inventory:transition", "inventory:delete", "inventory:import", "audit:read", "onchain:queue"],
-  admin: ["inventory:read", "inventory:create", "inventory:update", "inventory:transition", "inventory:delete", "inventory:import", "audit:read", "onchain:queue"]
+  admin: ["inventory:read", "inventory:create", "inventory:update", "inventory:transition", "inventory:delete", "inventory:import", "audit:read", "chain:reconcile", "onchain:queue"]
 };
 
 export const hasAdminPermission = (role: AdminRole, permission: AdminPermission): boolean => {

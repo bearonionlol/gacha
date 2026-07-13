@@ -45,7 +45,7 @@ type TransactionActionPanelProps = TransactionPanelAction & {
   approval?: TransactionPanelAction;
   chainContext?: ChainContext;
   contracts: ProtocolContracts | null;
-  onAccountChange?: (account: Address) => void;
+  onAccountChange?: (account: Address | null) => void;
   onConfirmed?: (receipt: TransactionReceipt) => void;
   receiptClient?: ReceiptClient;
   registryMessage?: string;
@@ -128,7 +128,7 @@ export function TransactionActionPanel({
         ? (accounts.find((value): value is Address => typeof value === "string") ?? null)
         : null;
       setAccount(nextAccount);
-      if (nextAccount !== null) onAccountChange?.(nextAccount);
+      onAccountChange?.(nextAccount);
     };
     const applyChainId = (nextChainId: unknown) => {
       if (typeof nextChainId !== "string") {
@@ -256,7 +256,7 @@ export function TransactionActionPanel({
       const accounts = await requestWalletAccounts(provider);
       const connectedAccount = (accounts[0] as Address | undefined) ?? null;
       setAccount(connectedAccount);
-      if (connectedAccount !== null) onAccountChange?.(connectedAccount);
+      onAccountChange?.(connectedAccount);
       setChainId(await readWalletChainId(provider));
     } catch (error) {
       setWalletError(getWalletErrorMessage(error));

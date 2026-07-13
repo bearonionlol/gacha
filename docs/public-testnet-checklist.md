@@ -54,6 +54,10 @@ NEXT_PUBLIC_GACHA_CHAIN_MODE=testnet
 NEXT_PUBLIC_GACHA_RPC_URL=https://reviewed-robinhood-testnet-rpc.example
 NEXT_PUBLIC_GACHA_ENABLE_ADMIN=true
 NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY={...reviewed deployment JSON...}
+ADMIN_CHAIN_INDEXER_START_BLOCK=<first deployment event block>
+ADMIN_CHAIN_INDEXER_CONFIRMATIONS=12
+ADMIN_CHAIN_INDEXER_LOG_CHUNK_SIZE=1000
+ADMIN_CHAIN_INDEXER_MAX_BLOCKS=100000
 ```
 
 Start the app with `pnpm --filter @gacha/web dev --port 64920`. The `/admin/inventory` readiness panel and the contract smoke script must both pass.
@@ -64,6 +68,8 @@ Inspect `/`, `/vault`, `/market`, `/forge`, `/redemption`, and `/admin/inventory
 
 - Guaranteed contents, exact transaction prices, Forge fees, marketplace fees, output caps, and buyback quotes are visible before a wallet confirmation.
 - Pack purchase hands its purchase ID to reveal.
+- Wallet reconnect restores pending and revealed purchases from finalized indexed events.
+- Admin **Sync chain** advances only after PackSale, Marketplace, and RedemptionRegistry custody events reconcile successfully.
 - Vault Ascension displays all six exact 3 by 3 seals, reads live Dust and Passport state, requires retained duplicate proofs, and exposes craft, reveal, guided selection, default settlement, cancellation, and Dust Exchange actions without clipped controls.
 - Marketplace list, buy, cancel, proceeds withdrawal, buyback acceptance, and payout withdrawal controls render without clipped or overlapping text.
 - Redemption clearly represents physical fulfillment and keeps operator status changes separate from user requests.

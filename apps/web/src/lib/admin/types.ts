@@ -15,6 +15,7 @@ export type AdminPermission =
   | "inventory:delete"
   | "inventory:import"
   | "audit:read"
+  | "chain:reconcile"
   | "onchain:queue";
 
 export type AdminSession = {

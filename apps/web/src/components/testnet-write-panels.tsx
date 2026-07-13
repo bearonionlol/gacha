@@ -68,10 +68,12 @@ type DropReadState =
 
 export function PackPurchasePanel({
   onDropSummaryChange,
-  onPurchaseConfirmed
+  onPurchaseConfirmed,
+  onWalletAccountChange
 }: {
   onDropSummaryChange?: (summary: LiveDropSummary | null) => void;
   onPurchaseConfirmed?: (purchaseId: bigint) => void;
+  onWalletAccountChange?: (account: Address | null) => void;
 }) {
   const registry = useClientRegistry();
   const client = useMemo(() => createConfiguredPublicClient(registry.chainContext), [registry.chainContext]);
@@ -94,7 +96,10 @@ export function PackPurchasePanel({
     isAllowlisted,
     allowlistProof
   );
-  const handleAccountChange = useCallback((account: Address) => setWalletAccount(account), []);
+  const handleAccountChange = useCallback((account: Address | null) => {
+    setWalletAccount(account);
+    onWalletAccountChange?.(account);
+  }, [onWalletAccountChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -206,7 +211,15 @@ function getDropDisabledReason(
   return null;
 }
 
-export function PackRevealPanel({ initialPurchaseId = null }: { initialPurchaseId?: bigint | null }) {
+export function PackRevealPanel({
+  initialPurchaseId = null,
+  onRevealConfirmed,
+  onWalletAccountChange
+}: {
+  initialPurchaseId?: bigint | null;
+  onRevealConfirmed?: () => void;
+  onWalletAccountChange?: (account: Address | null) => void;
+}) {
   const registry = useClientRegistry();
   const [purchaseIdInput, setPurchaseIdInput] = useState(initialPurchaseId?.toString() ?? "");
   const purchaseId = parsePositiveActionId(purchaseIdInput);
@@ -234,6 +247,8 @@ export function PackRevealPanel({ initialPurchaseId = null }: { initialPurchaseI
         chainContext={registry.chainContext}
         ctaLabel="Reveal purchase"
         description="Reveals the reserved capsule after its randomness request is ready. A failed early attempt does not change the reserved pull."
+        onAccountChange={onWalletAccountChange}
+        onConfirmed={onRevealConfirmed}
         registryMessage={registry.message}
         summary={[
           { label: "Function", value: "PackSale.reveal" },
@@ -607,7 +622,7 @@ type ForgeCraftPanelProps = {
   imprintHash: Hex;
   recipeId: bigint;
   value: bigint;
-  onAccountChange?: (account: Address) => void;
+  onAccountChange?: (account: Address | null) => void;
   onConfirmed?: (receipt: TransactionReceipt) => void;
 };
 

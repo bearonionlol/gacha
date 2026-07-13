@@ -13,6 +13,12 @@ type ReadinessRow = {
   auth_rate_events: string | null;
   inventory_items: string | null;
   onchain_operations: string | null;
+  protocol_chain_events: string | null;
+  protocol_chain_checkpoints: string | null;
+  protocol_capsule_purchases: string | null;
+  inventory_chain_state: string | null;
+  marketplace_listing_state: string | null;
+  redemption_request_state: string | null;
   sessions: string | null;
 };
 
@@ -26,7 +32,13 @@ export async function GET(request: NextRequest) {
       to_regclass('public.admin_auth_challenges')::text AS auth_challenges,
       to_regclass('public.admin_sessions')::text AS sessions,
       to_regclass('public.admin_auth_rate_events')::text AS auth_rate_events,
-      to_regclass('public.inventory_onchain_operations')::text AS onchain_operations`);
+      to_regclass('public.inventory_onchain_operations')::text AS onchain_operations,
+      to_regclass('public.protocol_chain_events')::text AS protocol_chain_events,
+      to_regclass('public.protocol_chain_checkpoints')::text AS protocol_chain_checkpoints,
+      to_regclass('public.protocol_capsule_purchases')::text AS protocol_capsule_purchases,
+      to_regclass('public.inventory_chain_state')::text AS inventory_chain_state,
+      to_regclass('public.marketplace_listing_state')::text AS marketplace_listing_state,
+      to_regclass('public.redemption_request_state')::text AS redemption_request_state`);
     const row = result.rows[0];
     const schemaReady = row !== undefined && Object.values(row).every((value) => value !== null);
     return noStoreJson({

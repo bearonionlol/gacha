@@ -53,6 +53,25 @@ describe("InventoryRepository contract", () => {
     ]);
   });
 
+  it("attaches finalized chain evidence to lifecycle audit events", async () => {
+    const repository = new InMemoryInventoryRepository(sampleInventory);
+    const original = await repository.get("inv-sample-graded-001");
+    const evidence = {
+      blockNumber: "89941842",
+      chainId: 46630,
+      contractAddress: "0x2222222222222222222222222222222222222222",
+      eventName: "PackRevealed",
+      logIndex: 4,
+      transactionHash: `0x${"ab".repeat(32)}`
+    };
+
+    await repository.transition(original!.item.inventoryId, "tokenized", 1, actor, { chainEvidence: evidence });
+
+    expect(await repository.listAudit({ inventoryId: original!.item.inventoryId })).toEqual([
+      expect.objectContaining({ metadata: expect.objectContaining({ chainEvidence: evidence }) })
+    ]);
+  });
+
   it("keeps bulk creates atomic when any ID conflicts", async () => {
     const repository = new InMemoryInventoryRepository(sampleInventory);
     const first = {

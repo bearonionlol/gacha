@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { formatEther } from "viem";
+import { formatEther, type Address } from "viem";
 import {
   Archive,
   BadgeCheck,
@@ -19,6 +19,7 @@ import {
 import { activeDrop, revealPreview } from "../lib/game-state";
 import { loadChainContextFromEnv } from "../lib/deployments";
 import type { LiveDropSummary } from "../lib/contracts/live-state";
+import { MyCapsulesPanel } from "./my-capsules-panel";
 import { PackPurchasePanel, PackRevealPanel } from "./testnet-write-panels";
 
 type MachineState = "idle" | "turning" | "dispensed";
@@ -43,6 +44,8 @@ export function GachaMachine() {
   }), []);
   const [machineState, setMachineState] = useState<MachineState>("idle");
   const [purchaseId, setPurchaseId] = useState<bigint | null>(null);
+  const [walletAccount, setWalletAccount] = useState<Address | null>(null);
+  const [capsuleHistoryRevision, setCapsuleHistoryRevision] = useState(0);
   const [liveDropSummary, setLiveDropSummary] = useState<LiveDropSummary | null>(null);
   const turnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -52,6 +55,15 @@ export function GachaMachine() {
     },
     []
   );
+
+  useEffect(() => {
+    if (walletAccount === null) {
+      setPurchaseId(null);
+      return;
+    }
+    const stored = window.localStorage.getItem(purchaseStorageKey(chainContext.chainId, walletAccount));
+    setPurchaseId(stored !== null && /^\d+$/.test(stored) && BigInt(stored) > 0n ? BigInt(stored) : null);
+  }, [chainContext.chainId, walletAccount]);
 
   function turnHandle() {
     if (machineState === "turning") return;
@@ -67,6 +79,18 @@ export function GachaMachine() {
   function handlePurchaseConfirmed(nextPurchaseId: bigint) {
     setPurchaseId(nextPurchaseId);
     setMachineState("idle");
+    if (walletAccount !== null) {
+      window.localStorage.setItem(purchaseStorageKey(chainContext.chainId, walletAccount), nextPurchaseId.toString());
+    }
+    setCapsuleHistoryRevision((revision) => revision + 1);
+  }
+
+  function resumeCapsule(nextPurchaseId: bigint) {
+    setPurchaseId(nextPurchaseId);
+    setMachineState("idle");
+    if (walletAccount !== null) {
+      window.localStorage.setItem(purchaseStorageKey(chainContext.chainId, walletAccount), nextPurchaseId.toString());
+    }
   }
 
   const handleDropSummaryChange = useCallback((summary: LiveDropSummary | null) => {
@@ -206,9 +230,21 @@ export function GachaMachine() {
             <PackPurchasePanel
               onDropSummaryChange={handleDropSummaryChange}
               onPurchaseConfirmed={handlePurchaseConfirmed}
+              onWalletAccountChange={setWalletAccount}
             />
-            <PackRevealPanel initialPurchaseId={purchaseId} />
+            <PackRevealPanel
+              initialPurchaseId={purchaseId}
+              onRevealConfirmed={() => setCapsuleHistoryRevision((revision) => revision + 1)}
+              onWalletAccountChange={setWalletAccount}
+            />
           </div>
+
+          <MyCapsulesPanel
+            account={walletAccount}
+            chainId={chainContext.chainId}
+            onResume={resumeCapsule}
+            refreshKey={capsuleHistoryRevision}
+          />
 
           <div className="gacha-aftercare" aria-label="After reveal destinations">
             <span className="eyebrow">After the reveal</span>
@@ -230,6 +266,10 @@ export function GachaMachine() {
       </div>
     </section>
   );
+}
+
+function purchaseStorageKey(chainId: number, account: Address): string {
+  return `gacha:last-purchase:${chainId}:${account.toLowerCase()}`;
 }
 
 function getMachineStatus(machineState: MachineState, purchaseId: bigint | null) {

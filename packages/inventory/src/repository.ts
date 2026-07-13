@@ -49,9 +49,24 @@ export type InventoryCustodyPhotoException = {
   reason: string;
 };
 
+export type InventoryChainEvidence = {
+  blockNumber: string;
+  chainId: number;
+  contractAddress: string;
+  eventName: string;
+  logIndex: number;
+  transactionHash: string;
+};
+
 export type InventoryRepositoryTransitionOptions = {
   adminReviewed?: boolean;
+  chainEvidence?: InventoryChainEvidence;
   custodyPhotoException?: InventoryCustodyPhotoException;
+};
+
+export type InventoryRepositoryUpdateOptions = {
+  chainEvidence?: InventoryChainEvidence;
+  reconciliation?: "onchain_custody_normalization";
 };
 
 export type InventoryListQuery = {
@@ -90,7 +105,12 @@ export interface InventoryRepository {
     actor: InventoryActor,
     options?: InventoryRepositoryTransitionOptions
   ): Promise<VersionedInventoryItem>;
-  update(item: InventoryItem, expectedRevision: number, actor: InventoryActor): Promise<VersionedInventoryItem>;
+  update(
+    item: InventoryItem,
+    expectedRevision: number,
+    actor: InventoryActor,
+    options?: InventoryRepositoryUpdateOptions
+  ): Promise<VersionedInventoryItem>;
 }
 
 export class InventoryNotFoundError extends Error {
@@ -221,7 +241,12 @@ export class InMemoryInventoryRepository implements InventoryRepository {
     return created;
   }
 
-  async update(item: InventoryItem, expectedRevision: number, actor: InventoryActor): Promise<VersionedInventoryItem> {
+  async update(
+    item: InventoryItem,
+    expectedRevision: number,
+    actor: InventoryActor,
+    options: InventoryRepositoryUpdateOptions = {}
+  ): Promise<VersionedInventoryItem> {
     assertExpectedRevision(expectedRevision);
     const parsed = InventoryItemSchema.parse(item);
     const existing = this.#requireRecord(parsed.inventoryId);
@@ -229,7 +254,11 @@ export class InMemoryInventoryRepository implements InventoryRepository {
 
     const record = { item: cloneItem(parsed), revision: existing.revision + 1 };
     this.#records.set(parsed.inventoryId, record);
-    this.#appendAudit("inventory.updated", record, actor, { previousRevision: existing.revision });
+    this.#appendAudit("inventory.updated", record, actor, {
+      previousRevision: existing.revision,
+      ...(options.chainEvidence === undefined ? {} : { chainEvidence: options.chainEvidence }),
+      ...(options.reconciliation === undefined ? {} : { reconciliation: options.reconciliation })
+    });
     return cloneRecord(record);
   }
 
@@ -252,6 +281,7 @@ export class InMemoryInventoryRepository implements InventoryRepository {
       from: existing.item.custodyStatus,
       previousRevision: existing.revision,
       to,
+      ...(options.chainEvidence === undefined ? {} : { chainEvidence: options.chainEvidence }),
       ...(options.custodyPhotoException === undefined
         ? {}
         : { custodyPhotoException: options.custodyPhotoException })

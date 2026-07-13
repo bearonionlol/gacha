@@ -141,4 +141,40 @@ describe("AdminInventoryService", () => {
       })
     ]);
   });
+
+  it("advances only through safe on-chain reconciliation paths", async () => {
+    const repository = new InMemoryInventoryRepository([sampleInventory[2]!]);
+    const service = new AdminInventoryService(repository);
+    const evidence = {
+      blockNumber: "89941842",
+      chainId: 46630,
+      contractAddress: "0x2222222222222222222222222222222222222222",
+      eventName: "PackRevealed",
+      logIndex: 4,
+      transactionHash: `0x${"ab".repeat(32)}`
+    };
+
+    const owned = await service.reconcileOnchainStatus(sampleInventory[2]!.inventoryId, "user_owned", actor, evidence);
+    expect(owned.item.custodyStatus).toBe("user_owned");
+    expect(owned.item.dropEligibility).toBe(false);
+    expect(owned.item.tierPoolEligible).toBe(false);
+    expect(owned.revision).toBe(4);
+    expect(await repository.listAudit({ inventoryId: sampleInventory[2]!.inventoryId })).toEqual([
+      expect.objectContaining({
+        action: "inventory.updated",
+        metadata: expect.objectContaining({
+          chainEvidence: evidence,
+          reconciliation: "onchain_custody_normalization"
+        })
+      }),
+      expect.objectContaining({ action: "inventory.transitioned" }),
+      expect.objectContaining({ action: "inventory.transitioned" })
+    ]);
+    await expect(service.reconcileOnchainStatus(
+      sampleInventory[2]!.inventoryId,
+      "redeemed",
+      actor,
+      evidence
+    )).rejects.toBeInstanceOf(InventoryMutationForbiddenError);
+  });
 });

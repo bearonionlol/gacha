@@ -488,6 +488,123 @@
   font-size: 0.7rem;
 }
 
+.my-capsules {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0d120f;
+}
+
+.my-capsules > header {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding: 11px 13px;
+}
+
+.my-capsules h3 {
+  margin: 3px 0 0;
+  font-size: 0.95rem;
+}
+
+.capsule-history-spin {
+  color: var(--green);
+  animation: capsule-history-spin 0.8s linear infinite;
+}
+
+.capsule-history-empty,
+.capsule-history-error {
+  margin: 0;
+  padding: 13px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.capsule-history-error {
+  color: #ffb1b4;
+}
+
+.capsule-history-list {
+  display: grid;
+}
+
+.capsule-history-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding: 10px 13px;
+}
+
+.capsule-history-row:last-child {
+  border-bottom: 0;
+}
+
+.capsule-history-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  color: var(--muted);
+}
+
+.capsule-history-row.status-pending .capsule-history-icon {
+  border-color: rgba(243, 186, 47, 0.38);
+  color: var(--warm);
+}
+
+.capsule-history-row.status-revealed .capsule-history-icon {
+  border-color: var(--green-line);
+  color: var(--green);
+}
+
+.capsule-history-copy,
+.capsule-history-copy strong,
+.capsule-history-copy small {
+  display: block;
+  min-width: 0;
+}
+
+.capsule-history-copy strong {
+  font-size: 0.78rem;
+}
+
+.capsule-history-copy small,
+.capsule-history-price,
+.capsule-history-refund {
+  color: var(--faint);
+  font-size: 0.68rem;
+}
+
+.capsule-history-copy small {
+  overflow: hidden;
+  margin-top: 3px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capsule-history-price {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.capsule-history-action {
+  min-height: 32px;
+  padding: 7px 9px;
+  font-size: 0.7rem;
+}
+
+@keyframes capsule-history-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .gacha-aftercare {
   border-top: 1px solid var(--line);
   padding-top: 16px;
@@ -755,6 +872,20 @@
     width: 100%;
   }
 
+  .capsule-history-row {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+  }
+
+  .capsule-history-price {
+    display: none;
+  }
+
+  .capsule-history-action,
+  .capsule-history-refund {
+    grid-column: 2 / -1;
+    justify-self: start;
+  }
+
   .card-tier-stack {
     justify-items: start;
   }
@@ -783,6 +914,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .capsule-history-spin,
   .state-turning .gacha-handle,
   .state-turning .gacha-machine-art {
     animation: none;

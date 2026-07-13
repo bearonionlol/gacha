@@ -5,6 +5,7 @@ import {
   InventoryMutationForbiddenError,
   createPhotoHash,
   type InventoryActor,
+  type InventoryChainEvidence,
   type InventoryItem,
   type InventoryListQuery,
   type InventoryOnchainAction,
@@ -60,6 +61,39 @@ const assertSafeInventoryPolicy = (item: InventoryItem): void => {
 type AdminInventoryTransitionOptions = {
   adminReviewed?: boolean;
   allowSingleCustodyPhotoOnTestnet?: boolean;
+};
+
+const onchainTransitionPaths: Readonly<Partial<Record<InventoryStatus, Partial<Record<InventoryStatus, InventoryStatus[]>>>>> = {
+  drop_ready: {
+    tokenized: ["tokenized"],
+    user_owned: ["tokenized", "user_owned"]
+  },
+  tokenized: {
+    user_owned: ["user_owned"]
+  },
+  user_owned: {
+    listed: ["listed"],
+    redemption_pending: ["redemption_pending"]
+  },
+  listed: {
+    user_owned: ["user_owned"]
+  },
+  redemption_pending: {
+    user_owned: ["user_owned"],
+    redeemed: ["redeemed"]
+  }
+};
+
+export const getOnchainReconciliationPath = (
+  from: InventoryStatus,
+  to: InventoryStatus
+): InventoryStatus[] => {
+  if (from === to) return [];
+  const path = onchainTransitionPaths[from]?.[to];
+  if (path === undefined) {
+    throw new InventoryMutationForbiddenError(`Unsafe on-chain inventory reconciliation: ${from} -> ${to}`);
+  }
+  return [...path];
 };
 
 const assertTransitionReadiness = (
@@ -187,6 +221,44 @@ export class AdminInventoryService {
       adminReviewed: options.adminReviewed,
       ...(usesSinglePhotoException ? { custodyPhotoException: TESTNET_SINGLE_PHOTO_EXCEPTION } : {})
     });
+  }
+
+  async reconcileOnchainStatus(
+    inventoryId: string,
+    target: InventoryStatus,
+    actor: InventoryActor,
+    chainEvidence: InventoryChainEvidence
+  ): Promise<VersionedInventoryItem> {
+    let record = await this.repository.get(inventoryId);
+    if (record === null) throw new InventoryNotFoundError(inventoryId);
+
+    const path = getOnchainReconciliationPath(record.item.custodyStatus, target);
+    for (const nextStatus of path) {
+      record = await this.repository.transition(
+        inventoryId,
+        nextStatus,
+        record.revision,
+        actor,
+        { adminReviewed: true, chainEvidence }
+      );
+    }
+    if (
+      !["verified", "vaulted", "drop_ready"].includes(record.item.custodyStatus)
+      && (record.item.dropEligibility || record.item.tierPoolEligible)
+    ) {
+      const normalizedItem = {
+        ...record.item,
+        dropEligibility: false,
+        tierPoolEligible: false,
+        updatedAt: this.now().toISOString()
+      };
+      assertSafeInventoryPolicy(normalizedItem);
+      record = await this.repository.update(normalizedItem, record.revision, actor, {
+        chainEvidence,
+        reconciliation: "onchain_custody_normalization"
+      });
+    }
+    return record;
   }
 
   queueOnchainOperation(

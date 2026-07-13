@@ -120,6 +120,7 @@ export function AdminInventoryConsole({ configuration, demoRecords }: AdminInven
   const selectedRecord = newDraft ?? visibleRecords.find(({ item }) => item.inventoryId === selectedId) ?? null;
   const canEdit = configuration.configured && canEditRole(session?.role);
   const canManage = configuration.configured && canManageRole(session?.role);
+  const canReconcileChain = configuration.configured && session?.role === "admin";
   const canQueue = canManage && configuration.onchainQueueConfigured;
 
   useEffect(() => {
@@ -210,6 +211,20 @@ export function AdminInventoryConsole({ configuration, demoRecords }: AdminInven
     await loadInventory();
   });
 
+  const reconcileChain = async () => runMutation(async () => {
+    const response = await adminRequest<{
+      result: { decodedEvents: number; reconciledInventoryEvents: number; scannedFromBlock: string | null; scannedToBlock: string | null };
+    }>("/api/admin/indexer/reconcile", { body: {}, csrfToken, method: "POST" });
+    const range = response.result.scannedFromBlock === null
+      ? "No finalized blocks were waiting."
+      : `Scanned blocks ${response.result.scannedFromBlock}-${response.result.scannedToBlock}.`;
+    setNotice({
+      kind: "success",
+      text: `${range} Reconciled ${response.result.reconciledInventoryEvents} inventory event(s) from ${response.result.decodedEvents} protocol event(s).`
+    });
+    await loadInventory();
+  });
+
   const logout = async () => {
     if (csrfToken !== null) {
       await adminRequest("/api/admin/auth/logout", { body: {}, csrfToken, method: "POST" }).catch(() => undefined);
@@ -247,6 +262,7 @@ export function AdminInventoryConsole({ configuration, demoRecords }: AdminInven
             </form>
             <div className={styles.toolbarActions}>
               <button aria-label="Refresh inventory" className={styles.iconButton} disabled={loading || !configuration.configured} onClick={() => void loadInventory()} title="Refresh" type="button"><RefreshCw aria-hidden="true" className={loading ? styles.spin : undefined} size={17} /></button>
+              <button className="secondary-action" disabled={!canReconcileChain || busy} onClick={() => void reconcileChain()} type="button"><RefreshCw aria-hidden="true" className={busy ? styles.spin : undefined} size={16} /> Sync chain</button>
               <button className="primary-action" disabled={!canEdit || busy} onClick={() => { setNewDraft({ item: createDraftInventoryItem(), revision: -1 }); setSelectedId(null); }} type="button"><Plus aria-hidden="true" size={17} /> New intake</button>
             </div>
           </section>

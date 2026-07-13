@@ -230,8 +230,14 @@ export NEXT_PUBLIC_GACHA_CHAIN_MODE=testnet
 export NEXT_PUBLIC_GACHA_RPC_URL="$ROBINHOOD_TESTNET_RPC_URL"
 export NEXT_PUBLIC_GACHA_ENABLE_ADMIN=true
 export NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY="$(cat deployments/robinhoodTestnet.json)"
+export ADMIN_CHAIN_INDEXER_START_BLOCK=<first deployment event block>
+export ADMIN_CHAIN_INDEXER_CONFIRMATIONS=12
+export ADMIN_CHAIN_INDEXER_LOG_CHUNK_SIZE=1000
+export ADMIN_CHAIN_INDEXER_MAX_BLOCKS=100000
 pnpm --filter @gacha/web dev --port 64920
 ```
+
+After admin wallet sign-in, use **Sync chain** in `/admin/inventory`. The finalized event indexer records PackSale purchases and reveals, Marketplace listing custody, and RedemptionRegistry custody before advancing its checkpoint. Run the same endpoint from a trusted scheduler in hosted environments; do not expose an admin session or CSRF token to a public client.
 
 ## Public Testnet Go/No-Go
 
@@ -258,6 +264,7 @@ Browser smoke path:
 - Open `/forge`, connect the wallet, preview each 3 by 3 seal, then use Live settlement with the exact Anchor, trade-in, retained duplicate-proof, fee, and claim IDs. Verify reveal, guided selection, default settlement, Dust Exchange, and timeout cancellation states.
 - Open `/redemption`, scan known seeded inventory, select a redeemable token, approve RedemptionRegistry, and request redemption.
 - Open `/admin/inventory` with an operator wallet that holds `REDEMPTION_ADMIN_ROLE`.
+- Use **Sync chain** after the finality window, then confirm inventory custody and audit evidence match the completed Marketplace or RedemptionRegistry transaction.
 - Submit redemption lifecycle updates as separate transactions: approve, mark packed, mark shipped, complete, or cancel.
 
 Record every transaction hash, the wallet address used, and the deployment registry commit or artifact reviewed for the session. Do not use the browser app as the source of truth for fulfillment; the contract state and operator records remain authoritative.

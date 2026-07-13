@@ -18,6 +18,7 @@ import {
   type InventoryOnchainOperation,
   type InventoryRepository,
   type InventoryRepositoryTransitionOptions,
+  type InventoryRepositoryUpdateOptions,
   type VersionedInventoryItem,
   assertOnchainQueueEligibility
 } from "./repository";
@@ -195,7 +196,12 @@ export class PostgresInventoryRepository implements InventoryRepository {
     });
   }
 
-  async update(item: InventoryItem, expectedRevision: number, actor: InventoryActor): Promise<VersionedInventoryItem> {
+  async update(
+    item: InventoryItem,
+    expectedRevision: number,
+    actor: InventoryActor,
+    options: InventoryRepositoryUpdateOptions = {}
+  ): Promise<VersionedInventoryItem> {
     assertExpectedRevision(expectedRevision);
     const parsed = InventoryItemSchema.parse(item);
     return this.#transaction(async (client) => {
@@ -212,7 +218,11 @@ export class PostgresInventoryRepository implements InventoryRepository {
       const row = result.rows[0];
       if (row === undefined) throw new InventoryConflictError("Inventory changed during update", existing.revision);
       const record = mapInventoryRow(row);
-      await this.#appendAudit(client, "inventory.updated", record, actor, { previousRevision: existing.revision });
+      await this.#appendAudit(client, "inventory.updated", record, actor, {
+        previousRevision: existing.revision,
+        ...(options.chainEvidence === undefined ? {} : { chainEvidence: options.chainEvidence }),
+        ...(options.reconciliation === undefined ? {} : { reconciliation: options.reconciliation })
+      });
       return record;
     });
   }
@@ -239,6 +249,7 @@ export class PostgresInventoryRepository implements InventoryRepository {
         from: existing.item.custodyStatus,
         previousRevision: existing.revision,
         to,
+        ...(options.chainEvidence === undefined ? {} : { chainEvidence: options.chainEvidence }),
         ...(options.custodyPhotoException === undefined
           ? {}
           : { custodyPhotoException: options.custodyPhotoException })
