@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { formatEther, type Address } from "viem";
 import {
   Archive,
   BadgeCheck,
@@ -16,6 +17,9 @@ import {
   Store
 } from "lucide-react";
 import { activeDrop, revealPreview } from "../lib/game-state";
+import { loadChainContextFromEnv } from "../lib/deployments";
+import type { LiveDropSummary } from "../lib/contracts/live-state";
+import { MyCapsulesPanel } from "./my-capsules-panel";
 import { PackPurchasePanel, PackRevealPanel } from "./testnet-write-panels";
 
 type MachineState = "idle" | "turning" | "dispensed";
@@ -35,8 +39,14 @@ const revealActions = [
 ] as const;
 
 export function GachaMachine() {
+  const chainContext = useMemo(() => loadChainContextFromEnv({
+    NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY: process.env.NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY
+  }), []);
   const [machineState, setMachineState] = useState<MachineState>("idle");
   const [purchaseId, setPurchaseId] = useState<bigint | null>(null);
+  const [walletAccount, setWalletAccount] = useState<Address | null>(null);
+  const [capsuleHistoryRevision, setCapsuleHistoryRevision] = useState(0);
+  const [liveDropSummary, setLiveDropSummary] = useState<LiveDropSummary | null>(null);
   const turnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -45,6 +55,15 @@ export function GachaMachine() {
     },
     []
   );
+
+  useEffect(() => {
+    if (walletAccount === null) {
+      setPurchaseId(null);
+      return;
+    }
+    const stored = window.localStorage.getItem(purchaseStorageKey(chainContext.chainId, walletAccount));
+    setPurchaseId(stored !== null && /^\d+$/.test(stored) && BigInt(stored) > 0n ? BigInt(stored) : null);
+  }, [chainContext.chainId, walletAccount]);
 
   function turnHandle() {
     if (machineState === "turning") return;
@@ -60,7 +79,23 @@ export function GachaMachine() {
   function handlePurchaseConfirmed(nextPurchaseId: bigint) {
     setPurchaseId(nextPurchaseId);
     setMachineState("idle");
+    if (walletAccount !== null) {
+      window.localStorage.setItem(purchaseStorageKey(chainContext.chainId, walletAccount), nextPurchaseId.toString());
+    }
+    setCapsuleHistoryRevision((revision) => revision + 1);
   }
+
+  function resumeCapsule(nextPurchaseId: bigint) {
+    setPurchaseId(nextPurchaseId);
+    setMachineState("idle");
+    if (walletAccount !== null) {
+      window.localStorage.setItem(purchaseStorageKey(chainContext.chainId, walletAccount), nextPurchaseId.toString());
+    }
+  }
+
+  const handleDropSummaryChange = useCallback((summary: LiveDropSummary | null) => {
+    setLiveDropSummary(summary);
+  }, []);
 
   const statusMessage = getMachineStatus(machineState, purchaseId);
   const activeStep = purchaseId === null ? 1 : machineState === "dispensed" ? 3 : 2;
@@ -69,25 +104,29 @@ export function GachaMachine() {
     <section className="gacha-experience" aria-labelledby="gacha-title">
       <header className="gacha-intro">
         <div>
-          <span className="eyebrow">Capsule No. 01 / Robinhood Chain Testnet</span>
+          <span className="eyebrow">Capsule No. 01 / {chainContext.environmentLabel}</span>
           <h1 id="gacha-title">Vault Gacha</h1>
           <p>
-            Turn a Japanese-inspired capsule machine for one real vault-backed collectible, guaranteed Magic Dust,
-            and two published specialty Dust rolls.
+            Reserve a vault-backed collectible, turn the capsule handle, then reveal it with the published Dust bundle
+            and specialty roll odds.
           </p>
         </div>
         <dl className="gacha-drop-facts" aria-label="Active gacha facts">
           <div>
             <dt>Pull</dt>
-            <dd>{activeDrop.testnetPriceLabel}</dd>
+            <dd>{liveDropSummary ? `${formatEther(liveDropSummary.price)} ETH` : activeDrop.priceLabel}</dd>
           </div>
           <div>
             <dt>Vault card</dt>
-            <dd>1 guaranteed</dd>
+            <dd>1 per pull</dd>
           </div>
           <div>
             <dt>Remaining</dt>
-            <dd>{activeDrop.remainingSupply} capsule</dd>
+            <dd>{liveDropSummary?.remainingInventory.toString() ?? activeDrop.remainingSupply} capsule</dd>
+          </div>
+          <div>
+            <dt>Wallet cap</dt>
+            <dd>{liveDropSummary?.maxPerWallet.toString() ?? "Published live"}</dd>
           </div>
         </dl>
       </header>
@@ -137,9 +176,11 @@ export function GachaMachine() {
           <div className="gacha-drop-heading">
             <div>
               <span className="eyebrow">Now dispensing</span>
-              <h2>{activeDrop.title}</h2>
+              <h2>{liveDropSummary?.name ?? activeDrop.title}</h2>
             </div>
-            <span className="chain-pill">Inventory backed</span>
+            <span className="chain-pill">
+              {liveDropSummary && !/^0x0{64}$/i.test(liveDropSummary.allowlistRoot) ? "Allowlist required" : "Inventory backed"}
+            </span>
           </div>
 
           <ol className="gacha-steps" aria-label="Gacha pull steps">
@@ -186,9 +227,24 @@ export function GachaMachine() {
           </details>
 
           <div className="gacha-wallet-flow">
-            <PackPurchasePanel onPurchaseConfirmed={handlePurchaseConfirmed} />
-            <PackRevealPanel initialPurchaseId={purchaseId} />
+            <PackPurchasePanel
+              onDropSummaryChange={handleDropSummaryChange}
+              onPurchaseConfirmed={handlePurchaseConfirmed}
+              onWalletAccountChange={setWalletAccount}
+            />
+            <PackRevealPanel
+              initialPurchaseId={purchaseId}
+              onRevealConfirmed={() => setCapsuleHistoryRevision((revision) => revision + 1)}
+              onWalletAccountChange={setWalletAccount}
+            />
           </div>
+
+          <MyCapsulesPanel
+            account={walletAccount}
+            chainId={chainContext.chainId}
+            onResume={resumeCapsule}
+            refreshKey={capsuleHistoryRevision}
+          />
 
           <div className="gacha-aftercare" aria-label="After reveal destinations">
             <span className="eyebrow">After the reveal</span>
@@ -200,12 +256,20 @@ export function GachaMachine() {
                 </Link>
               ))}
             </div>
-            <small>{revealPreview.title} is shown as the current testnet preview; the settled pull comes from the reserved pool.</small>
+            <small>
+              {chainContext.isDemo
+                ? `${revealPreview.title} is an illustrative reveal preview. Demo interactions do not reserve inventory.`
+                : "The revealed collectible comes from the reserved inventory pool. Collection estimates do not guarantee resale value."}
+            </small>
           </div>
         </div>
       </div>
     </section>
   );
+}
+
+function purchaseStorageKey(chainId: number, account: Address): string {
+  return `gacha:last-purchase:${chainId}:${account.toLowerCase()}`;
 }
 
 function getMachineStatus(machineState: MachineState, purchaseId: bigint | null) {
@@ -215,7 +279,7 @@ function getMachineStatus(machineState: MachineState, purchaseId: bigint | null)
 
   if (machineState === "dispensed") {
     return purchaseId === null
-      ? { title: "Practice capsule dispensed", detail: "Reserve a testnet pull to bind a real purchase ID." }
+      ? { title: "Preview capsule dispensed", detail: "Reserve a pull to bind the handle to an on-chain purchase ID." }
       : { title: `Capsule ${purchaseId.toString()} dispensed`, detail: "Reveal the reserved purchase when randomness is ready." };
   }
 

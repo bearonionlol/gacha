@@ -1,17 +1,19 @@
 import Link from "next/link";
-import { BadgeCheck, Gem, Hammer, PackageCheck, ShieldCheck, Tags, Trophy } from "lucide-react";
+import { BadgeCheck, Gem, Hammer, PackageCheck, ShieldCheck, Store, Tags, Trophy } from "lucide-react";
 import { buildCollectionProgression } from "../lib/collection-progression";
 import { formatCents } from "../lib/format";
 import { collectibleCards, vaultStats } from "../lib/inventory";
+import { loadChainContextFromEnv } from "../lib/deployments";
 
 export function VaultGrid() {
   const progression = buildCollectionProgression(collectibleCards);
+  const chainContext = loadChainContextFromEnv();
 
   return (
     <section className="portfolio-section" aria-labelledby="vault-grid-title">
       <div className="portfolio-summary" aria-label="Vault summary">
         <div>
-          <span className="eyebrow">Portfolio value</span>
+          <span className="eyebrow">Estimated value</span>
           <strong>{formatCents(vaultStats.marketValueCents)}</strong>
         </div>
         <div>
@@ -48,7 +50,14 @@ export function VaultGrid() {
                 </div>
                 <strong>{set.percentComplete}%</strong>
               </div>
-              <div className="progress-track" aria-hidden="true">
+              <div
+                aria-label={`${set.title} collection progress`}
+                aria-valuemax={100}
+                aria-valuemin={0}
+                aria-valuenow={set.percentComplete}
+                className="progress-track"
+                role="progressbar"
+              >
                 <span style={{ width: `${set.percentComplete}%` }} />
               </div>
               <p>
@@ -73,13 +82,18 @@ export function VaultGrid() {
 
       <div className="section-heading-row">
         <div>
-          <span className="eyebrow">Inventory backed</span>
+          <span className="eyebrow">Custody records</span>
           <h2 id="vault-grid-title">Collectible positions</h2>
         </div>
-        <span className="chain-pill">{vaultStats.totalItems} verified samples</span>
+        <span className="chain-pill">
+          {chainContext.isDemo ? `${vaultStats.totalItems} illustrative items` : `${vaultStats.totalItems} collection previews`}
+        </span>
       </div>
 
-      <p className="disclosure">{collectibleCards[0]?.legalDisclaimer}</p>
+      <p className="disclosure">
+        {chainContext.isDemo ? "Demo inventory is illustrative and does not represent wallet ownership. " : "Collection previews are not a substitute for the connected wallet and custody record. "}
+        {collectibleCards[0]?.legalDisclaimer} Estimates are informational and do not guarantee a sale price.
+      </p>
 
       <div className="vault-grid">
         {collectibleCards.map((card) => (
@@ -153,6 +167,10 @@ export function VaultGrid() {
               <Link className="secondary-action" href="/forge">
                 <Hammer size={16} aria-hidden="true" />
                 {card.tradeInEligible ? "Use as trade-in" : "Use as Anchor"}
+              </Link>
+              <Link className="secondary-action" href="/market">
+                <Store size={16} aria-hidden="true" />
+                Market options
               </Link>
               <Link className="secondary-action" href="/redemption">
                 <PackageCheck size={16} aria-hidden="true" />

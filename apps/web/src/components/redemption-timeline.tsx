@@ -1,6 +1,7 @@
-import { BadgeCheck, CheckCircle2, Clock3, Hammer, PackageCheck, Truck } from "lucide-react";
+import { BadgeCheck, CheckCircle2, Clock3, Hammer, LockKeyhole, PackageCheck, Truck } from "lucide-react";
 import { RedemptionRequestPanel } from "./testnet-write-panels";
 import { redemptionRequests } from "../lib/game-state";
+import { loadChainContextFromEnv } from "../lib/deployments";
 
 const lifecycleStates = ["requested", "approved", "packed", "shipped", "completed"];
 
@@ -16,14 +17,24 @@ const formatRequestDate = (value: string): string =>
   new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(value));
 
 export function RedemptionTimeline() {
+  const chainContext = loadChainContextFromEnv();
+
   return (
     <section className="portfolio-section" aria-labelledby="redemption-timeline-title">
       <div className="section-heading-row">
         <div>
-          <span className="eyebrow">Physical delivery</span>
-          <h2 id="redemption-timeline-title">Lifecycle states</h2>
+          <span className="eyebrow">What happens next</span>
+          <h2 id="redemption-timeline-title">Fulfillment timeline</h2>
         </div>
         <span className="chain-pill">On-chain lifecycle</span>
+      </div>
+
+      <div className="redemption-privacy-note">
+        <LockKeyhole size={18} aria-hidden="true" />
+        <div>
+          <strong>Keep shipping details off-chain</strong>
+          <p>The wallet transaction records token escrow only. Never enter a name, address, email, or tracking number into a public transaction field.</p>
+        </div>
       </div>
 
       <div className="timeline-state-row" aria-label="Redemption lifecycle states">
@@ -50,12 +61,12 @@ export function RedemptionTimeline() {
         </div>
       </div>
 
-      <div className="redemption-requests">
+      <div className="redemption-requests" aria-label="Illustrative redemption timeline">
         {redemptionRequests.map((request) => (
           <article className="redemption-card" key={request.id}>
             <div className="panel-header compact">
               <div>
-                <span className="eyebrow">Request {request.id}</span>
+                <span className="eyebrow">{chainContext.isDemo ? "Demo request" : "Lifecycle example"} / {request.id}</span>
                 <h3>{request.title}</h3>
               </div>
               <span className="tier-pill">{request.status}</span>

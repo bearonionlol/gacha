@@ -1,7 +1,11 @@
+import { sampleInventory } from "@gacha/inventory";
+
 import { AdminInventoryConsole } from "../../../components/admin-inventory-console";
 import { AppShell } from "../../../components/app-shell";
+import { getAdminPublicConfiguration } from "../../../lib/admin/config";
 
 export default function AdminInventoryPage() {
+  const configuration = getAdminPublicConfiguration();
   return (
     <AppShell activePath="/admin/inventory">
       <main className="command-center route-page">
@@ -18,7 +22,10 @@ export default function AdminInventoryPage() {
             item can back a gacha pull or Vault Ascension outcome.
           </p>
         </section>
-        <AdminInventoryConsole />
+        <AdminInventoryConsole
+          configuration={configuration}
+          demoRecords={sampleInventory.map((item) => ({ item, revision: 0 }))}
+        />
       </main>
     </AppShell>
   );

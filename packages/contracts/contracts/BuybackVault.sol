@@ -9,6 +9,7 @@ import {ItemToken} from "./ItemToken.sol";
 
 contract BuybackVault is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     bytes32 public constant BUYBACK_ADMIN_ROLE = keccak256("BUYBACK_ADMIN_ROLE");
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     struct Quote {
         uint256 price;
@@ -132,11 +133,11 @@ contract BuybackVault is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder
         emit NativeWithdrawn(to, amount);
     }
 
-    function pause() external onlyRole(BUYBACK_ADMIN_ROLE) {
+    function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
-    function unpause() external onlyRole(BUYBACK_ADMIN_ROLE) {
+    function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
 

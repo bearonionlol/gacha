@@ -9,7 +9,7 @@ describe("vault, market, and redemption routes", () => {
 
     expect(screen.getByText(/Pokemon TCG Charizard ex/i)).toBeInTheDocument();
     expect(screen.getByText(/Authentic resale collectible descriptor/i)).toBeInTheDocument();
-    expect(screen.getByText(/no affiliation or endorsement/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/no affiliation or endorsement/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Album progress/i)).toBeInTheDocument();
     expect(screen.getByText(/Master set/i)).toBeInTheDocument();
     expect(screen.getByText(/Next chase/i)).toBeInTheDocument();
@@ -21,8 +21,8 @@ describe("vault, market, and redemption routes", () => {
   it("renders marketplace fees and escrow disclosure", () => {
     render(<MarketPage />);
 
-    expect(screen.getByText(/Vault Market/i)).toBeInTheDocument();
-    expect(screen.getByText(/Compare vault-backed listings/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Marketplace/i })).toBeInTheDocument();
+    expect(screen.getByText(/Compare asks with buyback references/i)).toBeInTheDocument();
     expect(screen.queryByText(/deterministic demo listings/i)).not.toBeInTheDocument();
     expect(screen.getByText(/escrowed until sale or cancellation/i)).toBeInTheDocument();
     expect(screen.getAllByText(/protocol fee/i).length).toBeGreaterThan(0);
@@ -36,7 +36,7 @@ describe("vault, market, and redemption routes", () => {
     expect(screen.getAllByText(/Marketplace\.list/i).length).toBeGreaterThan(0);
     expect(screen.getAllByLabelText(/Owned inventory token ID/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Scan wallet inventory/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/known seeded inventory/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/known inventory/i).length).toBeGreaterThan(0);
     expect(screen.getByLabelText(/On-chain listing ID/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Marketplace\.buy/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Marketplace\.cancel/i).length).toBeGreaterThan(0);
@@ -50,16 +50,17 @@ describe("vault, market, and redemption routes", () => {
   it("renders redemption lifecycle states", () => {
     render(<RedemptionPage />);
 
-    expect(screen.getByText(/Redemption Desk/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Physical Redemption/i })).toBeInTheDocument();
     expect(screen.getAllByText(/requested/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/completed/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Vault Ascension boundary/i)).toBeInTheDocument();
+    expect(screen.getByText(/Keep shipping details off-chain/i)).toBeInTheDocument();
     expect(screen.getByText(/Opened on Jul 9/i)).toBeInTheDocument();
     expect(screen.getByText(/Approve RedemptionRegistry/i)).toBeInTheDocument();
     expect(screen.getAllByText(/RedemptionRegistry\.requestRedemption/i).length).toBeGreaterThan(0);
     expect(screen.getByLabelText(/Redeemable inventory token ID/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Scan wallet inventory/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/known seeded inventory/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/known inventory/i).length).toBeGreaterThan(0);
   });
 
   it("routes item-specific vault actions into Forge and redemption", () => {

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "inventory": {
+    "inventoryId": "inv-op06-case-001",
+    "inventoryHash": "0x7396ba114e4122b25f7de0f545d5abb6670f2521176b9d0082cf73fc0a2f65e8",
+    "metadataUri": "https://raw.githubusercontent.com/bearonionlol/gacha/codex/mainnet-production-readiness/apps/web/public/metadata/inventory/inv-op06-case-001.json",
+    "redeemable": true,
+    "grailProtected": true,
+    "policy": {
+      "canonicalKey": "one_piece:op06:wings_of_the_captain:sealed_case:english",
+      "setKey": "one_piece:op06:sealed_case",
+      "tier": 4,
+      "tradeInEligible": false,
+      "tierPoolEligible": false
+    }
+  },
+  "drop": {
+    "expectedDropId": "2",
+    "name": "OP-06 Sealed Case Private Test",
+    "priceWei": "1000000000000000",
+    "startTime": "2026-07-12T00:00:00.000Z",
+    "endTime": "2026-08-12T00:00:00.000Z",
+    "allowedBuyer": "0x9Ec1807165F0e887ffDaA044b2224f33Aa49a6dE",
+    "dustPolicyId": "1",
+    "bonusItems": [
+      {
+        "tokenId": "7001",
+        "amount": "3",
+        "tokenUri": "ipfs://metadata/game/fire-shard.json"
+      },
+      {
+        "tokenId": "7002",
+        "amount": "1",
+        "tokenUri": "ipfs://metadata/game/vault-seal.json"
+      }
+    ]
+  }
+}

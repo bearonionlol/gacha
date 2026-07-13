@@ -1,4 +1,4 @@
-import { getDeploymentDiagnostics } from "../deployments";
+import { getDeploymentDiagnostics, loadChainContextFromEnv } from "../deployments";
 
 const baseContracts = {
   InventoryRegistry: "0x0000000000000000000000000000000000000001",
@@ -22,6 +22,24 @@ const vaultForgeContracts = {
 };
 
 describe("deployment diagnostics", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("reads the default deployment from the public registry variable", () => {
+    vi.stubEnv("NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY", JSON.stringify({
+      network: "robinhoodTestnet",
+      chainId: 46630,
+      contracts: { ...baseContracts, ...vaultForgeContracts }
+    }));
+
+    const context = loadChainContextFromEnv();
+
+    expect(context.mode).toBe("testnet");
+    expect(context.environmentLabel).toBe("Testnet");
+    expect(context.readiness).toBe("ready");
+  });
+
   it("distinguishes a usable base deployment from a missing Vault Forge deployment", () => {
     const result = getDeploymentDiagnostics({
       network: "robinhoodTestnet",

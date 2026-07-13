@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getLiveProtocolSnapshot, type ProtocolReadClient } from "../live-state";
+import { getLiveProtocolSnapshot, readLiveDropSummary, type ProtocolReadClient } from "../live-state";
 
 const addresses = {
   InventoryRegistry: "0x32657A9d0AFe229E132dA8610a23D6d32d22C4Ee",
@@ -40,8 +40,10 @@ describe("live protocol state", () => {
   });
 
   it("returns ready metrics from a read client", async () => {
+    const reads: { args?: readonly unknown[]; functionName: string }[] = [];
     const client: ProtocolReadClient = {
-      readContract: async ({ functionName }) => {
+      readContract: async ({ functionName, args }) => {
+        reads.push({ functionName, ...(args === undefined ? {} : { args }) });
         const values: Record<string, bigint> = {
           nextDropId: 2n,
           nextPurchaseId: 1n,
@@ -57,11 +59,13 @@ describe("live protocol state", () => {
       }
     };
 
-    const snapshot = await getLiveProtocolSnapshot({ registrySnapshot: registry, client });
+    const snapshot = await getLiveProtocolSnapshot({ registrySnapshot: registry, client, dropId: 2n });
 
     expect(snapshot.state).toBe("ready");
     expect(snapshot.metrics.map((metric) => metric.label)).toContain("Drops created");
+    expect(snapshot.metrics.find((metric) => metric.label === "Drop 2 inventory")?.value).toBe("3");
     expect(snapshot.metrics.find((metric) => metric.label === "Market fee")?.value).toBe("250 bps");
+    expect(reads).toContainEqual({ functionName: "remainingInventory", args: [2n] });
   });
 
   it("returns degraded state when an RPC read fails", async () => {
@@ -74,7 +78,7 @@ describe("live protocol state", () => {
     const snapshot = await getLiveProtocolSnapshot({ registrySnapshot: registry, client });
 
     expect(snapshot.state).toBe("degraded");
-    expect(snapshot.message).toBe("Robinhood testnet RPC is temporarily unavailable. Browsing remains in read-only mode.");
+    expect(snapshot.message).toBe("Robinhood Chain Testnet data is temporarily unavailable. Browsing remains in read-only mode.");
     expect(snapshot.message).not.toContain("https://secret.example");
   });
 
@@ -86,19 +90,54 @@ describe("live protocol state", () => {
     const snapshot = await getLiveProtocolSnapshot({ registrySnapshot: registry, client, timeoutMs: 1 });
 
     expect(snapshot.state).toBe("degraded");
-    expect(snapshot.message).toBe("Robinhood testnet RPC is temporarily unavailable. Browsing remains in read-only mode.");
+    expect(snapshot.message).toBe("Robinhood Chain Testnet data is temporarily unavailable. Browsing remains in read-only mode.");
   });
 
-  it("does not read mainnet registries during the Phase 4A testnet slice", async () => {
+  it("reads a configured mainnet registry with mainnet vocabulary", async () => {
     const client: ProtocolReadClient = {
-      readContract: async () => {
-        throw new Error("mainnet should not be read");
-      }
+      readContract: async ({ functionName }) => functionName === "feeBps" ? 250n : 1n
     };
 
     const snapshot = await getLiveProtocolSnapshot({ registrySnapshot: mainnetRegistry, client });
 
-    expect(snapshot.state).toBe("demo");
-    expect(snapshot.message).toMatch(/testnet only/i);
+    expect(snapshot.state).toBe("ready");
+    expect(snapshot.message).toMatch(/Robinhood Chain contracts on chain 4663/i);
+  });
+
+  it("normalizes live drop price, allowlist, supply, cap, and wallet usage", async () => {
+    const account = "0x1234567890abcdef1234567890abcdef12345678" as const;
+    const allowlistRoot = `0x${"ab".repeat(32)}` as const;
+    const client: ProtocolReadClient = {
+      readContract: async ({ functionName }) => functionName === "purchasesByWallet"
+        ? 1n
+        : {
+            name: "Collector Drop",
+            price: 20_000_000_000_000_000n,
+            startTime: 10n,
+            endTime: 20n,
+            maxSupply: 12n,
+            maxPerWallet: 2n,
+            allowlistRoot,
+            sold: 4n,
+            pendingPurchases: 1n,
+            remainingInventory: 8n
+          }
+    };
+
+    const summary = await readLiveDropSummary({
+      account,
+      address: addresses.PackSale as `0x${string}`,
+      client,
+      dropId: 3n
+    });
+
+    expect(summary).toMatchObject({
+      allowlistRoot,
+      dropId: 3n,
+      maxPerWallet: 2n,
+      price: 20_000_000_000_000_000n,
+      purchasesByWallet: 1n,
+      remainingInventory: 8n
+    });
   });
 });

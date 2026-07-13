@@ -12,6 +12,7 @@ out/
 *.tsbuildinfo
 .env
 .env.local
+.testnet-operator/
 .DS_Store
 .worktrees/
 worktrees/

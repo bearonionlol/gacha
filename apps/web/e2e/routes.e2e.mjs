@@ -13,9 +13,9 @@ for (const route of Object.values(appRoutes)) {
     }
 
     if (route === appRoutes.admin) {
-      await page.getByText("Contract-by-contract diagnosis", { exact: true }).click();
-      await expect(page.locator(".deployment-contract-details li")).toHaveCount(15);
-      await expect(page.getByRole("heading", { name: "Inventory Reconciliation" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Inventory & Pool Intake" })).toBeVisible();
+      await expect(page.getByText("Read-only demo mode", { exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Inventory records" })).toBeVisible();
     }
   });
 }

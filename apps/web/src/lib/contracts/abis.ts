@@ -33,6 +33,40 @@ export const packSaleAbi = [
   },
   {
     type: "function",
+    name: "purchasesByWallet",
+    stateMutability: "view",
+    inputs: [
+      { name: "dropId", type: "uint256" },
+      { name: "buyer", type: "address" }
+    ],
+    outputs: [{ name: "purchases", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "getDropSummary",
+    stateMutability: "view",
+    inputs: [{ name: "dropId", type: "uint256" }],
+    outputs: [
+      {
+        name: "summary",
+        type: "tuple",
+        components: [
+          { name: "name", type: "string" },
+          { name: "price", type: "uint256" },
+          { name: "startTime", type: "uint256" },
+          { name: "endTime", type: "uint256" },
+          { name: "maxSupply", type: "uint256" },
+          { name: "maxPerWallet", type: "uint256" },
+          { name: "allowlistRoot", type: "bytes32" },
+          { name: "sold", type: "uint256" },
+          { name: "pendingPurchases", type: "uint256" },
+          { name: "remainingInventory", type: "uint256" }
+        ]
+      }
+    ]
+  },
+  {
+    type: "function",
     name: "getDropBonus",
     stateMutability: "view",
     inputs: [{ name: "dropId", type: "uint256" }],
@@ -47,6 +81,16 @@ export const packSaleAbi = [
     name: "purchase",
     stateMutability: "payable",
     inputs: [{ name: "dropId", type: "uint256" }],
+    outputs: [{ name: "purchaseId", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "purchaseAllowlisted",
+    stateMutability: "payable",
+    inputs: [
+      { name: "dropId", type: "uint256" },
+      { name: "allowlistProof", type: "bytes32[]" }
+    ],
     outputs: [{ name: "purchaseId", type: "uint256" }]
   },
   {

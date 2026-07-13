@@ -111,6 +111,8 @@ describe("Protocol collector journey", function () {
       startTime: latestBlock.timestamp - 60,
       endTime: latestBlock.timestamp + 86_400,
       maxSupply: 1n,
+      maxPerWallet: 1n,
+      allowlistRoot: ethers.ZeroHash,
       inventoryIds: [inventoryId],
       metadataUris: [metadataUri],
       bonusTokenIds: [fireShardTokenId, vaultSealTokenId],

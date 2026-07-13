@@ -1,6 +1,8 @@
 packages:
   - "packages/*"
   - "apps/*"
+overrides:
+  postcss: 8.5.16
 onlyBuiltDependencies:
   - esbuild
   - keccak

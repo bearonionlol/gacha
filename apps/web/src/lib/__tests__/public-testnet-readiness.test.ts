@@ -24,6 +24,19 @@ const readyRegistry = JSON.stringify({
 });
 
 describe("public testnet readiness", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("reads its default checks from statically named public variables", () => {
+    vi.stubEnv("NEXT_PUBLIC_GACHA_CHAIN_MODE", "testnet");
+    vi.stubEnv("NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY", readyRegistry);
+    vi.stubEnv("NEXT_PUBLIC_GACHA_ENABLE_ADMIN", "true");
+    vi.stubEnv("NEXT_PUBLIC_GACHA_RPC_URL", "https://rpc.testnet.chain.robinhood.com");
+
+    expect(getPublicTestnetReadiness().summary).toBe("ready");
+  });
+
   it("marks a fully configured Robinhood testnet build ready", () => {
     const readiness = getPublicTestnetReadiness({
       NEXT_PUBLIC_GACHA_CHAIN_MODE: "testnet",

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "inventory": {
+    "inventoryId": "inv-reviewed-custody-001",
+    "inventoryHash": "0xabababababababababababababababababababababababababababababababab",
+    "metadataUri": "https://assets.example.com/inventory/inv-reviewed-custody-001.json",
+    "redeemable": true,
+    "grailProtected": true,
+    "policy": {
+      "canonicalKey": "one_piece:op06:sealed_case:english",
+      "setKey": "one_piece:op06:sealed_case",
+      "tier": 4,
+      "tradeInEligible": false,
+      "tierPoolEligible": false
+    }
+  },
+  "drop": {
+    "expectedDropId": "2",
+    "name": "Reviewed Private Testnet Capsule",
+    "priceWei": "1000000000000000",
+    "startTime": "2026-07-12T00:00:00.000Z",
+    "endTime": "2026-08-12T00:00:00.000Z",
+    "allowedBuyer": "0x0000000000000000000000000000000000000001",
+    "dustPolicyId": "1",
+    "bonusItems": [
+      {
+        "tokenId": "7001",
+        "amount": "3",
+        "tokenUri": "ipfs://metadata/game/fire-shard.json"
+      },
+      {
+        "tokenId": "7002",
+        "amount": "1",
+        "tokenUri": "ipfs://metadata/game/vault-seal.json"
+      }
+    ]
+  }
+}

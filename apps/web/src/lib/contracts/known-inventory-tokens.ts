@@ -72,20 +72,20 @@ export async function readKnownInventoryTokenStates({
     if (tokens.length === 0) {
       return {
         status: "empty",
-        message: "No seeded inventory tokens found for this wallet.",
+        message: "No known inventory tokens found for this wallet.",
         tokens: []
       };
     }
 
     return {
       status: "ready",
-      message: `Found ${tokens.length} seeded inventory token${tokens.length === 1 ? "" : "s"}.`,
+      message: `Found ${tokens.length} known inventory token${tokens.length === 1 ? "" : "s"}.`,
       tokens
     };
   } catch {
     return {
       status: "degraded",
-      message: "Unable to scan known seeded inventory right now. Manual token ID entry remains available.",
+      message: "Unable to scan known inventory right now. Manual token ID entry remains available.",
       tokens: []
     };
   }

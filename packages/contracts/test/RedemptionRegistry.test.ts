@@ -172,6 +172,33 @@ describe("RedemptionRegistry", function () {
       .withArgs(other.address, role);
   });
 
+  it("pauses new redemption intake without trapping requests already in custody", async function () {
+    const fixture = await deployProtocolFixture();
+    const { itemToken, redemptionRegistry, redemptionAdmin, owner, other } = fixture;
+    const { requestId } = await requestRedeemableToken(fixture);
+    const secondTokenId = await anchorAndMintInventory(fixture, "redemption-paused-002", owner, true);
+    await itemToken.connect(owner).setApprovalForAll(await redemptionRegistry.getAddress(), true);
+
+    const pauserRole = await redemptionRegistry.PAUSER_ROLE();
+    await expect(redemptionRegistry.connect(other).pause())
+      .to.be.revertedWithCustomError(redemptionRegistry, "AccessControlUnauthorizedAccount")
+      .withArgs(other.address, pauserRole);
+
+    await redemptionRegistry.connect(redemptionAdmin).pause();
+    await expect(redemptionRegistry.connect(owner).requestRedemption(secondTokenId))
+      .to.be.revertedWithCustomError(redemptionRegistry, "EnforcedPause");
+
+    await redemptionRegistry.connect(redemptionAdmin).cancel(requestId, cancelReason);
+    expect((await redemptionRegistry.requests(requestId)).status).to.equal(RedemptionStatus.Cancelled);
+
+    await expect(redemptionRegistry.connect(other).unpause())
+      .to.be.revertedWithCustomError(redemptionRegistry, "AccessControlUnauthorizedAccount")
+      .withArgs(other.address, pauserRole);
+    await redemptionRegistry.connect(redemptionAdmin).unpause();
+    await redemptionRegistry.connect(owner).requestRedemption(secondTokenId);
+    expect((await redemptionRegistry.requests(2n)).status).to.equal(RedemptionStatus.Requested);
+  });
+
   it("returns escrowed tokens when an admin cancels a request", async function () {
     const fixture = await deployProtocolFixture();
     const { itemToken, redemptionRegistry, redemptionAdmin, owner } = fixture;

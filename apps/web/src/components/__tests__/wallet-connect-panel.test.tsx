@@ -1,6 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WalletConnectPanel } from "../wallet-connect-panel";
+import { resolveChainContext } from "../../lib/deployments";
+
+const testnetChainContext = resolveChainContext({
+  network: "robinhoodTestnet",
+  chainId: 46630,
+  contracts: {}
+});
 
 function setEthereumProvider(provider: unknown) {
   Object.defineProperty(window, "ethereum", {
@@ -21,14 +28,16 @@ describe("WalletConnectPanel", () => {
     expect(screen.queryByRole("button", { name: /Connect wallet/i })).not.toBeInTheDocument();
   });
 
-  it("does not call the wallet provider on page load", async () => {
+  it("restores wallet state silently without requesting access", async () => {
     const request = vi.fn().mockResolvedValue([]);
     setEthereumProvider({ request });
 
-    render(<WalletConnectPanel />);
+    render(<WalletConnectPanel chainContext={testnetChainContext} />);
 
     await waitFor(() => expect(screen.getByRole("button", { name: /Connect wallet/i })).toBeInTheDocument());
-    expect(request).not.toHaveBeenCalled();
+    expect(request).toHaveBeenCalledWith({ method: "eth_accounts" });
+    expect(request).toHaveBeenCalledWith({ method: "eth_chainId" });
+    expect(request).not.toHaveBeenCalledWith({ method: "eth_requestAccounts" });
   });
 
   it("connects and shows Robinhood testnet status", async () => {
@@ -46,7 +55,7 @@ describe("WalletConnectPanel", () => {
     });
     setEthereumProvider({ request });
 
-    render(<WalletConnectPanel />);
+    render(<WalletConnectPanel chainContext={testnetChainContext} />);
     fireEvent.click(await screen.findByRole("button", { name: /Connect wallet/i }));
 
     await waitFor(() => expect(screen.getByText("0x1234...5678")).toBeInTheDocument());
@@ -70,7 +79,7 @@ describe("WalletConnectPanel", () => {
     });
     setEthereumProvider({ request });
 
-    render(<WalletConnectPanel />);
+    render(<WalletConnectPanel chainContext={testnetChainContext} />);
     fireEvent.click(await screen.findByRole("button", { name: /Connect wallet/i }));
 
     await waitFor(() => expect(screen.getByText(/Connection rejected/i)).toBeInTheDocument());
@@ -92,11 +101,11 @@ describe("WalletConnectPanel", () => {
     });
     setEthereumProvider({ request });
 
-    render(<WalletConnectPanel />);
+    render(<WalletConnectPanel chainContext={testnetChainContext} />);
     fireEvent.click(await screen.findByRole("button", { name: /Connect wallet/i }));
 
     await waitFor(() => expect(screen.getByText("0x1234...5678")).toBeInTheDocument());
-    expect(screen.getByText(/Wrong chain/i)).toBeInTheDocument();
+    expect(screen.getByText(/Wrong network/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Switch to testnet/i })).toBeInTheDocument();
   });
 
@@ -120,7 +129,7 @@ describe("WalletConnectPanel", () => {
     });
     setEthereumProvider({ request });
 
-    render(<WalletConnectPanel />);
+    render(<WalletConnectPanel chainContext={testnetChainContext} />);
     fireEvent.click(await screen.findByRole("button", { name: /Connect wallet/i }));
 
     const switchButton = await screen.findByRole("button", { name: /Switch to testnet/i });

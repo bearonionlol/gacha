@@ -8,14 +8,14 @@ export default function MarketPage() {
         <section className="panel route-hero" aria-labelledby="market-title">
           <div className="panel-header">
             <div>
-              <span className="eyebrow">Peer-to-peer marketplace</span>
-              <h1 id="market-title">Vault Market</h1>
+              <span className="eyebrow">Peer-to-peer trading</span>
+              <h1 id="market-title">Marketplace</h1>
             </div>
-            <span className="chain-pill">Fees visible</span>
+            <span className="chain-pill">Fees before signing</span>
           </div>
           <p>
-            Compare vault-backed listings by price, buyback floor, Forge Tier, and trade-in eligibility. Market escrow
-            never changes a card's disclosed tier or grants hidden Forge advantages.
+            Compare asks with buyback references, review the protocol fee, and load the exact escrow state before you
+            sign. Listed collectibles do not carry guaranteed liquidity or resale value.
           </p>
         </section>
         <MarketBoard />

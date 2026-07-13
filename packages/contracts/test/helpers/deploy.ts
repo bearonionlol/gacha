@@ -100,6 +100,8 @@ export interface CreateDropParams {
   startTime: BigNumberish;
   endTime: BigNumberish;
   maxSupply: BigNumberish;
+  maxPerWallet: BigNumberish;
+  allowlistRoot: string;
   inventoryIds: string[];
   metadataUris: string[];
   bonusTokenIds: BigNumberish[];
@@ -109,13 +111,21 @@ export interface CreateDropParams {
 
 export type PackSale = Omit<BaseContract, "connect"> & {
   DROP_ADMIN_ROLE(): Promise<string>;
+  PAUSER_ROLE(): Promise<string>;
   REFUND_TIMEOUT(): Promise<bigint>;
+  MAX_DROP_INVENTORY(): Promise<bigint>;
   treasuryCredit(): Promise<bigint>;
   createDrop(params: CreateDropParams): Promise<ContractTransactionResponse>;
   purchase(dropId: BigNumberish, overrides?: { value?: BigNumberish }): Promise<ContractTransactionResponse>;
+  purchaseAllowlisted(
+    dropId: BigNumberish,
+    proof: string[],
+    overrides?: { value?: BigNumberish }
+  ): Promise<ContractTransactionResponse>;
   reveal(purchaseId: BigNumberish): Promise<ContractTransactionResponse>;
   claimRevealedTokenTo(purchaseId: BigNumberish, to: string): Promise<ContractTransactionResponse>;
   refundCredit(account: string): Promise<bigint>;
+  purchasesByWallet(dropId: BigNumberish, account: string): Promise<bigint>;
   refundExpiredPurchase(purchaseId: BigNumberish): Promise<ContractTransactionResponse>;
   withdrawRefund(): Promise<ContractTransactionResponse>;
   withdrawTreasuryCredit(): Promise<ContractTransactionResponse>;
@@ -123,6 +133,18 @@ export type PackSale = Omit<BaseContract, "connect"> & {
   closeDrop(dropId: BigNumberish): Promise<ContractTransactionResponse>;
   remainingInventory(dropId: BigNumberish): Promise<bigint>;
   getDropBonus(dropId: BigNumberish): Promise<[bigint[], bigint[], string[]]>;
+  getDropSummary(dropId: BigNumberish): Promise<{
+    name: string;
+    price: bigint;
+    startTime: bigint;
+    endTime: bigint;
+    maxSupply: bigint;
+    maxPerWallet: bigint;
+    allowlistRoot: string;
+    sold: bigint;
+    pendingPurchases: bigint;
+    remainingInventory: bigint;
+  }>;
   configureDustRewards(dustLedger: string, dustRewardPolicy: string): Promise<ContractTransactionResponse>;
   setDropDustPolicy(dropId: BigNumberish, policyId: BigNumberish): Promise<ContractTransactionResponse>;
   pause(): Promise<ContractTransactionResponse>;
@@ -143,6 +165,7 @@ export interface ListingRecord {
 
 export type Marketplace = Omit<BaseContract, "connect"> & {
   MARKET_ADMIN_ROLE(): Promise<string>;
+  PAUSER_ROLE(): Promise<string>;
   feeBps(): Promise<bigint>;
   treasury(): Promise<string>;
   proceedsCredit(account: string): Promise<bigint>;
@@ -167,6 +190,7 @@ export interface QuoteRecord {
 
 export type BuybackVault = Omit<BaseContract, "connect"> & {
   BUYBACK_ADMIN_ROLE(): Promise<string>;
+  PAUSER_ROLE(): Promise<string>;
   payoutCredit(account: string): Promise<bigint>;
   quotes(tokenId: BigNumberish): Promise<QuoteRecord>;
   setQuote(
@@ -231,6 +255,7 @@ export interface ForgeRecipe {
 export type Forge = Omit<BaseContract, "connect"> & {
   RECIPE_ADMIN_ROLE(): Promise<string>;
   CRAFT_REVIEWER_ROLE(): Promise<string>;
+  PAUSER_ROLE(): Promise<string>;
   nextRecipeId(): Promise<bigint>;
   nextCraftId(): Promise<bigint>;
   createRecipe(params: CreateRecipeParams): Promise<ContractTransactionResponse>;
@@ -287,6 +312,7 @@ export interface RedemptionRequest {
 
 export type RedemptionRegistry = Omit<BaseContract, "connect"> & {
   REDEMPTION_ADMIN_ROLE(): Promise<string>;
+  PAUSER_ROLE(): Promise<string>;
   nextRequestId(): Promise<bigint>;
   requestRedemption(tokenId: BigNumberish): Promise<ContractTransactionResponse>;
   approve(requestId: BigNumberish): Promise<ContractTransactionResponse>;
@@ -297,6 +323,8 @@ export type RedemptionRegistry = Omit<BaseContract, "connect"> & {
   ): Promise<ContractTransactionResponse>;
   complete(requestId: BigNumberish): Promise<ContractTransactionResponse>;
   cancel(requestId: BigNumberish, reason: string): Promise<ContractTransactionResponse>;
+  pause(): Promise<ContractTransactionResponse>;
+  unpause(): Promise<ContractTransactionResponse>;
   requests(requestId: BigNumberish): Promise<RedemptionRequest>;
   grantRole(role: string, account: string): Promise<ContractTransactionResponse>;
   supportsInterface(interfaceId: string): Promise<boolean>;
@@ -436,14 +464,19 @@ export async function deployProtocolFixture() {
   await randomnessProvider.grantRole(REQUESTER_ROLE, await packSale.getAddress());
   await randomnessProvider.grantRole(await randomnessProvider.REVEALER_ROLE(), revealer.address);
   await packSale.grantRole(await packSale.DROP_ADMIN_ROLE(), dropAdmin.address);
+  await packSale.grantRole(await packSale.PAUSER_ROLE(), dropAdmin.address);
   await marketplace.grantRole(await marketplace.MARKET_ADMIN_ROLE(), marketAdmin.address);
+  await marketplace.grantRole(await marketplace.PAUSER_ROLE(), marketAdmin.address);
   await buybackVault.grantRole(await buybackVault.BUYBACK_ADMIN_ROLE(), buybackAdmin.address);
+  await buybackVault.grantRole(await buybackVault.PAUSER_ROLE(), buybackAdmin.address);
   await forge.grantRole(await forge.RECIPE_ADMIN_ROLE(), recipeAdmin.address);
   await forge.grantRole(await forge.CRAFT_REVIEWER_ROLE(), recipeAdmin.address);
+  await forge.grantRole(await forge.PAUSER_ROLE(), recipeAdmin.address);
   await redemptionRegistry.grantRole(
     await redemptionRegistry.REDEMPTION_ADMIN_ROLE(),
     redemptionAdmin.address
   );
+  await redemptionRegistry.grantRole(await redemptionRegistry.PAUSER_ROLE(), redemptionAdmin.address);
 
   return {
     registry,

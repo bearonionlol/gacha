@@ -19,6 +19,15 @@ export type PublicTestnetReadiness = {
   summary: PublicTestnetReadinessSummary;
 };
 
+function readPublicTestnetEnv(): PublicTestnetReadinessEnv {
+  return {
+    NEXT_PUBLIC_GACHA_CHAIN_MODE: process.env.NEXT_PUBLIC_GACHA_CHAIN_MODE,
+    NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY: process.env.NEXT_PUBLIC_GACHA_DEPLOYMENT_REGISTRY,
+    NEXT_PUBLIC_GACHA_ENABLE_ADMIN: process.env.NEXT_PUBLIC_GACHA_ENABLE_ADMIN,
+    NEXT_PUBLIC_GACHA_RPC_URL: process.env.NEXT_PUBLIC_GACHA_RPC_URL
+  };
+}
+
 function readEnvValue(env: PublicTestnetReadinessEnv, key: string): string {
   return env[key]?.trim() ?? "";
 }
@@ -33,12 +42,13 @@ function isHttpUrl(value: string): boolean {
 }
 
 export function getPublicTestnetReadiness(
-  env: PublicTestnetReadinessEnv = process.env
+  env?: PublicTestnetReadinessEnv
 ): PublicTestnetReadiness {
-  const deploymentStatus = resolveDeploymentStatus(loadDeploymentRegistrySnapshotFromEnv(env));
-  const chainMode = readEnvValue(env, "NEXT_PUBLIC_GACHA_CHAIN_MODE");
-  const rpcUrl = readEnvValue(env, "NEXT_PUBLIC_GACHA_RPC_URL");
-  const adminEnabled = readEnvValue(env, "NEXT_PUBLIC_GACHA_ENABLE_ADMIN") === "true";
+  const publicEnv = env ?? readPublicTestnetEnv();
+  const deploymentStatus = resolveDeploymentStatus(loadDeploymentRegistrySnapshotFromEnv(publicEnv));
+  const chainMode = readEnvValue(publicEnv, "NEXT_PUBLIC_GACHA_CHAIN_MODE");
+  const rpcUrl = readEnvValue(publicEnv, "NEXT_PUBLIC_GACHA_RPC_URL");
+  const adminEnabled = readEnvValue(publicEnv, "NEXT_PUBLIC_GACHA_ENABLE_ADMIN") === "true";
 
   const registryReady =
     deploymentStatus.mode === "testnet" &&

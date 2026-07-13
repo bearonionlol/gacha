@@ -7,6 +7,7 @@ import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {ERC165Checker} from "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
+import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import {InventoryRegistry} from "./InventoryRegistry.sol";
 import {ItemToken} from "./ItemToken.sol";
 import {DustLedger} from "./DustLedger.sol";
@@ -15,8 +16,10 @@ import {IRandomnessProvider} from "./randomness/IRandomnessProvider.sol";
 
 contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     bytes32 public constant DROP_ADMIN_ROLE = keccak256("DROP_ADMIN_ROLE");
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     uint256 public constant REFUND_TIMEOUT = 1 days;
     uint256 public constant MAX_BONUS_ITEMS = 4;
+    uint256 public constant MAX_DROP_INVENTORY = 128;
 
     struct CreateDropParams {
         string name;
@@ -24,6 +27,8 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         uint256 startTime;
         uint256 endTime;
         uint256 maxSupply;
+        uint256 maxPerWallet;
+        bytes32 allowlistRoot;
         string[] inventoryIds;
         string[] metadataUris;
         uint256[] bonusTokenIds;
@@ -37,6 +42,8 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         uint256 startTime;
         uint256 endTime;
         uint256 maxSupply;
+        uint256 maxPerWallet;
+        bytes32 allowlistRoot;
         uint256 sold;
         uint256 nextPurchasePosition;
         uint256 nextRevealPosition;
@@ -63,8 +70,22 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         bool exists;
     }
 
+    struct DropSummary {
+        string name;
+        uint256 price;
+        uint256 startTime;
+        uint256 endTime;
+        uint256 maxSupply;
+        uint256 maxPerWallet;
+        bytes32 allowlistRoot;
+        uint256 sold;
+        uint256 pendingPurchases;
+        uint256 remainingInventory;
+    }
+
     error InvalidAddress();
     error InvalidDropParams();
+    error DropInventoryLimitExceeded(uint256 provided, uint256 maximum);
     error InvalidBonusBundle();
     error InvalidBonusToken(uint256 tokenId);
     error DuplicateBonusToken(uint256 tokenId);
@@ -78,6 +99,8 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     error InactiveSale(uint256 dropId);
     error ExactPaymentRequired(uint256 expected, uint256 actual);
     error SoldOut(uint256 dropId);
+    error WalletPurchaseLimit(uint256 dropId, address buyer, uint256 limit);
+    error InvalidAllowlistProof(uint256 dropId, address buyer);
     error NoInventoryRemaining(uint256 dropId);
     error RandomnessNotReady(bytes32 requestId);
     error UnauthorizedReveal(uint256 purchaseId, address caller);
@@ -106,6 +129,8 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         uint256 startTime,
         uint256 endTime,
         uint256 maxSupply,
+        uint256 maxPerWallet,
+        bytes32 allowlistRoot,
         uint256 inventoryCount
     );
     event PackPurchased(
@@ -152,10 +177,11 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     mapping(uint256 dropId => Drop drop) private _drops;
     mapping(uint256 purchaseId => Purchase purchase) private _purchases;
     mapping(uint256 dropId => mapping(uint256 position => uint256 purchaseId)) private _purchaseIdByDropPosition;
-    mapping(bytes32 inventoryKey => bool reserved) private _reservedInventory;
+    mapping(bytes32 inventoryKey => uint256 dropId) private _reservedDropByInventory;
     mapping(uint256 tokenId => string tokenUri) private _bonusTokenUris;
     mapping(address account => uint256 amount) public refundCredit;
     mapping(uint256 dropId => uint256 policyId) public dropDustPolicyId;
+    mapping(uint256 dropId => mapping(address buyer => uint256 purchases)) public purchasesByWallet;
 
     constructor(
         InventoryRegistry inventoryRegistry_,
@@ -180,24 +206,31 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
 
     function createDrop(CreateDropParams calldata params) external onlyRole(DROP_ADMIN_ROLE) returns (uint256 dropId) {
         uint256 inventoryCount = params.inventoryIds.length;
+        if (inventoryCount > MAX_DROP_INVENTORY) {
+            revert DropInventoryLimitExceeded(inventoryCount, MAX_DROP_INVENTORY);
+        }
         if (
             bytes(params.name).length == 0 || params.price == 0 || params.startTime >= params.endTime
                 || params.maxSupply == 0 || inventoryCount == 0 || inventoryCount != params.metadataUris.length
-                || params.maxSupply > inventoryCount
+                || params.maxSupply > inventoryCount || params.maxPerWallet == 0
+                || params.maxPerWallet > params.maxSupply
         ) {
             revert InvalidDropParams();
         }
 
         _validateBonusBundle(params);
 
+        uint256 pendingDropId = nextDropId;
         for (uint256 index = 0; index < inventoryCount; index++) {
             string calldata inventoryId = params.inventoryIds[index];
             bytes32 inventoryKey = _inventoryKey(inventoryId);
 
-            for (uint256 duplicateIndex = index + 1; duplicateIndex < inventoryCount; duplicateIndex++) {
-                if (inventoryKey == _inventoryKey(params.inventoryIds[duplicateIndex])) {
-                    revert DuplicateInventory(inventoryId);
-                }
+            uint256 reservedDropId = _reservedDropByInventory[inventoryKey];
+            if (reservedDropId == pendingDropId) {
+                revert DuplicateInventory(inventoryId);
+            }
+            if (reservedDropId != 0) {
+                revert InventoryAlreadyReserved(inventoryId);
             }
 
             InventoryRegistry.InventoryRecord memory record;
@@ -212,9 +245,7 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
                 revert InventoryAlreadyTokenized(inventoryId);
             }
 
-            if (_reservedInventory[inventoryKey]) {
-                revert InventoryAlreadyReserved(inventoryId);
-            }
+            _reservedDropByInventory[inventoryKey] = pendingDropId;
         }
 
         dropId = nextDropId++;
@@ -224,10 +255,11 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         drop.startTime = params.startTime;
         drop.endTime = params.endTime;
         drop.maxSupply = params.maxSupply;
+        drop.maxPerWallet = params.maxPerWallet;
+        drop.allowlistRoot = params.allowlistRoot;
         drop.exists = true;
 
         for (uint256 index = 0; index < inventoryCount; index++) {
-            _reservedInventory[_inventoryKey(params.inventoryIds[index])] = true;
             drop.inventoryIds.push(params.inventoryIds[index]);
             drop.metadataUris.push(params.metadataUris[index]);
         }
@@ -249,6 +281,8 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
             params.startTime,
             params.endTime,
             params.maxSupply,
+            params.maxPerWallet,
+            params.allowlistRoot,
             inventoryCount
         );
     }
@@ -281,7 +315,29 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
     }
 
     function purchase(uint256 dropId) external payable nonReentrant whenNotPaused returns (uint256 purchaseId) {
+        bytes32[] memory emptyProof = new bytes32[](0);
+        return _purchase(dropId, emptyProof);
+    }
+
+    function purchaseAllowlisted(uint256 dropId, bytes32[] calldata allowlistProof)
+        external
+        payable
+        nonReentrant
+        whenNotPaused
+        returns (uint256 purchaseId)
+    {
+        return _purchase(dropId, allowlistProof);
+    }
+
+    function _purchase(uint256 dropId, bytes32[] memory allowlistProof) private returns (uint256 purchaseId) {
         Drop storage drop = _dropFor(dropId);
+
+        if (
+            drop.allowlistRoot != bytes32(0)
+                && !MerkleProof.verify(allowlistProof, drop.allowlistRoot, _allowlistLeaf(msg.sender))
+        ) {
+            revert InvalidAllowlistProof(dropId, msg.sender);
+        }
 
         if (address(dustLedger) != address(0) && dropDustPolicyId[dropId] == 0) {
             revert DropDustPolicyMissing(dropId);
@@ -299,6 +355,10 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
             revert SoldOut(dropId);
         }
 
+        if (purchasesByWallet[dropId][msg.sender] >= drop.maxPerWallet) {
+            revert WalletPurchaseLimit(dropId, msg.sender, drop.maxPerWallet);
+        }
+
         if (drop.inventoryIds.length == 0) {
             revert NoInventoryRemaining(dropId);
         }
@@ -308,6 +368,7 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         uint256 position = drop.nextPurchasePosition;
 
         drop.sold += 1;
+        purchasesByWallet[dropId][msg.sender] += 1;
         drop.nextPurchasePosition += 1;
         drop.pendingPurchases += 1;
         _purchaseIdByDropPosition[dropId][position] = purchaseId;
@@ -379,7 +440,7 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         purchaseRecord.revealed = true;
         purchaseRecord.revealedTokenId = tokenId;
         inventoryRegistry.markTokenized(inventoryId, purchaseRecord.buyer);
-        delete _reservedInventory[_inventoryKey(inventoryId)];
+        delete _reservedDropByInventory[_inventoryKey(inventoryId)];
         itemToken.mintInventoryItem(address(this), tokenId, inventoryId, metadataUri);
         _mintBonusBundle(purchaseId, drop);
         _awardDust(purchaseId, purchaseRecord, randomness);
@@ -425,6 +486,7 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         Drop storage drop = _dropFor(purchaseRecord.dropId);
         purchaseRecord.refunded = true;
         drop.sold -= 1;
+        purchasesByWallet[purchaseRecord.dropId][purchaseRecord.buyer] -= 1;
         drop.pendingPurchases -= 1;
 
         if (purchaseRecord.position == drop.nextRevealPosition) {
@@ -473,7 +535,7 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
 
         uint256 releasedInventory = drop.inventoryIds.length;
         for (uint256 index = 0; index < releasedInventory; index++) {
-            delete _reservedInventory[_inventoryKey(drop.inventoryIds[index])];
+            delete _reservedDropByInventory[_inventoryKey(drop.inventoryIds[index])];
         }
 
         delete drop.inventoryIds;
@@ -495,11 +557,27 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
         return (drop.bonusTokenIds, drop.bonusAmounts, drop.bonusUris);
     }
 
-    function pause() external onlyRole(DROP_ADMIN_ROLE) {
+    function getDropSummary(uint256 dropId) external view returns (DropSummary memory summary) {
+        Drop storage drop = _dropFor(dropId);
+        summary = DropSummary({
+            name: drop.name,
+            price: drop.price,
+            startTime: drop.startTime,
+            endTime: drop.endTime,
+            maxSupply: drop.maxSupply,
+            maxPerWallet: drop.maxPerWallet,
+            allowlistRoot: drop.allowlistRoot,
+            sold: drop.sold,
+            pendingPurchases: drop.pendingPurchases,
+            remainingInventory: drop.inventoryIds.length
+        });
+    }
+
+    function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
-    function unpause() external onlyRole(DROP_ADMIN_ROLE) {
+    function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
 
@@ -699,5 +777,9 @@ contract PackSale is AccessControl, Pausable, ReentrancyGuard, ERC1155Holder {
 
     function _sameString(string memory left, string memory right) private pure returns (bool) {
         return keccak256(bytes(left)) == keccak256(bytes(right));
+    }
+
+    function _allowlistLeaf(address account) private pure returns (bytes32) {
+        return keccak256(bytes.concat(keccak256(abi.encode(account))));
     }
 }

@@ -1,0 +1,39 @@
+{
+  "name": "Wings of the Captain OP-06 Sealed Booster Case",
+  "description": "One owner-attested, unopened English One Piece Card Game OP-06 distributor case containing 288 booster packs. The exterior shipping carton shows handling wear. This metadata is for a controlled Robinhood Chain testnet rehearsal and does not independently authenticate contents, seals, or legal title.",
+  "image": "https://raw.githubusercontent.com/bearonionlol/gacha/codex/mainnet-production-readiness/apps/web/public/assets/inventory/op06-case-001/front.jpg",
+  "attributes": [
+    {
+      "trait_type": "Brand",
+      "value": "One Piece Card Game"
+    },
+    {
+      "trait_type": "Set",
+      "value": "Wings of the Captain (OP-06)"
+    },
+    {
+      "trait_type": "Language",
+      "value": "English"
+    },
+    {
+      "trait_type": "Configuration",
+      "value": "288 booster packs"
+    },
+    {
+      "trait_type": "Custody",
+      "value": "Owner-attested factory sealed"
+    },
+    {
+      "trait_type": "Forge Tier",
+      "value": 4
+    },
+    {
+      "trait_type": "Grail Protected",
+      "value": "Yes"
+    },
+    {
+      "trait_type": "Network Status",
+      "value": "Testnet rehearsal only"
+    }
+  ]
+}

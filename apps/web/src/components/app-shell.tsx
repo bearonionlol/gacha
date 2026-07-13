@@ -6,8 +6,10 @@ import {
   Hammer,
   ShieldCheck,
   Store,
-  WalletCards
+  WalletCards,
+  RadioTower
 } from "lucide-react";
+import { loadChainContextFromEnv } from "../lib/deployments";
 import { WalletConnectPanel } from "./wallet-connect-panel";
 
 const navItems = [
@@ -25,8 +27,11 @@ type AppShellProps = {
 };
 
 export function AppShell({ activePath = "/", children }: AppShellProps) {
+  const chainContext = loadChainContextFromEnv();
+
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#app-main">Skip to content</a>
       <aside className="shell-sidebar" aria-label="Application navigation">
         <a className="brand-mark" href="/" aria-label="Gacha Markets home">
           <span className="brand-icon" aria-hidden="true">
@@ -34,7 +39,7 @@ export function AppShell({ activePath = "/", children }: AppShellProps) {
           </span>
           <span>
             <strong>Gacha Markets</strong>
-            <small>Vault Arcade</small>
+            <small>{chainContext.environmentLabel} vault arcade</small>
           </span>
         </a>
 
@@ -52,15 +57,20 @@ export function AppShell({ activePath = "/", children }: AppShellProps) {
           ))}
         </nav>
 
-        <WalletConnectPanel />
+        <WalletConnectPanel chainContext={chainContext} />
       </aside>
 
       <div className="shell-content">
-        {children}
+        <div className={`environment-bar mode-${chainContext.mode}`} role="status">
+          <RadioTower size={15} aria-hidden="true" />
+          <strong>{chainContext.environmentLabel}</strong>
+          <span>{chainContext.disclosure}</span>
+        </div>
+        <div id="app-main">{children}</div>
         <footer className="shell-footer">
-          Robinhood Chain testnet build. Pull contents, Dust rewards, fees, and Vault Ascension rules are published
-          before wallet confirmation. Resale descriptors identify collector inventory only; no official affiliation or
-          endorsement is implied.
+          <strong>{chainContext.chainName}</strong> · Pull contents, odds, Dust rewards, protocol fees, and custody
+          effects are shown before confirmation. Collectible names are resale descriptors only; no affiliation or
+          endorsement is implied. Collectibles are not investments and no future value is guaranteed.
         </footer>
       </div>
     </div>

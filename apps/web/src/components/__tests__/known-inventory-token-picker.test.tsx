@@ -61,7 +61,7 @@ describe("KnownInventoryTokenPicker", () => {
     render(<KnownInventoryTokenPicker contracts={contracts} onSelectTokenId={vi.fn()} readClient={createReadClient()} />);
 
     expect(screen.getByRole("button", { name: /Scan wallet inventory/i })).toBeInTheDocument();
-    expect(screen.getAllByText(/known seeded inventory/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/known inventory/i).length).toBeGreaterThan(0);
     expect(request).not.toHaveBeenCalled();
   });
 
@@ -88,5 +88,28 @@ describe("KnownInventoryTokenPicker", () => {
     fireEvent.click(screen.getByRole("button", { name: /Use token 1001/i }));
 
     await waitFor(() => expect(onSelectTokenId).toHaveBeenCalledWith(1001n));
+  });
+
+  it("shows owned inventory as Vault actions without a generic token-selection button", async () => {
+    const request = vi.fn(async ({ method }: { method: string }) => {
+      if (method === "eth_requestAccounts") return ["0x1234567890abcdef1234567890abcdef12345678"];
+      if (method === "eth_chainId") return "0xb626";
+      return null;
+    });
+    setEthereumProvider(request);
+
+    render(
+      <KnownInventoryTokenPicker
+        contracts={contracts}
+        mode="vault"
+        readClient={createReadClient()}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Scan wallet inventory/i }));
+
+    expect(await screen.findByText(/Pokemon TCG Charizard ex/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Market/i })).toHaveAttribute("href", "/market");
+    expect(screen.getByRole("link", { name: /Redeem/i })).toHaveAttribute("href", "/redemption");
+    expect(screen.queryByRole("button", { name: /Use token 1001/i })).not.toBeInTheDocument();
   });
 });
